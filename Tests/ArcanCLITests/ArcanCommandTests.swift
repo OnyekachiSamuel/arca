@@ -13,6 +13,7 @@ struct ArcanCommandTests {
 
         OPTIONS:
           --file <path>           Review an explicit Swift file.
+          --debug                 Print loaded source and metadata.
           -h, --help              Show help information.
         """
 
@@ -57,6 +58,26 @@ struct ArcanCommandTests {
             #expect(result.exitCode != 0)
             #expect(result.output == "Error: Swift file does not exist: \(path)")
             #expect(result.reviewRequest == nil)
+        }
+    }
+
+    @Test("review debug mode prints loaded source and metadata")
+    func reviewDebugOutput() throws {
+        try withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("Greeting.swift")
+            let content = "let greeting = \"Hej 👋\""
+            try content.write(to: file, atomically: true, encoding: .utf8)
+
+            let result = ArcanCommand.run(
+                arguments: ["review", "--file", file.path, "--debug"]
+            )
+
+            let normalizedPath = file.standardizedFileURL.path
+            #expect(result.exitCode == 0)
+            #expect(
+                result.output
+                    == "Source: \(normalizedPath)\nLines: 1\n\n\(content)"
+            )
         }
     }
 

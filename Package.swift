@@ -16,7 +16,7 @@ let package = Package(
     targets: [
         .target(name: "ArcanDomain"),
         .target(name: "ArcanAnalysis", dependencies: ["ArcanDomain"]),
-        .target(name: "ArcanSource"),
+        .target(name: "ArcanSource", dependencies: ["ArcanDomain"]),
         .target(
             name: "ArcanCLI",
             dependencies: ["ArcanDomain", "ArcanSource"]
@@ -28,6 +28,9 @@ let package = Package(
             name: "ArcanAnalysisTests",
             dependencies: ["ArcanAnalysis", "ArcanDomain"]
         ),
-        .testTarget(name: "ArcanSourceTests", dependencies: ["ArcanSource"])
+        .testTarget(
+            name: "ArcanSourceTests",
+            dependencies: ["ArcanSource", "ArcanDomain"]
+        )
     ]
 )

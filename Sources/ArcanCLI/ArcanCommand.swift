@@ -26,6 +26,7 @@ public enum ArcanCommand {
 
     OPTIONS:
       --file <path>           Review an explicit Swift file.
+      --debug                 Print loaded source and metadata.
       -h, --help              Show help information.
     """
 
@@ -42,10 +43,17 @@ public enum ArcanCommand {
     """
 
     public static func run(arguments: [String]) -> CommandResult {
+        if arguments.count == 4,
+           arguments[0] == "review",
+           arguments[1] == "--file",
+           arguments[3] == "--debug" {
+            return reviewFile(at: arguments[2], debug: true)
+        }
+
         if arguments.count == 3,
            arguments[0] == "review",
            arguments[1] == "--file" {
-            return reviewFile(at: arguments[2])
+            return reviewFile(at: arguments[2], debug: false)
         }
 
         switch arguments {
@@ -66,19 +74,36 @@ public enum ArcanCommand {
         }
     }
 
-    private static func reviewFile(at path: String) -> CommandResult {
+    private static func reviewFile(at path: String, debug: Bool) -> CommandResult {
         do {
             let selectedFile = try ExplicitSwiftFileSelector().select(path: path)
             let request = ReviewRequest(
                 id: UUID(),
                 selectedFiles: [selectedFile]
             )
+            let output: String
+            if debug {
+                let source = try SwiftSourceFileLoader().load(path: selectedFile)
+                output = """
+                Source: \(source.path)
+                Lines: \(source.lineCount)
+
+                \(source.content)
+                """
+            } else {
+                output = "Selected Swift file: \(selectedFile)"
+            }
             return CommandResult(
-                output: "Selected Swift file: \(selectedFile)",
+                output: output,
                 exitCode: 0,
                 reviewRequest: request
             )
         } catch let error as SourceSelectionError {
+            return CommandResult(
+                output: "Error: \(error.localizedDescription)",
+                exitCode: 64
+            )
+        } catch let error as SourceLoadingError {
             return CommandResult(
                 output: "Error: \(error.localizedDescription)",
                 exitCode: 64
