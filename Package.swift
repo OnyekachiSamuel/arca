@@ -8,11 +8,14 @@ let package = Package(
         .macOS(.v13)
     ],
     products: [
-        .executable(name: "arcan", targets: ["ArcanExecutable"])
+        .executable(name: "arcan", targets: ["ArcanExecutable"]),
+        .library(name: "ArcanDomain", targets: ["ArcanDomain"])
     ],
     targets: [
+        .target(name: "ArcanDomain"),
         .target(name: "ArcanCLI"),
         .executableTarget(name: "ArcanExecutable", dependencies: ["ArcanCLI"]),
-        .testTarget(name: "ArcanCLITests", dependencies: ["ArcanCLI"])
+        .testTarget(name: "ArcanCLITests", dependencies: ["ArcanCLI"]),
+        .testTarget(name: "ArcanDomainTests", dependencies: ["ArcanDomain"])
     ]
 )
