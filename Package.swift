@@ -11,6 +11,7 @@ let package = Package(
         .executable(name: "arcan", targets: ["ArcanExecutable"]),
         .library(name: "ArcanDomain", targets: ["ArcanDomain"]),
         .library(name: "ArcanAnalysis", targets: ["ArcanAnalysis"]),
+        .library(name: "ArcanAnalyzers", targets: ["ArcanAnalyzers"]),
         .library(name: "ArcanSource", targets: ["ArcanSource"]),
         .library(name: "ArcanSwiftSyntax", targets: ["ArcanSwiftSyntax"])
     ],
@@ -23,6 +24,10 @@ let package = Package(
     targets: [
         .target(name: "ArcanDomain"),
         .target(name: "ArcanAnalysis", dependencies: ["ArcanDomain"]),
+        .target(
+            name: "ArcanAnalyzers",
+            dependencies: ["ArcanAnalysis", "ArcanDomain"]
+        ),
         .target(name: "ArcanSource", dependencies: ["ArcanDomain"]),
         .target(
             name: "ArcanSwiftSyntax",
@@ -43,6 +48,17 @@ let package = Package(
         .testTarget(
             name: "ArcanAnalysisTests",
             dependencies: ["ArcanAnalysis", "ArcanDomain"]
+        ),
+        .testTarget(
+            name: "ArcanAnalyzersTests",
+            dependencies: [
+                "ArcanAnalysis",
+                "ArcanAnalyzers",
+                "ArcanDomain",
+                "ArcanSource",
+                "ArcanSwiftSyntax"
+            ],
+            resources: [.copy("Fixtures")]
         ),
         .testTarget(
             name: "ArcanSourceTests",

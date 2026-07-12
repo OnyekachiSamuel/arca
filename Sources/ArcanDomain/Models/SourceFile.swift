@@ -1,3 +1,5 @@
+import Foundation
+
 public struct SourceFile: Codable, Equatable, Sendable {
     public let path: String
     public let content: String

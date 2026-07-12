@@ -63,6 +63,20 @@
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "ArcanAnalyzers"
+               BuildableName = "ArcanAnalyzers"
+               BlueprintName = "ArcanAnalyzers"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -119,6 +133,16 @@
                BlueprintIdentifier = "ArcanSwiftSyntaxTests"
                BuildableName = "ArcanSwiftSyntaxTests"
                BlueprintName = "ArcanSwiftSyntaxTests"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "ArcanAnalyzersTests"
+               BuildableName = "ArcanAnalyzersTests"
+               BlueprintName = "ArcanAnalyzersTests"
                ReferencedContainer = "container:">
             </BuildableReference>
          </TestableReference>
