@@ -91,6 +91,20 @@
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "ArcanGit"
+               BuildableName = "ArcanGit"
+               BlueprintName = "ArcanGit"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -177,6 +191,16 @@
                BlueprintIdentifier = "ArcanEndToEndTests"
                BuildableName = "ArcanEndToEndTests"
                BlueprintName = "ArcanEndToEndTests"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "ArcanGitTests"
+               BuildableName = "ArcanGitTests"
+               BlueprintName = "ArcanGitTests"
                ReferencedContainer = "container:">
             </BuildableReference>
          </TestableReference>
