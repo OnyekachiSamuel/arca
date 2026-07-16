@@ -1,7 +1,7 @@
 import ArcanDomain
 import Foundation
 
-public struct SwiftSourceFileLoader: Sendable {
+public struct SourceFileLoader: Sendable {
     public init() {}
 
     public func load(path: String) throws -> SourceFile {

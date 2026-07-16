@@ -1,6 +1,6 @@
 import Foundation
 
-public enum GitRepositoryFinderError: Error, Equatable, LocalizedError {
+public enum GitRepositoryFinderError: Equatable, LocalizedError {
     case notRepository(path: String)
     case commandCouldNotRun(path: String, reason: String)
     case invalidOutput(path: String)

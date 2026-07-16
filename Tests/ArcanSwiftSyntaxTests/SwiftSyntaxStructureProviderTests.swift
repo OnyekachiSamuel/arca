@@ -83,7 +83,7 @@ struct SwiftSyntaxStructureProviderTests {
                 subdirectory: "Fixtures"
             )
         )
-        let source = try SwiftSourceFileLoader().load(path: fixtureURL.path)
+        let source = try SourceFileLoader().load(path: fixtureURL.path)
         let provider: any SwiftStructureProvider = SwiftSyntaxStructureProvider()
         return try provider.extractMetrics(from: source)
     }

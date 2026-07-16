@@ -25,7 +25,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "ArcanDomain"),
-        .target(name: "ArcanGit"),
+        .target(name: "ArcanGit", dependencies: ["ArcanDomain"]),
         .target(name: "ArcanAnalysis", dependencies: ["ArcanDomain"]),
         .target(
             name: "ArcanAnalyzers",
@@ -48,6 +48,7 @@ let package = Package(
                 "ArcanAnalysis",
                 "ArcanAnalyzers",
                 "ArcanDomain",
+                "ArcanGit",
                 "ArcanReporting",
                 "ArcanSource",
                 "ArcanSwiftSyntax"
@@ -61,7 +62,10 @@ let package = Package(
             resources: [.copy("Fixtures")]
         ),
         .testTarget(name: "ArcanDomainTests", dependencies: ["ArcanDomain"]),
-        .testTarget(name: "ArcanGitTests", dependencies: ["ArcanGit"]),
+        .testTarget(
+            name: "ArcanGitTests",
+            dependencies: ["ArcanDomain", "ArcanGit"]
+        ),
         .testTarget(
             name: "ArcanAnalysisTests",
             dependencies: ["ArcanAnalysis", "ArcanDomain"]

@@ -1,6 +1,7 @@
 import ArcanAnalysis
 import ArcanAnalyzers
 import ArcanDomain
+import ArcanGit
 import ArcanReporting
 import ArcanSource
 import ArcanSwiftSyntax
@@ -30,6 +31,7 @@ public enum ArcanCommand {
 
     OPTIONS:
       --file <path>           Review an explicit Swift file.
+      --changed               Review changed Swift files in the Git repository.
       --debug                 Print loaded source and metadata.
       -h, --help              Show help information.
     """
@@ -46,7 +48,10 @@ public enum ArcanCommand {
       -h, --help              Show help information.
     """
 
-    public static func run(arguments: [String]) async -> CommandResult {
+    public static func run(
+        arguments: [String],
+        currentDirectory: String = FileManager.default.currentDirectoryPath
+    ) async -> CommandResult {
         if arguments.count == 4,
            arguments[0] == "review",
            arguments[1] == "--file",
@@ -58,6 +63,10 @@ public enum ArcanCommand {
            arguments[0] == "review",
            arguments[1] == "--file" {
             return await reviewFile(at: arguments[2], debug: false)
+        }
+
+        if arguments == ["review", "--changed"] {
+            return await reviewChanged(from: currentDirectory)
         }
 
         switch arguments {
@@ -84,12 +93,71 @@ public enum ArcanCommand {
     ) async -> CommandResult {
         do {
             let selectedFile = try ExplicitSwiftFileSelector().select(path: path)
-            let source = try SwiftSourceFileLoader().load(path: selectedFile)
+            return await reviewFiles(
+                at: [selectedFile],
+                debug: debug,
+                failureDescription: "Swift file: \(path)"
+            )
+        } catch let error as SourceSelectionError {
+            return CommandResult(
+                output: "Error: \(error.localizedDescription)",
+                exitCode: 64
+            )
+        } catch {
+            return CommandResult(
+                output: "Error: Review failed for Swift file: \(path)",
+                exitCode: 64
+            )
+        }
+    }
+
+    private static func reviewChanged(
+        from currentDirectory: String
+    ) async -> CommandResult {
+        do {
+            let changes = try GitDiffProvider().extract(from: currentDirectory)
+            let selectedFiles = changes.map(\.filePath)
+            return await reviewFiles(
+                at: selectedFiles,
+                debug: false,
+                failureDescription: "changed Swift files",
+                changes: changes
+            )
+        } catch let error as GitRepositoryFinderError {
+            return CommandResult(
+                output: "Error: \(error.localizedDescription)",
+                exitCode: 64
+            )
+        } catch let error as GitChangedSwiftFileFinderError {
+            return CommandResult(
+                output: "Error: \(error.localizedDescription)",
+                exitCode: 64
+            )
+        } catch {
+            return CommandResult(
+                output: "Error: Could not select changed Swift files.",
+                exitCode: 64
+            )
+        }
+    }
+
+    private static func reviewFiles(
+        at paths: [String],
+        debug: Bool,
+        failureDescription: String,
+        changes: [CodeChange] = []
+    ) async -> CommandResult {
+        do {
+            let sources = try paths.map { path in
+                try SourceFileLoader().load(path: path)
+            }
             let request = ReviewRequest(
                 id: UUID(),
-                selectedFiles: [selectedFile]
+                selectedFiles: paths,
+                changes: changes
             )
-            if debug {
+
+            if debug, let source = sources.first {
                 let output = """
                 Source: \(source.path)
                 Lines: \(source.lineCount)
@@ -105,7 +173,7 @@ public enum ArcanCommand {
 
             let context = AnalysisContext(
                 request: request,
-                sourceFiles: [source]
+                sourceFiles: sources
             )
             let analyzer = GodObjectAnalyzer(
                 structureProvider: SwiftSyntaxStructureProvider()
@@ -125,11 +193,6 @@ public enum ArcanCommand {
                 exitCode: 0,
                 reviewRequest: request
             )
-        } catch let error as SourceSelectionError {
-            return CommandResult(
-                output: "Error: \(error.localizedDescription)",
-                exitCode: 64
-            )
         } catch let error as SourceLoadingError {
             return CommandResult(
                 output: "Error: \(error.localizedDescription)",
@@ -137,7 +200,7 @@ public enum ArcanCommand {
             )
         } catch {
             return CommandResult(
-                output: "Error: Review failed for Swift file: \(path)",
+                output: "Error: Review failed for \(failureDescription)",
                 exitCode: 64
             )
         }

@@ -1,6 +1,6 @@
 import Foundation
 
-public enum SourceLoadingError: Error, Equatable, LocalizedError {
+public enum SourceLoadingError: Equatable, LocalizedError {
     case unreadable(path: String)
     case invalidUTF8(path: String)
 

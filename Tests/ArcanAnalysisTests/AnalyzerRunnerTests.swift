@@ -7,9 +7,16 @@ import Testing
 struct AnalyzerRunnerTests {
     @Test("runner invokes an analyzer and returns its result")
     func invokesAnalyzer() async throws {
+        let change = CodeChange(
+            filePath: "Sources/App.swift",
+            modifiedLineRanges: [
+                ChangedLineRange(startLine: 4, endLine: 6)
+            ]
+        )
         let request = ReviewRequest(
             id: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!,
-            selectedFiles: ["Sources/App.swift"]
+            selectedFiles: ["Sources/App.swift"],
+            changes: [change]
         )
         let context = AnalysisContext(request: request)
         let expected = AnalyzerResult(analyzerID: "mock", findings: [])
@@ -23,6 +30,7 @@ struct AnalyzerRunnerTests {
         #expect(analyzer.supportedReviewTypes == [.godObject, .style])
         let receivedContext = await recorder.receivedContext
         #expect(receivedContext == context)
+        #expect(receivedContext?.changes == [change])
     }
 }
 

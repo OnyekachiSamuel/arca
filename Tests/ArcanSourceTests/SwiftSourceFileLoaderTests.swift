@@ -18,7 +18,7 @@ struct SwiftSourceFileLoaderTests {
             try content.write(to: file, atomically: true, encoding: .utf8)
             let pathWithDotComponent = directory.path + "/./Unicode.swift"
 
-            let source = try SwiftSourceFileLoader().load(
+            let source = try SourceFileLoader().load(
                 path: pathWithDotComponent
             )
 
@@ -36,7 +36,7 @@ struct SwiftSourceFileLoaderTests {
             let normalizedPath = file.standardizedFileURL.path
 
             expectError(.invalidUTF8(path: normalizedPath)) {
-                _ = try SwiftSourceFileLoader().load(path: file.path)
+                _ = try SourceFileLoader().load(path: file.path)
             }
         }
     }
@@ -58,7 +58,7 @@ struct SwiftSourceFileLoaderTests {
             }
 
             expectError(.unreadable(path: file.standardizedFileURL.path)) {
-                _ = try SwiftSourceFileLoader().load(path: file.path)
+                _ = try SourceFileLoader().load(path: file.path)
             }
         }
     }

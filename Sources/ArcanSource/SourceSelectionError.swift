@@ -1,6 +1,6 @@
 import Foundation
 
-public enum SourceSelectionError: Error, Equatable, LocalizedError {
+public enum SourceSelectionError: Equatable, LocalizedError {
     case missing(path: String)
     case directory(path: String)
     case notSwiftFile(path: String)

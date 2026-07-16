@@ -8,7 +8,24 @@ struct DomainModelCodableTests {
     func reviewRequest() throws {
         let request = ReviewRequest(
             id: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!,
-            selectedFiles: ["Sources/App.swift", "Sources/Feature.swift"]
+            selectedFiles: ["Sources/App.swift", "Sources/Feature.swift"],
+            changes: [
+                CodeChange(
+                    filePath: "Sources/App.swift",
+                    addedLineRanges: [
+                        ChangedLineRange(startLine: 8, endLine: 10)
+                    ],
+                    modifiedLineRanges: [
+                        ChangedLineRange(startLine: 20, endLine: 21)
+                    ],
+                    deletedLineRanges: [
+                        DeletedLineRange(
+                            originalStartLine: 15,
+                            originalEndLine: 16
+                        )
+                    ]
+                )
+            ]
         )
 
         let data = try encodeToJSON(request)

@@ -13,6 +13,7 @@ struct ArcanCommandTests {
 
         OPTIONS:
           --file <path>           Review an explicit Swift file.
+          --changed               Review changed Swift files in the Git repository.
           --debug                 Print loaded source and metadata.
           -h, --help              Show help information.
         """
@@ -83,6 +84,43 @@ struct ArcanCommandTests {
                     == "Source: \(normalizedPath)\nLines: 1\n\n\(content)"
             )
         }
+    }
+
+    @Test("review changed selects current Swift changes")
+    func reviewChangedBuildsRequest() async throws {
+        try await withTemporaryDirectory { directory in
+            try initializeGitRepository(at: directory)
+            let file = directory.appendingPathComponent("Changed File.swift")
+            try "struct ChangedFile {}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.run(
+                arguments: ["review", "--changed"],
+                currentDirectory: directory.path
+            )
+
+            #expect(result.exitCode == 0)
+            #expect(
+                result.reviewRequest?.selectedFiles
+                    == [file.standardizedFileURL.resolvingSymlinksInPath().path]
+            )
+            let change = try #require(result.reviewRequest?.changes.first)
+            #expect(change.addedLineRanges.first?.startLine == 1)
+            #expect(change.addedLineRanges.first?.endLine == 1)
+        }
+    }
+
+    private func initializeGitRepository(at directory: URL) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = ["init", "--quiet"]
+        process.currentDirectoryURL = directory
+        try process.run()
+        process.waitUntilExit()
+        #expect(process.terminationStatus == 0)
     }
 
     private func withTemporaryDirectory<Result>(

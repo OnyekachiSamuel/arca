@@ -196,7 +196,7 @@ struct GodObjectAnalyzerTests {
                 subdirectory: "Fixtures"
             )
         )
-        return try SwiftSourceFileLoader().load(path: url.path)
+        return try SourceFileLoader().load(path: url.path)
     }
 }
 
