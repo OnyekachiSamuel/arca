@@ -1,5 +1,9 @@
+import ArcanAnalysis
+import ArcanAnalyzers
 import ArcanDomain
+import ArcanReporting
 import ArcanSource
+import ArcanSwiftSyntax
 import Foundation
 
 public struct CommandResult: Equatable {
@@ -42,18 +46,18 @@ public enum ArcanCommand {
       -h, --help              Show help information.
     """
 
-    public static func run(arguments: [String]) -> CommandResult {
+    public static func run(arguments: [String]) async -> CommandResult {
         if arguments.count == 4,
            arguments[0] == "review",
            arguments[1] == "--file",
            arguments[3] == "--debug" {
-            return reviewFile(at: arguments[2], debug: true)
+            return await reviewFile(at: arguments[2], debug: true)
         }
 
         if arguments.count == 3,
            arguments[0] == "review",
            arguments[1] == "--file" {
-            return reviewFile(at: arguments[2], debug: false)
+            return await reviewFile(at: arguments[2], debug: false)
         }
 
         switch arguments {
@@ -74,27 +78,50 @@ public enum ArcanCommand {
         }
     }
 
-    private static func reviewFile(at path: String, debug: Bool) -> CommandResult {
+    private static func reviewFile(
+        at path: String,
+        debug: Bool
+    ) async -> CommandResult {
         do {
             let selectedFile = try ExplicitSwiftFileSelector().select(path: path)
+            let source = try SwiftSourceFileLoader().load(path: selectedFile)
             let request = ReviewRequest(
                 id: UUID(),
                 selectedFiles: [selectedFile]
             )
-            let output: String
             if debug {
-                let source = try SwiftSourceFileLoader().load(path: selectedFile)
-                output = """
+                let output = """
                 Source: \(source.path)
                 Lines: \(source.lineCount)
 
                 \(source.content)
                 """
-            } else {
-                output = "Selected Swift file: \(selectedFile)"
+                return CommandResult(
+                    output: output,
+                    exitCode: 0,
+                    reviewRequest: request
+                )
             }
+
+            let context = AnalysisContext(
+                request: request,
+                sourceFiles: [source]
+            )
+            let analyzer = GodObjectAnalyzer(
+                structureProvider: SwiftSyntaxStructureProvider()
+            )
+            let analyzerResult = try await AnalyzerRunner().run(
+                analyzer,
+                context: context
+            )
+            let report = ReviewReport(
+                schemaVersion: 1,
+                requestID: request.id,
+                findings: analyzerResult.findings,
+                analyzerResults: [analyzerResult]
+            )
             return CommandResult(
-                output: output,
+                output: TerminalReporter().render(report: report),
                 exitCode: 0,
                 reviewRequest: request
             )
@@ -110,7 +137,7 @@ public enum ArcanCommand {
             )
         } catch {
             return CommandResult(
-                output: "Error: Unable to select Swift file: \(path)",
+                output: "Error: Review failed for Swift file: \(path)",
                 exitCode: 64
             )
         }

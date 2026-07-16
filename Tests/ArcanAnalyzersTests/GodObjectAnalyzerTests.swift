@@ -24,8 +24,36 @@ struct GodObjectAnalyzerTests {
 
         #expect(result.analyzerID == "god-object")
         #expect(result.findings.count == 1)
-        #expect(result.findings.first?.ruleID == "ARCAN-GOD-001")
-        #expect(result.findings.first?.filePath == source.path)
+        let finding = try #require(result.findings.first)
+        #expect(finding.ruleID == "ARCAN-GOD-001")
+        #expect(finding.filePath == source.path)
+        #expect(finding.range == SourceRange(
+            startLine: 1,
+            startColumn: 1,
+            endLine: 9,
+            endColumn: 2
+        ))
+        #expect(finding.evidence == [
+            Evidence(metric: "lines", observedValue: 9, thresholdValue: 8),
+            Evidence(metric: "methods", observedValue: 3, thresholdValue: 2),
+            Evidence(
+                metric: "storedProperties",
+                observedValue: 3,
+                thresholdValue: 2
+            )
+        ])
+        #expect(
+            finding.explanation
+                == "Type 'LargeCoordinator' exceeds multiple configured structural thresholds, suggesting it may have too many responsibilities."
+        )
+        #expect(finding.suggestion == Suggestion(
+            summary: "Split the type into smaller, focused components.",
+            steps: [
+                "Group related properties and methods by responsibility.",
+                "Extract each responsibility into a dedicated type.",
+                "Keep only necessary coordination in the original type."
+            ]
+        ))
     }
 
     @Test("small fixture produces no finding")

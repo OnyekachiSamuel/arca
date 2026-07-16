@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "ArcanDomain", targets: ["ArcanDomain"]),
         .library(name: "ArcanAnalysis", targets: ["ArcanAnalysis"]),
         .library(name: "ArcanAnalyzers", targets: ["ArcanAnalyzers"]),
+        .library(name: "ArcanReporting", targets: ["ArcanReporting"]),
         .library(name: "ArcanSource", targets: ["ArcanSource"]),
         .library(name: "ArcanSwiftSyntax", targets: ["ArcanSwiftSyntax"])
     ],
@@ -28,6 +29,7 @@ let package = Package(
             name: "ArcanAnalyzers",
             dependencies: ["ArcanAnalysis", "ArcanDomain"]
         ),
+        .target(name: "ArcanReporting", dependencies: ["ArcanDomain"]),
         .target(name: "ArcanSource", dependencies: ["ArcanDomain"]),
         .target(
             name: "ArcanSwiftSyntax",
@@ -40,10 +42,22 @@ let package = Package(
         ),
         .target(
             name: "ArcanCLI",
-            dependencies: ["ArcanDomain", "ArcanSource"]
+            dependencies: [
+                "ArcanAnalysis",
+                "ArcanAnalyzers",
+                "ArcanDomain",
+                "ArcanReporting",
+                "ArcanSource",
+                "ArcanSwiftSyntax"
+            ]
         ),
         .executableTarget(name: "ArcanExecutable", dependencies: ["ArcanCLI"]),
         .testTarget(name: "ArcanCLITests", dependencies: ["ArcanCLI"]),
+        .testTarget(
+            name: "ArcanEndToEndTests",
+            dependencies: ["ArcanExecutable"],
+            resources: [.copy("Fixtures")]
+        ),
         .testTarget(name: "ArcanDomainTests", dependencies: ["ArcanDomain"]),
         .testTarget(
             name: "ArcanAnalysisTests",
@@ -59,6 +73,10 @@ let package = Package(
                 "ArcanSwiftSyntax"
             ],
             resources: [.copy("Fixtures")]
+        ),
+        .testTarget(
+            name: "ArcanReportingTests",
+            dependencies: ["ArcanDomain", "ArcanReporting"]
         ),
         .testTarget(
             name: "ArcanSourceTests",

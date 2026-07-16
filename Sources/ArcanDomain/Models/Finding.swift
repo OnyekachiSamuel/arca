@@ -6,7 +6,9 @@ public struct Finding: Codable, Equatable, Sendable, Identifiable {
     public let title: String
     public let severity: Severity
     public let filePath: String
+    public let range: SourceRange?
     public let explanation: String
+    public let evidence: [Evidence]
     public let suggestion: Suggestion?
 
     public init(
@@ -15,7 +17,9 @@ public struct Finding: Codable, Equatable, Sendable, Identifiable {
         title: String,
         severity: Severity,
         filePath: String,
+        range: SourceRange? = nil,
         explanation: String,
+        evidence: [Evidence] = [],
         suggestion: Suggestion? = nil
     ) {
         self.id = id
@@ -23,7 +27,9 @@ public struct Finding: Codable, Equatable, Sendable, Identifiable {
         self.title = title
         self.severity = severity
         self.filePath = filePath
+        self.range = range
         self.explanation = explanation
+        self.evidence = evidence
         self.suggestion = suggestion
     }
 }

@@ -29,7 +29,20 @@ struct DomainModelCodableTests {
             title: "God Object candidate",
             severity: .warning,
             filePath: "Sources/LargeCoordinator.swift",
+            range: SourceRange(
+                startLine: 1,
+                startColumn: 1,
+                endLine: 30,
+                endColumn: 2
+            ),
             explanation: "The type has too many responsibilities.",
+            evidence: [
+                Evidence(
+                    metric: "methods",
+                    observedValue: 30,
+                    thresholdValue: 25
+                )
+            ],
             suggestion: suggestion
         )
         let analyzerResult = AnalyzerResult(
