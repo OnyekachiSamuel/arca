@@ -14,7 +14,11 @@ struct ReviewCommandEndToEndTests {
         )
         let process = Process()
         process.executableURL = try arcanExecutableURL()
-        process.arguments = ["review", "--file", fixture.path]
+        process.arguments = [
+            "review",
+            "--file", fixture.path,
+            "--review", "god-object"
+        ]
 
         let standardOutput = Pipe()
         let standardError = Pipe()

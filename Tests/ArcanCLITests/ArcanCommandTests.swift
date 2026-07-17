@@ -14,6 +14,7 @@ struct ArcanCommandTests {
         OPTIONS:
           --file <path>           Review an explicit Swift file.
           --changed               Review changed Swift files in the Git repository.
+          --review <type>         Select a review; repeatable. Values: god-object, all.
           --debug                 Print loaded source and metadata.
           -h, --help              Show help information.
         """
@@ -48,6 +49,153 @@ struct ArcanCommandTests {
 
             #expect(result.exitCode == 0)
             #expect(result.reviewRequest?.selectedFiles == [file.path])
+            #expect(
+                result.reviewRequest?.selectedReviewTypes == [.godObject]
+            )
+        }
+    }
+
+    @Test("review accepts an explicit God Object review type")
+    func reviewAcceptsGodObjectType() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "struct App {}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.run(arguments: [
+                "review",
+                "--review", "god-object",
+                "--file", file.path
+            ])
+
+            #expect(result.exitCode == 0)
+            #expect(
+                result.reviewRequest?.selectedReviewTypes == [.godObject]
+            )
+        }
+    }
+
+    @Test("review all resolves to every registered review type")
+    func reviewAcceptsAllTypes() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "struct App {}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.run(arguments: [
+                "review",
+                "--file", file.path,
+                "--review", "all"
+            ])
+
+            #expect(result.exitCode == 0)
+            #expect(
+                result.reviewRequest?.selectedReviewTypes == [.godObject]
+            )
+        }
+    }
+
+    @Test("repeated review types are deduplicated")
+    func repeatedReviewTypesAreDeduplicated() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "struct App {}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.run(arguments: [
+                "review",
+                "--file", file.path,
+                "--review", "god-object",
+                "--review", "god-object"
+            ])
+
+            #expect(result.exitCode == 0)
+            #expect(
+                result.reviewRequest?.selectedReviewTypes == [.godObject]
+            )
+        }
+    }
+
+    @Test("all takes precedence when review types are repeated")
+    func allTakesPrecedence() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "struct App {}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.run(arguments: [
+                "review",
+                "--file", file.path,
+                "--review", "god-object",
+                "--review", "all"
+            ])
+
+            #expect(result.exitCode == 0)
+            #expect(
+                result.reviewRequest?.selectedReviewTypes == [.godObject]
+            )
+        }
+    }
+
+    @Test("unsupported review type returns a clear error")
+    func unsupportedReviewTypeReturnsError() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "struct App {}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.run(arguments: [
+                "review",
+                "--file", file.path,
+                "--review", "security"
+            ])
+
+            #expect(result.exitCode == 64)
+            #expect(
+                result.output
+                    == "Error: Unsupported review type 'security'."
+            )
+            #expect(result.reviewRequest == nil)
+        }
+    }
+
+    @Test("review type without a registered analyzer returns a clear error")
+    func unavailableReviewTypeReturnsError() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "struct App {}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.run(arguments: [
+                "review",
+                "--file", file.path,
+                "--review", "style"
+            ])
+
+            #expect(result.exitCode == 64)
+            #expect(
+                result.output
+                    == "Error: No analyzer is registered for review type 'style'. Available values: god-object, all."
+            )
+            #expect(result.reviewRequest == nil)
         }
     }
 
@@ -110,6 +258,107 @@ struct ArcanCommandTests {
             let change = try #require(result.reviewRequest?.changes.first)
             #expect(change.addedLineRanges.first?.startLine == 1)
             #expect(change.addedLineRanges.first?.endLine == 1)
+        }
+    }
+
+    @Test("review uses configured God Object thresholds from repository root")
+    func reviewUsesRepositoryConfiguration() async throws {
+        try await withTemporaryDirectory { repository in
+            try initializeGitRepository(at: repository)
+            let sources = repository.appendingPathComponent(
+                "Sources",
+                isDirectory: true
+            )
+            try FileManager.default.createDirectory(
+                at: sources,
+                withIntermediateDirectories: true
+            )
+            let file = sources.appendingPathComponent("LargeType.swift")
+            try """
+            class LargeType {
+                func first() {}
+                func second() {}
+            }
+            """.write(to: file, atomically: true, encoding: .utf8)
+            try """
+            {
+              "schemaVersion": 1,
+              "godObject": {
+                "maximumLines": 3,
+                "maximumMethods": 1
+              }
+            }
+            """.write(
+                to: repository.appendingPathComponent(".arcan.json"),
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.run(
+                arguments: ["review", "--file", file.path],
+                currentDirectory: sources.path
+            )
+
+            #expect(result.exitCode == 0)
+            #expect(result.output.contains("ARCAN-GOD-001"))
+            #expect(
+                result.reviewRequest?
+                    .configuration
+                    .godObjectThresholds
+                    .maximumLines == 3
+            )
+        }
+    }
+
+    @Test("review reports invalid configuration")
+    func reviewReportsInvalidConfiguration() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "struct App {}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+            try """
+            {
+              "schemaVersion": 99
+            }
+            """.write(
+                to: directory.appendingPathComponent(".arcan.json"),
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.run(
+                arguments: ["review", "--file", file.path],
+                currentDirectory: directory.path
+            )
+
+            #expect(result.exitCode == 64)
+            #expect(
+                result.output
+                    == "Error: Unsupported configuration schema version: 99. Supported version: 1."
+            )
+            #expect(result.reviewRequest == nil)
+        }
+    }
+
+    @Test("help remains available when configuration is invalid")
+    func helpDoesNotLoadConfiguration() async throws {
+        try await withTemporaryDirectory { directory in
+            try "not json".write(
+                to: directory.appendingPathComponent(".arcan.json"),
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.run(
+                arguments: ["review", "--help"],
+                currentDirectory: directory.path
+            )
+
+            #expect(result.exitCode == 0)
+            #expect(result.output == ArcanCommand.reviewHelp)
         }
     }
 

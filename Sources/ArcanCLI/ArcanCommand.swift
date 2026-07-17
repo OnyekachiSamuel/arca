@@ -1,5 +1,6 @@
 import ArcanAnalysis
 import ArcanAnalyzers
+import ArcanConfiguration
 import ArcanDomain
 import ArcanGit
 import ArcanReporting
@@ -34,6 +35,7 @@ public enum ArcanCommand {
     OPTIONS:
       --file <path>           Review an explicit Swift file.
       --changed               Review changed Swift files in the Git repository.
+      --review <type>         Select a review; repeatable. Values: god-object, all.
       --debug                 Print loaded source and metadata.
       -h, --help              Show help information.
     """
@@ -54,34 +56,53 @@ public enum ArcanCommand {
         arguments: [String],
         currentDirectory: String = FileManager.default.currentDirectoryPath
     ) async -> CommandResult {
-        if arguments.count == 4,
-           arguments[0] == "review",
-           arguments[1] == "--file",
-           arguments[3] == "--debug" {
-            return await reviewFile(at: arguments[2], debug: true)
-        }
-
-        if arguments.count == 3,
-           arguments[0] == "review",
-           arguments[1] == "--file" {
-            return await reviewFile(at: arguments[2], debug: false)
-        }
-
-        if arguments == ["review", "--changed"] {
-            return await reviewChanged(from: currentDirectory)
-        }
-
         switch arguments {
         case [], ["--help"], ["-h"]:
             return CommandResult(output: rootHelp, exitCode: 0)
         case ["review", "--help"], ["review", "-h"]:
             return CommandResult(output: reviewHelp, exitCode: 0)
-        case ["review"]:
-            return CommandResult(
-                output: "No Swift file selected. Run 'arcan review --help' for usage.",
-                exitCode: 0
-            )
         default:
+            break
+        }
+
+        guard arguments.first == "review" else {
+            return CommandResult(
+                output: "Error: unknown command or option. Run 'arcan --help' for usage.",
+                exitCode: 64
+            )
+        }
+
+        do {
+            let options = try ReviewCommandParser().parse(
+                arguments: Array(arguments.dropFirst())
+            )
+            guard let source = options.source else {
+                return CommandResult(
+                    output: "No Swift file selected. Run 'arcan review --help' for usage.",
+                    exitCode: 0
+                )
+            }
+
+            switch source {
+            case .file(let path):
+                return await reviewFile(
+                    at: path,
+                    debug: options.debug,
+                    currentDirectory: currentDirectory,
+                    reviewSelection: options.reviewSelection
+                )
+            case .changed:
+                return await reviewChanged(
+                    from: currentDirectory,
+                    reviewSelection: options.reviewSelection
+                )
+            }
+        } catch let error as ReviewCommandParsingError {
+            return CommandResult(
+                output: "Error: \(error.localizedDescription)",
+                exitCode: 64
+            )
+        } catch {
             return CommandResult(
                 output: "Error: unknown command or option. Run 'arcan --help' for usage.",
                 exitCode: 64
@@ -91,14 +112,18 @@ public enum ArcanCommand {
 
     private static func reviewFile(
         at path: String,
-        debug: Bool
+        debug: Bool,
+        currentDirectory: String,
+        reviewSelection: ReviewSelection
     ) async -> CommandResult {
         do {
             let selectedFile = try ExplicitSwiftFileSelector().select(path: path)
             return await reviewFiles(
                 at: [selectedFile],
                 debug: debug,
-                failureDescription: "Swift file: \(path)"
+                failureDescription: "Swift file: \(path)",
+                currentDirectory: currentDirectory,
+                reviewSelection: reviewSelection
             )
         } catch let error as SourceSelectionError {
             return CommandResult(
@@ -114,7 +139,8 @@ public enum ArcanCommand {
     }
 
     private static func reviewChanged(
-        from currentDirectory: String
+        from currentDirectory: String,
+        reviewSelection: ReviewSelection
     ) async -> CommandResult {
         do {
             let changes = try GitDiffProvider().extract(from: currentDirectory)
@@ -123,6 +149,8 @@ public enum ArcanCommand {
                 at: selectedFiles,
                 debug: false,
                 failureDescription: "changed Swift files",
+                currentDirectory: currentDirectory,
+                reviewSelection: reviewSelection,
                 changes: changes
             )
         } catch let error as GitRepositoryFinderError {
@@ -147,16 +175,37 @@ public enum ArcanCommand {
         at paths: [String],
         debug: Bool,
         failureDescription: String,
+        currentDirectory: String,
+        reviewSelection: ReviewSelection,
         changes: [CodeChange] = []
     ) async -> CommandResult {
         do {
+            let configuration = try loadConfiguration(
+                from: currentDirectory
+            )
             let sources = try paths.map { path in
                 try SourceFileLoader().load(path: path)
             }
+            let structureProvider = SwiftSyntaxStructureProvider()
+            let registry = AnalyzerRegistry(analyzers: [
+                GodObjectAnalyzer(
+                    thresholds: configuration.godObjectThresholds,
+                    structureProvider: structureProvider
+                )
+            ])
+            let selectedReviewTypes = try resolveReviewTypes(
+                reviewSelection,
+                using: registry
+            )
+            let selectedAnalyzers = registry.analyzers(
+                matching: selectedReviewTypes
+            )
             let request = ReviewRequest(
                 id: UUID(),
                 selectedFiles: paths,
-                changes: changes
+                changes: changes,
+                selectedReviewTypes: selectedReviewTypes,
+                configuration: configuration
             )
 
             if debug, let source = sources.first {
@@ -173,7 +222,6 @@ public enum ArcanCommand {
                 )
             }
 
-            let structureProvider = SwiftSyntaxStructureProvider()
             let sourceContexts = try makeSourceContexts(
                 sourceFiles: sources,
                 changes: changes,
@@ -186,23 +234,24 @@ public enum ArcanCommand {
                 sourceFiles: sources,
                 sourceContexts: sourceContexts
             )
-            let analyzer = GodObjectAnalyzer(
-                structureProvider: structureProvider
-            )
-            let analyzerResult = try await AnalyzerRunner().run(
-                analyzer,
+            let report = try await ReviewEngine().review(
+                analyzers: selectedAnalyzers,
                 context: context
-            )
-            let report = ReviewReport(
-                schemaVersion: 1,
-                requestID: request.id,
-                findings: analyzerResult.findings,
-                analyzerResults: [analyzerResult]
             )
             return CommandResult(
                 output: TerminalReporter().render(report: report),
                 exitCode: 0,
                 reviewRequest: request
+            )
+        } catch let error as ReviewCommandParsingError {
+            return CommandResult(
+                output: "Error: \(error.localizedDescription)",
+                exitCode: 64
+            )
+        } catch let error as ConfigurationLoadingError {
+            return CommandResult(
+                output: "Error: \(error.localizedDescription)",
+                exitCode: 64
             )
         } catch let error as SourceLoadingError {
             return CommandResult(
@@ -215,6 +264,58 @@ public enum ArcanCommand {
                 exitCode: 64
             )
         }
+    }
+
+    private static func resolveReviewTypes(
+        _ selection: ReviewSelection,
+        using registry: AnalyzerRegistry
+    ) throws -> Set<ReviewType> {
+        switch selection {
+        case .all:
+            return registry.supportedReviewTypes
+        case .types(let requestedReviewTypes):
+            let unavailableReviewTypes = requestedReviewTypes.subtracting(
+                registry.supportedReviewTypes
+            )
+            guard let unavailableReviewType = unavailableReviewTypes.sorted(
+                by: { $0.commandLineName < $1.commandLineName }
+            ).first else {
+                return requestedReviewTypes
+            }
+
+            let availableValues = registry.supportedReviewTypes
+                .map(\.commandLineName)
+                .sorted() + ["all"]
+            throw ReviewCommandParsingError.unavailableReviewType(
+                unavailableReviewType.commandLineName,
+                availableValues: availableValues
+            )
+        }
+    }
+
+    private static func loadConfiguration(
+        from currentDirectory: String
+    ) throws -> ArcanConfiguration {
+        let configurationDirectory: String
+        do {
+            configurationDirectory = try GitRepositoryFinder().discover(
+                from: currentDirectory
+            )
+        } catch let error as GitRepositoryFinderError {
+            switch error {
+            case .notRepository:
+                configurationDirectory = currentDirectory
+            case .commandCouldNotRun, .invalidOutput:
+                throw error
+            }
+        }
+
+        return try ConfigurationLoader().load(
+            from: URL(
+                fileURLWithPath: configurationDirectory,
+                isDirectory: true
+            )
+        )
     }
 
     private static func makeSourceContexts(

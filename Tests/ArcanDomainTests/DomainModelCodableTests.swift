@@ -25,7 +25,17 @@ struct DomainModelCodableTests {
                         )
                     ]
                 )
-            ]
+            ],
+            selectedReviewTypes: [.godObject, .style],
+            configuration: ArcanConfiguration(
+                schemaVersion: 1,
+                godObjectThresholds: GodObjectThresholds(
+                    maximumLines: 300,
+                    maximumMethods: 15,
+                    maximumStoredProperties: 12,
+                    minimumTriggeredSignals: 3
+                )
+            )
         )
 
         let data = try encodeToJSON(request)
@@ -64,7 +74,8 @@ struct DomainModelCodableTests {
         )
         let analyzerResult = AnalyzerResult(
             analyzerID: "god-object",
-            findings: [finding]
+            findings: [finding],
+            durationMilliseconds: 17
         )
         let report = ReviewReport(
             schemaVersion: 1,
@@ -80,6 +91,22 @@ struct DomainModelCodableTests {
         #expect(decoded == report)
         #expect(decoded.findings.first?.suggestion == suggestion)
         #expect(decoded.analyzerResults.first == analyzerResult)
+    }
+
+    @Test("legacy analyzer result without duration defaults to zero")
+    func legacyAnalyzerResultDuration() throws {
+        let data = Data(
+            """
+            {
+              "analyzerID": "legacy",
+              "findings": []
+            }
+            """.utf8
+        )
+
+        let decoded = try decodeFromJSON(AnalyzerResult.self, from: data)
+
+        #expect(decoded.durationMilliseconds == 0)
     }
 
     @Test("source context window encoding and decoding of values")
