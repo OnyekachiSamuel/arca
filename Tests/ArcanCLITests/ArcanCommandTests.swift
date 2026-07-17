@@ -1,3 +1,4 @@
+import ArcanDomain
 import Foundation
 import Testing
 @testable import ArcanCLI
@@ -15,6 +16,7 @@ struct ArcanCommandTests {
           --file <path>           Review an explicit Swift file.
           --changed               Review changed Swift files in the Git repository.
           --review <type>         Select a review; repeatable. Values: god-object, all.
+          --format <format>       Select output format. Values: terminal, json.
           --debug                 Print loaded source and metadata.
           -h, --help              Show help information.
         """
@@ -49,8 +51,95 @@ struct ArcanCommandTests {
 
             #expect(result.exitCode == 0)
             #expect(result.reviewRequest?.selectedFiles == [file.path])
+            #expect(result.output.hasPrefix("ARCAN Review Report"))
             #expect(
                 result.reviewRequest?.selectedReviewTypes == [.godObject]
+            )
+        }
+    }
+
+    @Test("review JSON format returns a decodable report without decoration")
+    func reviewReturnsJSON() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "struct App {}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.run(arguments: [
+                "review",
+                "--file", file.path,
+                "--format", "json"
+            ])
+            let report = try JSONDecoder().decode(
+                ReviewReport.self,
+                from: Data(result.output.utf8)
+            )
+
+            #expect(result.exitCode == 0)
+            #expect(
+                report.schemaVersion == ReviewReport.currentSchemaVersion
+            )
+            #expect(
+                report.analyzerResults.map(\.analyzerID) == ["god-object"]
+            )
+            #expect(!result.output.contains("ARCAN Review Report"))
+            #expect(!result.output.contains("\u{001B}["))
+        }
+    }
+
+    @Test("unsupported output format returns a clear error")
+    func unsupportedOutputFormatReturnsError() async {
+        let result = await ArcanCommand.run(arguments: [
+            "review",
+            "--format", "xml"
+        ])
+
+        #expect(result.exitCode == 64)
+        #expect(
+            result.output
+                == "Error: Unsupported output format 'xml'. Available values: terminal, json."
+        )
+    }
+
+    @Test("output format may only be specified once")
+    func repeatedOutputFormatReturnsError() async {
+        let result = await ArcanCommand.run(arguments: [
+            "review",
+            "--format", "json",
+            "--format", "json"
+        ])
+
+        #expect(result.exitCode == 64)
+        #expect(
+            result.output
+                == "Error: Option '--format' may only be specified once."
+        )
+    }
+
+    @Test("JSON output cannot be combined with debug output")
+    func jsonAndDebugReturnError() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "struct App {}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.run(arguments: [
+                "review",
+                "--file", file.path,
+                "--format", "json",
+                "--debug"
+            ])
+
+            #expect(result.exitCode == 64)
+            #expect(
+                result.output
+                    == "Error: Options '--debug' and '--format json' cannot be used together."
             )
         }
     }

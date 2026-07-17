@@ -10,7 +10,7 @@ public struct TerminalReporter: Reporter {
         }
     }
 
-    public func render(report: ReviewReport) -> String {
+    public func render(report: ReviewReport) throws -> String {
         let usesColor = outputIsTTY()
         let findingLabel = report.findings.count == 1 ? "finding" : "findings"
         var lines = [

@@ -58,14 +58,17 @@ let package = Package(
             ]
         ),
         .executableTarget(name: "ArcanExecutable", dependencies: ["ArcanCLI"]),
-        .testTarget(name: "ArcanCLITests", dependencies: ["ArcanCLI"]),
+        .testTarget(
+            name: "ArcanCLITests",
+            dependencies: ["ArcanCLI", "ArcanDomain"]
+        ),
         .testTarget(
             name: "ArcanConfigurationTests",
             dependencies: ["ArcanConfiguration", "ArcanDomain"]
         ),
         .testTarget(
             name: "ArcanEndToEndTests",
-            dependencies: ["ArcanExecutable"],
+            dependencies: ["ArcanDomain", "ArcanExecutable"],
             resources: [.copy("Fixtures")]
         ),
         .testTarget(name: "ArcanDomainTests", dependencies: ["ArcanDomain"]),

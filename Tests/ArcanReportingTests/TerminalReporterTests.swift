@@ -6,10 +6,10 @@ import Testing
 @Suite("Terminal reporter")
 struct TerminalReporterTests {
     @Test("non-TTY output matches the readable finding snapshot without color")
-    func rendersFindingWithoutColor() {
+    func rendersFindingWithoutColor() throws {
         let reporter: any Reporter = TerminalReporter(outputIsTTY: { false })
 
-        let output = reporter.render(report: makeReport())
+        let output = try reporter.render(report: makeReport())
 
         let expected = """
         ARCAN Review Report
@@ -32,10 +32,10 @@ struct TerminalReporterTests {
     }
 
     @Test("TTY output applies severity color")
-    func rendersFindingWithColor() {
+    func rendersFindingWithColor() throws {
         let reporter = TerminalReporter(outputIsTTY: { true })
 
-        let output = reporter.render(report: makeReport())
+        let output = try reporter.render(report: makeReport())
 
         #expect(output.contains("\u{001B}[33m[WARNING]\u{001B}[0m"))
     }
@@ -69,7 +69,7 @@ struct TerminalReporterTests {
             )
         )
         return ReviewReport(
-            schemaVersion: 1,
+            schemaVersion: ReviewReport.currentSchemaVersion,
             requestID: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!,
             findings: [finding],
             analyzerResults: [

@@ -36,6 +36,7 @@ public enum ArcanCommand {
       --file <path>           Review an explicit Swift file.
       --changed               Review changed Swift files in the Git repository.
       --review <type>         Select a review; repeatable. Values: god-object, all.
+      --format <format>       Select output format. Values: terminal, json.
       --debug                 Print loaded source and metadata.
       -h, --help              Show help information.
     """
@@ -89,12 +90,14 @@ public enum ArcanCommand {
                     at: path,
                     debug: options.debug,
                     currentDirectory: currentDirectory,
-                    reviewSelection: options.reviewSelection
+                    reviewSelection: options.reviewSelection,
+                    outputFormat: options.outputFormat
                 )
             case .changed:
                 return await reviewChanged(
                     from: currentDirectory,
-                    reviewSelection: options.reviewSelection
+                    reviewSelection: options.reviewSelection,
+                    outputFormat: options.outputFormat
                 )
             }
         } catch let error as ReviewCommandParsingError {
@@ -114,7 +117,8 @@ public enum ArcanCommand {
         at path: String,
         debug: Bool,
         currentDirectory: String,
-        reviewSelection: ReviewSelection
+        reviewSelection: ReviewSelection,
+        outputFormat: ReviewOutputFormat
     ) async -> CommandResult {
         do {
             let selectedFile = try ExplicitSwiftFileSelector().select(path: path)
@@ -123,7 +127,8 @@ public enum ArcanCommand {
                 debug: debug,
                 failureDescription: "Swift file: \(path)",
                 currentDirectory: currentDirectory,
-                reviewSelection: reviewSelection
+                reviewSelection: reviewSelection,
+                outputFormat: outputFormat
             )
         } catch let error as SourceSelectionError {
             return CommandResult(
@@ -140,7 +145,8 @@ public enum ArcanCommand {
 
     private static func reviewChanged(
         from currentDirectory: String,
-        reviewSelection: ReviewSelection
+        reviewSelection: ReviewSelection,
+        outputFormat: ReviewOutputFormat
     ) async -> CommandResult {
         do {
             let changes = try GitDiffProvider().extract(from: currentDirectory)
@@ -151,6 +157,7 @@ public enum ArcanCommand {
                 failureDescription: "changed Swift files",
                 currentDirectory: currentDirectory,
                 reviewSelection: reviewSelection,
+                outputFormat: outputFormat,
                 changes: changes
             )
         } catch let error as GitRepositoryFinderError {
@@ -177,6 +184,7 @@ public enum ArcanCommand {
         failureDescription: String,
         currentDirectory: String,
         reviewSelection: ReviewSelection,
+        outputFormat: ReviewOutputFormat,
         changes: [CodeChange] = []
     ) async -> CommandResult {
         do {
@@ -238,8 +246,9 @@ public enum ArcanCommand {
                 analyzers: selectedAnalyzers,
                 context: context
             )
+            let reporter = reporter(for: outputFormat)
             return CommandResult(
-                output: TerminalReporter().render(report: report),
+                output: try reporter.render(report: report),
                 exitCode: 0,
                 reviewRequest: request
             )
@@ -263,6 +272,17 @@ public enum ArcanCommand {
                 output: "Error: Review failed for \(failureDescription)",
                 exitCode: 64
             )
+        }
+    }
+
+    private static func reporter(
+        for outputFormat: ReviewOutputFormat
+    ) -> any Reporter {
+        switch outputFormat {
+        case .terminal:
+            TerminalReporter()
+        case .json:
+            JSONReporter()
         }
     }
 

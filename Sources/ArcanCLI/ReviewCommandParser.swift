@@ -4,6 +4,8 @@ struct ReviewCommandParser {
     func parse(arguments: [String]) throws -> ReviewCommandOptions {
         var source: ReviewCommandOptions.Source?
         var reviewValues: [String] = []
+        var outputFormat = ReviewOutputFormat.terminal
+        var outputFormatWasSpecified = false
         var debug = false
         var index = 0
 
@@ -29,6 +31,30 @@ struct ReviewCommandParser {
                     )
                 )
                 index += 2
+            case "--format":
+                guard !outputFormatWasSpecified else {
+                    throw ReviewCommandParsingError.duplicateOption(
+                        "--format"
+                    )
+                }
+                let rawFormat = try value(
+                    after: "--format",
+                    at: index,
+                    in: arguments
+                )
+                guard let parsedFormat = ReviewOutputFormat(
+                    rawValue: rawFormat
+                ) else {
+                    throw ReviewCommandParsingError.unsupportedOutputFormat(
+                        rawFormat,
+                        availableValues: ReviewOutputFormat.allCases.map(
+                            \.rawValue
+                        )
+                    )
+                }
+                outputFormat = parsedFormat
+                outputFormatWasSpecified = true
+                index += 2
             case "--debug":
                 debug = true
                 index += 1
@@ -43,11 +69,16 @@ struct ReviewCommandParser {
             guard case .file = source else {
                 throw ReviewCommandParsingError.debugRequiresFile
             }
+            guard outputFormat != .json else {
+                throw ReviewCommandParsingError
+                    .jsonFormatDoesNotSupportDebug
+            }
         }
 
         return ReviewCommandOptions(
             source: source,
             reviewSelection: try makeReviewSelection(from: reviewValues),
+            outputFormat: outputFormat,
             debug: debug
         )
     }

@@ -5,8 +5,11 @@ enum ReviewCommandParsingError: Equatable, LocalizedError {
     case multipleSourceSelections
     case unsupportedReviewType(String)
     case unavailableReviewType(String, availableValues: [String])
+    case unsupportedOutputFormat(String, availableValues: [String])
+    case duplicateOption(String)
     case unknownOption(String)
     case debugRequiresFile
+    case jsonFormatDoesNotSupportDebug
 
     var errorDescription: String? {
         switch self {
@@ -21,10 +24,19 @@ enum ReviewCommandParsingError: Equatable, LocalizedError {
             No analyzer is registered for review type '\(value)'. \
             Available values: \(availableValues.joined(separator: ", ")).
             """
+        case .unsupportedOutputFormat(let value, let availableValues):
+            """
+            Unsupported output format '\(value)'. \
+            Available values: \(availableValues.joined(separator: ", ")).
+            """
+        case .duplicateOption(let option):
+            "Option '\(option)' may only be specified once."
         case .unknownOption(let option):
             "Unknown review option '\(option)'."
         case .debugRequiresFile:
             "Option '--debug' requires '--file'."
+        case .jsonFormatDoesNotSupportDebug:
+            "Options '--debug' and '--format json' cannot be used together."
         }
     }
 }

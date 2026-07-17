@@ -6,5 +6,6 @@ struct ReviewCommandOptions: Equatable, Sendable {
 
     let source: Source?
     let reviewSelection: ReviewSelection
+    let outputFormat: ReviewOutputFormat
     let debug: Bool
 }

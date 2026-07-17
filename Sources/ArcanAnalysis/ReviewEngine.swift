@@ -17,7 +17,7 @@ public struct ReviewEngine: Sendable {
         )
 
         return ReviewReport(
-            schemaVersion: 1,
+            schemaVersion: ReviewReport.currentSchemaVersion,
             requestID: context.request.id,
             findings: analyzerResults.flatMap(\.findings),
             analyzerResults: analyzerResults
