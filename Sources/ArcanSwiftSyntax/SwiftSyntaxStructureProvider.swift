@@ -14,9 +14,9 @@ public struct SwiftSyntaxStructureProvider: SwiftStructureProvider {
             fileName: sourceFile.path,
             tree: syntaxTree
         )
-        let visitor = StructuralMetricsVisitor(converter: converter)
-        visitor.walk(syntaxTree)
-        return visitor.metrics
+        let extractor = SwiftSourceCodeMetricsExtractor(converter: converter)
+        extractor.walk(syntaxTree)
+        return extractor.metrics
     }
 }
 

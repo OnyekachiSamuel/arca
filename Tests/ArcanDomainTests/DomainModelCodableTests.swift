@@ -82,6 +82,34 @@ struct DomainModelCodableTests {
         #expect(decoded.analyzerResults.first == analyzerResult)
     }
 
+    @Test("source context window encoding and decoding of values")
+    func sourceContextWindow() throws {
+        let context = SourceContextWindow(
+            filePath: "Sources/App.swift",
+            changedLineRange: ChangedLineRange(startLine: 10, endLine: 11),
+            includedLineRange: SourceLineRange(startLine: 7, endLine: 14),
+            sourceText: "func update() {}",
+            containingType: TypeStructuralMetrics(
+                name: "App",
+                kind: .class,
+                range: SourceRange(
+                    startLine: 1,
+                    startColumn: 1,
+                    endLine: 30,
+                    endColumn: 2
+                ),
+                lineCount: 30,
+                methodCount: 4,
+                propertyCount: 3
+            )
+        )
+
+        let data = try encodeToJSON(context)
+        let decoded = try decodeFromJSON(SourceContextWindow.self, from: data)
+
+        #expect(decoded == context)
+    }
+
     @Test(
         "severity values encoding and decoding",
         arguments: Severity.allCases

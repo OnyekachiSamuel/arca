@@ -3,7 +3,7 @@ import ArcanDomain
 import SwiftParser
 import SwiftSyntax
 
-final class StructuralMetricsVisitor: SyntaxVisitor {
+final class SwiftSourceCodeMetricsExtractor: SyntaxVisitor {
     private let converter: SourceLocationConverter
     private(set) var metrics: [TypeStructuralMetrics] = []
 

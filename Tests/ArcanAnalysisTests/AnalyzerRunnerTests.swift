@@ -18,7 +18,17 @@ struct AnalyzerRunnerTests {
             selectedFiles: ["Sources/App.swift"],
             changes: [change]
         )
-        let context = AnalysisContext(request: request)
+        let sourceContext = SourceContextWindow(
+            filePath: "Sources/App.swift",
+            changedLineRange: ChangedLineRange(startLine: 4, endLine: 6),
+            includedLineRange: SourceLineRange(startLine: 2, endLine: 8),
+            sourceText: "struct App {}",
+            containingType: nil
+        )
+        let context = AnalysisContext(
+            request: request,
+            sourceContexts: [sourceContext]
+        )
         let expected = AnalyzerResult(analyzerID: "mock", findings: [])
         let recorder = RecordAnalysisContext()
         let analyzer = MockAnalyzer(recorder: recorder, result: expected)
@@ -31,6 +41,7 @@ struct AnalyzerRunnerTests {
         let receivedContext = await recorder.receivedContext
         #expect(receivedContext == context)
         #expect(receivedContext?.changes == [change])
+        #expect(receivedContext?.sourceContexts == [sourceContext])
     }
 }
 
