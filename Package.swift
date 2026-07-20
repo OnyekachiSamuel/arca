@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "ArcanConfiguration", targets: ["ArcanConfiguration"]),
         .library(name: "ArcanDomain", targets: ["ArcanDomain"]),
         .library(name: "ArcanGit", targets: ["ArcanGit"]),
+        .library(name: "ArcanProcess", targets: ["ArcanProcess"]),
         .library(name: "ArcanAnalysis", targets: ["ArcanAnalysis"]),
         .library(name: "ArcanAnalyzers", targets: ["ArcanAnalyzers"]),
         .library(name: "ArcanReporting", targets: ["ArcanReporting"]),
@@ -28,6 +29,7 @@ let package = Package(
         .target(name: "ArcanDomain"),
         .target(name: "ArcanConfiguration", dependencies: ["ArcanDomain"]),
         .target(name: "ArcanGit", dependencies: ["ArcanDomain"]),
+        .target(name: "ArcanProcess"),
         .target(name: "ArcanAnalysis", dependencies: ["ArcanDomain"]),
         .target(
             name: "ArcanAnalyzers",
@@ -75,6 +77,10 @@ let package = Package(
         .testTarget(
             name: "ArcanGitTests",
             dependencies: ["ArcanDomain", "ArcanGit"]
+        ),
+        .testTarget(
+            name: "ArcanProcessTests",
+            dependencies: ["ArcanProcess"]
         ),
         .testTarget(
             name: "ArcanAnalysisTests",
