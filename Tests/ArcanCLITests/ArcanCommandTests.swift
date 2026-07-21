@@ -15,7 +15,7 @@ struct ArcanCommandTests {
         OPTIONS:
           --file <path>           Review an explicit Swift file.
           --changed               Review changed Swift files in the Git repository.
-          --review <type>         Select a review; repeatable. Values: god-object, all.
+          --review <type>         Select a review; repeatable. Values: god-object, style, all.
           --format <format>       Select output format. Values: terminal, json.
           --debug                 Print loaded source and metadata.
           -h, --help              Show help information.
@@ -87,6 +87,62 @@ struct ArcanCommandTests {
             )
             #expect(!result.output.contains("ARCAN Review Report"))
             #expect(!result.output.contains("\u{001B}["))
+        }
+    }
+
+    @Test("style review executes SwiftLint and returns normalized findings")
+    func reviewExecutesSwiftLint() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "let value = 1;".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+            let executable = directory.appendingPathComponent("swiftlint")
+            try """
+            #!/bin/sh
+            if [ "$1" = "version" ]; then
+              printf 'test-version\\n'
+              exit 0
+            fi
+            printf '[{"character":14,"file":"\(file.path)","line":1,"reason":"Unneeded semicolon.","rule_id":"trailing_semicolon","severity":"Warning","type":"Trailing Semicolon"}]'
+            """.write(
+                to: executable,
+                atomically: true,
+                encoding: .utf8
+            )
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o755],
+                ofItemAtPath: executable.path
+            )
+
+            let result = await ArcanCommand.run(
+                arguments: [
+                    "review",
+                    "--file", file.path,
+                    "--review", "style",
+                    "--format", "json"
+                ],
+                swiftLintExecutableURL: executable
+            )
+            let report = try JSONDecoder().decode(
+                ReviewReport.self,
+                from: Data(result.output.utf8)
+            )
+            let analyzerResult = try #require(
+                report.analyzerResults.first
+            )
+            let finding = try #require(analyzerResult.findings.first)
+
+            #expect(result.exitCode == 0)
+            #expect(
+                result.reviewRequest?.selectedReviewTypes == [.style]
+            )
+            #expect(analyzerResult.analyzerID == "swiftlint")
+            #expect(analyzerResult.tool?.version == "test-version")
+            #expect(finding.ruleID == "swiftlint.trailing_semicolon")
+            #expect(finding.externalRuleID == "trailing_semicolon")
         }
     }
 

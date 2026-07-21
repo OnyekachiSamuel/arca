@@ -44,7 +44,9 @@ struct ReviewEngineTests {
             context: context
         )
 
-        #expect(report.schemaVersion == 1)
+        #expect(
+            report.schemaVersion == ReviewReport.currentSchemaVersion
+        )
         #expect(report.requestID == requestID)
         #expect(
             report.analyzerResults.map(\.analyzerID)

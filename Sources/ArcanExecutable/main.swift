@@ -1,8 +1,10 @@
+import ArcanAnalyzers
 import ArcanCLI
 import Foundation
 
 let result = await ArcanCommand.run(
-    arguments: Array(CommandLine.arguments.dropFirst())
+    arguments: Array(CommandLine.arguments.dropFirst()),
+    swiftLintExecutableURL: SwiftLintExecutableLocator().locate()
 )
 let stream = result.exitCode == 0 ? FileHandle.standardOutput : FileHandle.standardError
 

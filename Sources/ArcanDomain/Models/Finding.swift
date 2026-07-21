@@ -3,6 +3,7 @@ import Foundation
 public struct Finding: Codable, Equatable, Sendable, Identifiable {
     public let id: UUID
     public let ruleID: String
+    public let externalRuleID: String?
     public let title: String
     public let severity: Severity
     public let filePath: String
@@ -14,6 +15,7 @@ public struct Finding: Codable, Equatable, Sendable, Identifiable {
     public init(
         id: UUID,
         ruleID: String,
+        externalRuleID: String? = nil,
         title: String,
         severity: Severity,
         filePath: String,
@@ -24,6 +26,7 @@ public struct Finding: Codable, Equatable, Sendable, Identifiable {
     ) {
         self.id = id
         self.ruleID = ruleID
+        self.externalRuleID = externalRuleID
         self.title = title
         self.severity = severity
         self.filePath = filePath

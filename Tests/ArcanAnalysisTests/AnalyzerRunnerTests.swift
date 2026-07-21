@@ -31,7 +31,8 @@ struct AnalyzerRunnerTests {
         )
         let analyzerResult = AnalyzerResult(
             analyzerID: "mock",
-            findings: []
+            findings: [],
+            tool: ToolMetadata(name: "MockTool", version: "1.2.3")
         )
         let recorder = RecordAnalysisContext()
         let analyzer = MockAnalyzer(
@@ -46,6 +47,12 @@ struct AnalyzerRunnerTests {
 
         #expect(result.analyzerID == "mock")
         #expect(result.findings.isEmpty)
+        #expect(
+            result.tool == ToolMetadata(
+                name: "MockTool",
+                version: "1.2.3"
+            )
+        )
         #expect(result.durationMilliseconds == 8)
         #expect(analyzer.id == "mock")
         #expect(analyzer.supportedReviewTypes == [.godObject, .style])

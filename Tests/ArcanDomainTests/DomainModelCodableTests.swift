@@ -53,6 +53,7 @@ struct DomainModelCodableTests {
         let finding = Finding(
             id: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
             ruleID: "ARCAN-GOD-001",
+            externalRuleID: "type_body_length",
             title: "God Object candidate",
             severity: .warning,
             filePath: "Sources/LargeCoordinator.swift",
@@ -75,10 +76,11 @@ struct DomainModelCodableTests {
         let analyzerResult = AnalyzerResult(
             analyzerID: "god-object",
             findings: [finding],
+            tool: ToolMetadata(name: "SwiftLint", version: "0.63.2"),
             durationMilliseconds: 17
         )
         let report = ReviewReport(
-            schemaVersion: 1,
+            schemaVersion: ReviewReport.currentSchemaVersion,
             requestID: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!,
             findings: [finding],
             analyzerResults: [analyzerResult]
@@ -89,7 +91,12 @@ struct DomainModelCodableTests {
         let decoded = try decodeFromJSON(ReviewReport.self, from: data)
 
         #expect(decoded == report)
+        #expect(decoded.findings.first?.externalRuleID == "type_body_length")
         #expect(decoded.findings.first?.suggestion == suggestion)
+        #expect(
+            decoded.analyzerResults.first?.tool
+                == ToolMetadata(name: "SwiftLint", version: "0.63.2")
+        )
         #expect(decoded.analyzerResults.first == analyzerResult)
     }
 
@@ -107,6 +114,7 @@ struct DomainModelCodableTests {
         let decoded = try decodeFromJSON(AnalyzerResult.self, from: data)
 
         #expect(decoded.durationMilliseconds == 0)
+        #expect(decoded.tool == nil)
     }
 
     @Test("source context window encoding and decoding of values")

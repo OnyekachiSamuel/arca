@@ -1,7 +1,7 @@
 import Foundation
 
 public struct ReviewReport: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public let schemaVersion: Int
     public let requestID: UUID

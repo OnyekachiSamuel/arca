@@ -35,7 +35,7 @@ public enum ArcanCommand {
     OPTIONS:
       --file <path>           Review an explicit Swift file.
       --changed               Review changed Swift files in the Git repository.
-      --review <type>         Select a review; repeatable. Values: god-object, all.
+      --review <type>         Select a review; repeatable. Values: god-object, style, all.
       --format <format>       Select output format. Values: terminal, json.
       --debug                 Print loaded source and metadata.
       -h, --help              Show help information.
@@ -55,7 +55,8 @@ public enum ArcanCommand {
 
     public static func run(
         arguments: [String],
-        currentDirectory: String = FileManager.default.currentDirectoryPath
+        currentDirectory: String = FileManager.default.currentDirectoryPath,
+        swiftLintExecutableURL: URL? = nil
     ) async -> CommandResult {
         switch arguments {
         case [], ["--help"], ["-h"]:
@@ -91,13 +92,15 @@ public enum ArcanCommand {
                     debug: options.debug,
                     currentDirectory: currentDirectory,
                     reviewSelection: options.reviewSelection,
-                    outputFormat: options.outputFormat
+                    outputFormat: options.outputFormat,
+                    swiftLintExecutableURL: swiftLintExecutableURL
                 )
             case .changed:
                 return await reviewChanged(
                     from: currentDirectory,
                     reviewSelection: options.reviewSelection,
-                    outputFormat: options.outputFormat
+                    outputFormat: options.outputFormat,
+                    swiftLintExecutableURL: swiftLintExecutableURL
                 )
             }
         } catch let error as ReviewCommandParsingError {
@@ -118,7 +121,8 @@ public enum ArcanCommand {
         debug: Bool,
         currentDirectory: String,
         reviewSelection: ReviewSelection,
-        outputFormat: ReviewOutputFormat
+        outputFormat: ReviewOutputFormat,
+        swiftLintExecutableURL: URL?
     ) async -> CommandResult {
         do {
             let selectedFile = try ExplicitSwiftFileSelector().select(path: path)
@@ -128,7 +132,8 @@ public enum ArcanCommand {
                 failureDescription: "Swift file: \(path)",
                 currentDirectory: currentDirectory,
                 reviewSelection: reviewSelection,
-                outputFormat: outputFormat
+                outputFormat: outputFormat,
+                swiftLintExecutableURL: swiftLintExecutableURL
             )
         } catch let error as SourceSelectionError {
             return CommandResult(
@@ -146,7 +151,8 @@ public enum ArcanCommand {
     private static func reviewChanged(
         from currentDirectory: String,
         reviewSelection: ReviewSelection,
-        outputFormat: ReviewOutputFormat
+        outputFormat: ReviewOutputFormat,
+        swiftLintExecutableURL: URL?
     ) async -> CommandResult {
         do {
             let changes = try GitDiffProvider().extract(from: currentDirectory)
@@ -158,6 +164,7 @@ public enum ArcanCommand {
                 currentDirectory: currentDirectory,
                 reviewSelection: reviewSelection,
                 outputFormat: outputFormat,
+                swiftLintExecutableURL: swiftLintExecutableURL,
                 changes: changes
             )
         } catch let error as GitRepositoryFinderError {
@@ -185,22 +192,24 @@ public enum ArcanCommand {
         currentDirectory: String,
         reviewSelection: ReviewSelection,
         outputFormat: ReviewOutputFormat,
+        swiftLintExecutableURL: URL?,
         changes: [CodeChange] = []
     ) async -> CommandResult {
         do {
-            let configuration = try loadConfiguration(
+            let environment = try loadReviewEnvironment(
                 from: currentDirectory
             )
             let sources = try paths.map { path in
                 try SourceFileLoader().load(path: path)
             }
             let structureProvider = SwiftSyntaxStructureProvider()
-            let registry = AnalyzerRegistry(analyzers: [
-                GodObjectAnalyzer(
-                    thresholds: configuration.godObjectThresholds,
-                    structureProvider: structureProvider
-                )
-            ])
+            let registry = AnalyzerRegistryFactory(
+                swiftLintExecutableURL: swiftLintExecutableURL
+            ).make(
+                configuration: environment.configuration,
+                structureProvider: structureProvider,
+                workingDirectoryURL: environment.workingDirectoryURL
+            )
             let selectedReviewTypes = try resolveReviewTypes(
                 reviewSelection,
                 using: registry
@@ -213,7 +222,7 @@ public enum ArcanCommand {
                 selectedFiles: paths,
                 changes: changes,
                 selectedReviewTypes: selectedReviewTypes,
-                configuration: configuration
+                configuration: environment.configuration
             )
 
             if debug, let source = sources.first {
@@ -313,9 +322,9 @@ public enum ArcanCommand {
         }
     }
 
-    private static func loadConfiguration(
+    private static func loadReviewEnvironment(
         from currentDirectory: String
-    ) throws -> ArcanConfiguration {
+    ) throws -> ReviewEnvironment {
         let configurationDirectory: String
         do {
             configurationDirectory = try GitRepositoryFinder().discover(
@@ -330,11 +339,15 @@ public enum ArcanCommand {
             }
         }
 
-        return try ConfigurationLoader().load(
-            from: URL(
-                fileURLWithPath: configurationDirectory,
-                isDirectory: true
-            )
+        let workingDirectoryURL = URL(
+            fileURLWithPath: configurationDirectory,
+            isDirectory: true
+        ).standardizedFileURL
+        return ReviewEnvironment(
+            configuration: try ConfigurationLoader().load(
+                from: workingDirectoryURL
+            ),
+            workingDirectoryURL: workingDirectoryURL
         )
     }
 
@@ -357,4 +370,9 @@ public enum ArcanCommand {
             )
         }
     }
+}
+
+private struct ReviewEnvironment {
+    let configuration: ArcanConfiguration
+    let workingDirectoryURL: URL
 }
