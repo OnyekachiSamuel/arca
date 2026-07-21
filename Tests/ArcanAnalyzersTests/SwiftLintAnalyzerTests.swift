@@ -175,6 +175,32 @@ struct SwiftLintAnalyzerTests {
         }
     }
 
+    @Test("optional policy skips SwiftLint when it disappears before execution")
+    func optionalRuntimeUnavailabilityIsSkipped() async throws {
+        let path = "/tools/swiftlint"
+        let analyzer = SwiftLintAnalyzer(
+            executableURL: URL(fileURLWithPath: path),
+            workingDirectoryURL: URL(
+                fileURLWithPath: "/project",
+                isDirectory: true
+            ),
+            availabilityPolicy: .optional,
+            processRunner: FailingProcessRunner(
+                error: .executableNotFound(path: path)
+            )
+        )
+
+        let result = try await analyzer.analyze(
+            context: analysisContext(paths: ["/project/App.swift"])
+        )
+
+        #expect(result.executionStatus == .skipped)
+        #expect(
+            result.diagnostics.map(\.code)
+                == ["ARCAN-SWIFTLINT-UNAVAILABLE"]
+        )
+    }
+
     @Test("real SwiftLint reports the fixture violation when configured")
     func runsRealSwiftLintWhenConfigured() async throws {
         guard let executablePath = ProcessInfo.processInfo.environment[
@@ -233,7 +259,7 @@ struct SwiftLintAnalyzerTests {
 
         let result = locator.locate()
 
-        #expect(result == executable.standardizedFileURL)
+        #expect(result == .available(executable.standardizedFileURL))
     }
 
     @Test("locates SwiftLint on PATH")
@@ -257,7 +283,80 @@ struct SwiftLintAnalyzerTests {
 
         let result = locator.locate()
 
-        #expect(result == executable.standardizedFileURL)
+        #expect(result == .available(executable.standardizedFileURL))
+    }
+
+    @Test("an invalid configured path is reported without PATH fallback")
+    func configuredPathIsAuthoritative() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let pathExecutable = directory.appendingPathComponent("swiftlint")
+        try Data().write(to: pathExecutable)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: pathExecutable.path
+        )
+        let configuredPath = directory
+            .appendingPathComponent("missing-swiftlint").path
+        let locator = SwiftLintExecutableLocator(environment: [
+            "ARCAN_SWIFTLINT_EXECUTABLE": configuredPath,
+            "PATH": directory.path
+        ])
+
+        let result = locator.locate()
+
+        #expect(
+            result == .unavailable(
+                .configuredExecutableNotFound(configuredPath)
+            )
+        )
+    }
+
+    @Test("optional unavailable SwiftLint returns a skipped result")
+    func optionalUnavailableSwiftLintIsSkipped() async throws {
+        let analyzer = UnavailableSwiftLintAnalyzer(
+            reason: .executableNotFound,
+            policy: .optional
+        )
+
+        let result = try await analyzer.analyze(
+            context: analysisContext(paths: ["/project/App.swift"])
+        )
+
+        #expect(result.analyzerID == "swiftlint")
+        #expect(result.executionStatus == .skipped)
+        #expect(result.findings.isEmpty)
+        #expect(result.tool == ToolMetadata(name: "SwiftLint"))
+        #expect(
+            result.diagnostics.map(\.code)
+                == ["ARCAN-SWIFTLINT-UNAVAILABLE"]
+        )
+        #expect(result.diagnostics.first?.severity == .warning)
+    }
+
+    @Test("required unavailable SwiftLint fails")
+    func requiredUnavailableSwiftLintFails() async {
+        let analyzer = UnavailableSwiftLintAnalyzer(
+            reason: .executableNotFound,
+            policy: .required
+        )
+
+        do {
+            _ = try await analyzer.analyze(
+                context: analysisContext(paths: ["/project/App.swift"])
+            )
+            Issue.record("Expected required SwiftLint to fail.")
+        } catch let error as SwiftLintAvailabilityError {
+            #expect(error == .requiredToolUnavailable(.executableNotFound))
+            #expect(error.errorDescription?.contains("required") == true)
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
     }
 
     private func makeAnalyzer(
@@ -336,4 +435,12 @@ private actor StubProcessRunner: ProcessRunning {
 
 private enum StubProcessRunnerError: Error {
     case missingResult
+}
+
+private struct FailingProcessRunner: ProcessRunning {
+    let error: ProcessExecutionError
+
+    func run(_ request: ProcessRequest) async throws -> ProcessResult {
+        throw error
+    }
 }

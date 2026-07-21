@@ -75,12 +75,56 @@ struct ReviewCommandEndToEndTests {
         #expect(!output.contains("\u{001B}["))
     }
 
+    @Test("compiled CLI reports skipped style analysis when SwiftLint is missing")
+    func reportsUnavailableSwiftLint() throws {
+        let fixture = try #require(
+            Bundle.module.url(
+                forResource: "LargeCoordinator",
+                withExtension: "swift",
+                subdirectory: "Fixtures"
+            )
+        )
+        let result = try runArcan(
+            arguments: [
+                "review",
+                "--file", fixture.path,
+                "--review", "style",
+                "--format", "json"
+            ],
+            environment: [
+                "ARCAN_SWIFTLINT_EXECUTABLE":
+                    "/definitely/missing/swiftlint"
+            ]
+        )
+        let report = try JSONDecoder().decode(
+            ReviewReport.self,
+            from: result.standardOutput
+        )
+        let analyzerResult = try #require(
+            report.analyzerResults.first
+        )
+
+        #expect(result.exitCode == 0)
+        #expect(result.standardError.isEmpty)
+        #expect(analyzerResult.analyzerID == "swiftlint")
+        #expect(analyzerResult.executionStatus == .skipped)
+        #expect(
+            analyzerResult.diagnostics.map(\.code)
+                == ["ARCAN-SWIFTLINT-UNAVAILABLE"]
+        )
+    }
+
     private func runArcan(
-        arguments: [String]
+        arguments: [String],
+        environment: [String: String] = [:]
     ) throws -> SubprocessResult {
         let process = Process()
         process.executableURL = try arcanExecutableURL()
         process.arguments = arguments
+        process.environment = ProcessInfo.processInfo.environment.merging(
+            environment,
+            uniquingKeysWith: { _, override in override }
+        )
 
         let standardOutput = Pipe()
         let standardError = Pipe()

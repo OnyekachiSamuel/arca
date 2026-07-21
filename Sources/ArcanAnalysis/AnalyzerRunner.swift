@@ -23,6 +23,8 @@ public struct AnalyzerRunner: Sendable {
             analyzerID: result.analyzerID,
             findings: result.findings,
             tool: result.tool,
+            executionStatus: result.executionStatus,
+            diagnostics: result.diagnostics,
             durationMilliseconds: durationInMilliseconds(
                 from: start,
                 to: end

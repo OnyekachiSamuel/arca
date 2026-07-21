@@ -56,7 +56,10 @@ public struct ConfigurationLoader {
 
         return ArcanConfiguration(
             schemaVersion: document.schemaVersion,
-            godObjectThresholds: thresholds
+            godObjectThresholds: thresholds,
+            swiftLint: SwiftLintConfiguration(
+                availability: document.swiftLint?.availability ?? .optional
+            )
         )
     }
 }

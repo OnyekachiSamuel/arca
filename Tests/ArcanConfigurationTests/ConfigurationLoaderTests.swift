@@ -32,6 +32,86 @@ struct ConfigurationLoaderTests {
             #expect(
                 configuration.godObjectThresholds == GodObjectThresholds()
             )
+            #expect(configuration.swiftLint.availability == .optional)
+        }
+    }
+
+    @Test("SwiftLint is optional by default")
+    func swiftLintIsOptionalByDefault() throws {
+        try withTemporaryDirectory { directory in
+            let configuration = try ConfigurationLoader().load(from: directory)
+
+            #expect(configuration.swiftLint.availability == .optional)
+        }
+    }
+
+    @Test("SwiftLint can be required")
+    func swiftLintCanBeRequired() throws {
+        try withTemporaryDirectory { directory in
+            try writeConfiguration(
+                """
+                {
+                  "schemaVersion": 1,
+                  "swiftLint": {
+                    "availability": "required"
+                  }
+                }
+                """,
+                to: directory
+            )
+
+            let configuration = try ConfigurationLoader().load(from: directory)
+
+            #expect(configuration.swiftLint.availability == .required)
+        }
+    }
+
+    @Test("invalid SwiftLint availability produces a diagnostic")
+    func invalidSwiftLintAvailabilityIsRejected() throws {
+        try withTemporaryDirectory { directory in
+            try writeConfiguration(
+                """
+                {
+                  "schemaVersion": 1,
+                  "swiftLint": {
+                    "availability": "fallback"
+                  }
+                }
+                """,
+                to: directory
+            )
+
+            #expect(throws: ConfigurationLoadingError.invalidValue(
+                field: "swiftLint.availability",
+                reason: "expected one of: optional, required."
+            )) {
+                try ConfigurationLoader().load(from: directory)
+            }
+        }
+    }
+
+    @Test("unknown SwiftLint fields produce a diagnostic")
+    func unknownSwiftLintFieldIsRejected() throws {
+        try withTemporaryDirectory { directory in
+            try writeConfiguration(
+                """
+                {
+                  "schemaVersion": 1,
+                  "swiftLint": {
+                    "required": true
+                  }
+                }
+                """,
+                to: directory
+            )
+
+            #expect(
+                throws: ConfigurationLoadingError.unknownField(
+                    "swiftLint.required"
+                )
+            ) {
+                try ConfigurationLoader().load(from: directory)
+            }
         }
     }
 

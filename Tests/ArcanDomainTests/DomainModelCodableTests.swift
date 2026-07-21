@@ -115,6 +115,37 @@ struct DomainModelCodableTests {
 
         #expect(decoded.durationMilliseconds == 0)
         #expect(decoded.tool == nil)
+        #expect(decoded.executionStatus == .completed)
+        #expect(decoded.diagnostics.isEmpty)
+    }
+
+    @Test("skipped analyzer result preserves its diagnostic")
+    func skippedAnalyzerResult() throws {
+        let result = AnalyzerResult(
+            analyzerID: "swiftlint",
+            findings: [],
+            tool: ToolMetadata(name: "SwiftLint"),
+            executionStatus: .skipped,
+            diagnostics: [
+                AnalyzerDiagnostic(
+                    code: "ARCAN-SWIFTLINT-UNAVAILABLE",
+                    severity: .warning,
+                    message: "SwiftLint was not found."
+                )
+            ]
+        )
+
+        let decoded = try decodeFromJSON(
+            AnalyzerResult.self,
+            from: encodeToJSON(result)
+        )
+
+        #expect(decoded == result)
+        #expect(decoded.executionStatus == .skipped)
+        #expect(
+            decoded.diagnostics.first?.code
+                == "ARCAN-SWIFTLINT-UNAVAILABLE"
+        )
     }
 
     @Test("source context window encoding and decoding of values")

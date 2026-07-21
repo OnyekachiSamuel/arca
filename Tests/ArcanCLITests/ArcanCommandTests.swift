@@ -53,8 +53,10 @@ struct ArcanCommandTests {
             #expect(result.reviewRequest?.selectedFiles == [file.path])
             #expect(result.output.hasPrefix("ARCAN Review Report"))
             #expect(
-                result.reviewRequest?.selectedReviewTypes == [.godObject]
+                result.reviewRequest?.selectedReviewTypes
+                    == [.godObject, .style]
             )
+            #expect(result.output.contains("1 analyzer skipped"))
         }
     }
 
@@ -83,7 +85,12 @@ struct ArcanCommandTests {
                 report.schemaVersion == ReviewReport.currentSchemaVersion
             )
             #expect(
-                report.analyzerResults.map(\.analyzerID) == ["god-object"]
+                report.analyzerResults.map(\.analyzerID)
+                    == ["god-object", "swiftlint"]
+            )
+            #expect(
+                report.analyzerResults.map(\.executionStatus)
+                    == [.completed, .skipped]
             )
             #expect(!result.output.contains("ARCAN Review Report"))
             #expect(!result.output.contains("\u{001B}["))
@@ -124,7 +131,7 @@ struct ArcanCommandTests {
                     "--review", "style",
                     "--format", "json"
                 ],
-                swiftLintExecutableURL: executable
+                swiftLintAvailability: .available(executable)
             )
             let report = try JSONDecoder().decode(
                 ReviewReport.self,
@@ -241,7 +248,8 @@ struct ArcanCommandTests {
 
             #expect(result.exitCode == 0)
             #expect(
-                result.reviewRequest?.selectedReviewTypes == [.godObject]
+                result.reviewRequest?.selectedReviewTypes
+                    == [.godObject, .style]
             )
         }
     }
@@ -289,7 +297,8 @@ struct ArcanCommandTests {
 
             #expect(result.exitCode == 0)
             #expect(
-                result.reviewRequest?.selectedReviewTypes == [.godObject]
+                result.reviewRequest?.selectedReviewTypes
+                    == [.godObject, .style]
             )
         }
     }
@@ -319,8 +328,8 @@ struct ArcanCommandTests {
         }
     }
 
-    @Test("review type without a registered analyzer returns a clear error")
-    func unavailableReviewTypeReturnsError() async throws {
+    @Test("optional unavailable SwiftLint returns a skipped style result")
+    func optionalUnavailableSwiftLintIsSkipped() async throws {
         try await withTemporaryDirectory { directory in
             let file = directory.appendingPathComponent("App.swift")
             try "struct App {}".write(
@@ -335,12 +344,124 @@ struct ArcanCommandTests {
                 "--review", "style"
             ])
 
-            #expect(result.exitCode == 64)
+            #expect(result.exitCode == 0)
             #expect(
-                result.output
-                    == "Error: No analyzer is registered for review type 'style'. Available values: god-object, all."
+                result.reviewRequest?.selectedReviewTypes == [.style]
             )
+            #expect(result.output.contains("0 findings"))
+            #expect(result.output.contains("1 analyzer skipped"))
+            #expect(
+                result.output.contains("ARCAN-SWIFTLINT-UNAVAILABLE")
+            )
+        }
+    }
+
+    @Test("optional unavailable SwiftLint is explicit in JSON output")
+    func optionalUnavailableSwiftLintIsJSONDiagnostic() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "struct App {}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.run(arguments: [
+                "review",
+                "--file", file.path,
+                "--review", "style",
+                "--format", "json"
+            ])
+            let report = try JSONDecoder().decode(
+                ReviewReport.self,
+                from: Data(result.output.utf8)
+            )
+            let analyzerResult = try #require(
+                report.analyzerResults.first
+            )
+
+            #expect(result.exitCode == 0)
+            #expect(analyzerResult.executionStatus == .skipped)
+            #expect(analyzerResult.findings.isEmpty)
+            #expect(
+                analyzerResult.diagnostics.map(\.code)
+                    == ["ARCAN-SWIFTLINT-UNAVAILABLE"]
+            )
+        }
+    }
+
+    @Test("required unavailable SwiftLint fails with unavailable exit code")
+    func requiredUnavailableSwiftLintFails() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "struct App {}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+            try """
+            {
+              "schemaVersion": 1,
+              "swiftLint": {
+                "availability": "required"
+              }
+            }
+            """.write(
+                to: directory.appendingPathComponent(".arcan.json"),
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.run(
+                arguments: [
+                    "review",
+                    "--file", file.path,
+                    "--review", "style"
+                ],
+                currentDirectory: directory.path
+            )
+
+            #expect(result.exitCode == 69)
+            #expect(result.output == "Error: SwiftLint is required but unavailable: SwiftLint executable was not found. Install SwiftLint or set ARCAN_SWIFTLINT_EXECUTABLE.")
             #expect(result.reviewRequest == nil)
+        }
+    }
+
+    @Test("required SwiftLint does not block an unselected review")
+    func requiredSwiftLintDoesNotBlockGodObjectReview() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "struct App {}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+            try """
+            {
+              "schemaVersion": 1,
+              "swiftLint": {
+                "availability": "required"
+              }
+            }
+            """.write(
+                to: directory.appendingPathComponent(".arcan.json"),
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.run(
+                arguments: [
+                    "review",
+                    "--file", file.path,
+                    "--review", "god-object"
+                ],
+                currentDirectory: directory.path
+            )
+
+            #expect(result.exitCode == 0)
+            #expect(
+                result.reviewRequest?.selectedReviewTypes == [.godObject]
+            )
         }
     }
 

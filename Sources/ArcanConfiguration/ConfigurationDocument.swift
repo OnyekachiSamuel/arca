@@ -3,6 +3,7 @@ import Foundation
 struct ConfigurationDocument: Decodable {
     let schemaVersion: Int
     let godObject: GodObjectThresholdConfiguration?
+    let swiftLint: SwiftLintConfigurationDocument?
 
     init(from decoder: any Decoder) throws {
         let container: KeyedDecodingContainer<ConfigurationCodingKey>
@@ -19,7 +20,7 @@ struct ConfigurationDocument: Decodable {
 
         try ConfigurationDecodingSupport.rejectUnknownFields(
             in: container,
-            allowing: ["schemaVersion", "godObject"]
+            allowing: ["schemaVersion", "godObject", "swiftLint"]
         )
 
         let schemaVersionKey = ConfigurationCodingKey("schemaVersion")
@@ -33,28 +34,53 @@ struct ConfigurationDocument: Decodable {
         )
 
         let godObjectKey = ConfigurationCodingKey("godObject")
-        guard container.contains(godObjectKey) else {
+        if container.contains(godObjectKey) {
+            guard try !container.decodeNil(forKey: godObjectKey) else {
+                throw ConfigurationDecodingIssue.invalidValue(
+                    field: "godObject",
+                    reason: "expected a JSON object."
+                )
+            }
+            do {
+                godObject = try container.decode(
+                    GodObjectThresholdConfiguration.self,
+                    forKey: godObjectKey
+                )
+            } catch let issue as ConfigurationDecodingIssue {
+                throw issue
+            } catch {
+                throw ConfigurationDecodingIssue.invalidValue(
+                    field: "godObject",
+                    reason: "expected a JSON object."
+                )
+            }
+        } else {
             godObject = nil
-            return
         }
-        guard try !container.decodeNil(forKey: godObjectKey) else {
-            throw ConfigurationDecodingIssue.invalidValue(
-                field: "godObject",
-                reason: "expected a JSON object."
-            )
-        }
-        do {
-            godObject = try container.decode(
-                GodObjectThresholdConfiguration.self,
-                forKey: godObjectKey
-            )
-        } catch let issue as ConfigurationDecodingIssue {
-            throw issue
-        } catch {
-            throw ConfigurationDecodingIssue.invalidValue(
-                field: "godObject",
-                reason: "expected a JSON object."
-            )
+
+        let swiftLintKey = ConfigurationCodingKey("swiftLint")
+        if container.contains(swiftLintKey) {
+            guard try !container.decodeNil(forKey: swiftLintKey) else {
+                throw ConfigurationDecodingIssue.invalidValue(
+                    field: "swiftLint",
+                    reason: "expected a JSON object."
+                )
+            }
+            do {
+                swiftLint = try container.decode(
+                    SwiftLintConfigurationDocument.self,
+                    forKey: swiftLintKey
+                )
+            } catch let issue as ConfigurationDecodingIssue {
+                throw issue
+            } catch {
+                throw ConfigurationDecodingIssue.invalidValue(
+                    field: "swiftLint",
+                    reason: "expected a JSON object."
+                )
+            }
+        } else {
+            swiftLint = nil
         }
     }
 }

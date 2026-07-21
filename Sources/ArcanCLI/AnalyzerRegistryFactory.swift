@@ -5,14 +5,14 @@ import ArcanProcess
 import Foundation
 
 struct AnalyzerRegistryFactory: Sendable {
-    private let swiftLintExecutableURL: URL?
+    private let swiftLintAvailability: SwiftLintAvailability
     private let processRunner: (any ProcessRunning)?
 
     init(
-        swiftLintExecutableURL: URL?,
+        swiftLintAvailability: SwiftLintAvailability,
         processRunner: (any ProcessRunning)? = nil
     ) {
-        self.swiftLintExecutableURL = swiftLintExecutableURL
+        self.swiftLintAvailability = swiftLintAvailability
         self.processRunner = processRunner
     }
 
@@ -28,7 +28,8 @@ struct AnalyzerRegistryFactory: Sendable {
             )
         ]
 
-        if let swiftLintExecutableURL {
+        switch swiftLintAvailability {
+        case .available(let swiftLintExecutableURL):
             let runner: any ProcessRunning
             if let processRunner {
                 runner = processRunner
@@ -40,7 +41,13 @@ struct AnalyzerRegistryFactory: Sendable {
             analyzers.append(SwiftLintAnalyzer(
                 executableURL: swiftLintExecutableURL,
                 workingDirectoryURL: workingDirectoryURL,
+                availabilityPolicy: configuration.swiftLint.availability,
                 processRunner: runner
+            ))
+        case .unavailable(let reason):
+            analyzers.append(UnavailableSwiftLintAnalyzer(
+                reason: reason,
+                policy: configuration.swiftLint.availability
             ))
         }
 

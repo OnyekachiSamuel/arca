@@ -11,7 +11,7 @@ struct AnalyzerRegistryFactoryTests {
     func registersSwiftLint() {
         let executable = URL(fileURLWithPath: "/tools/swiftlint")
         let factory = AnalyzerRegistryFactory(
-            swiftLintExecutableURL: executable,
+            swiftLintAvailability: .available(executable),
             processRunner: RegistryFactoryProcessRunner()
         )
 
@@ -33,10 +33,10 @@ struct AnalyzerRegistryFactoryTests {
         )
     }
 
-    @Test("keeps deterministic analyzers when SwiftLint is unavailable")
-    func omitsUnavailableSwiftLint() {
+    @Test("keeps style registered when SwiftLint is unavailable")
+    func registersUnavailableSwiftLint() {
         let factory = AnalyzerRegistryFactory(
-            swiftLintExecutableURL: nil
+            swiftLintAvailability: .unavailable(.executableNotFound)
         )
 
         let registry = factory.make(
@@ -48,7 +48,11 @@ struct AnalyzerRegistryFactoryTests {
             )
         )
 
-        #expect(registry.supportedReviewTypes == [.godObject])
+        #expect(registry.supportedReviewTypes == [.godObject, .style])
+        #expect(
+            registry.analyzers(matching: [.style]).map(\.id)
+                == ["swiftlint"]
+        )
     }
 }
 

@@ -56,7 +56,9 @@ public enum ArcanCommand {
     public static func run(
         arguments: [String],
         currentDirectory: String = FileManager.default.currentDirectoryPath,
-        swiftLintExecutableURL: URL? = nil
+        swiftLintAvailability: SwiftLintAvailability = .unavailable(
+            .executableNotFound
+        )
     ) async -> CommandResult {
         switch arguments {
         case [], ["--help"], ["-h"]:
@@ -93,14 +95,14 @@ public enum ArcanCommand {
                     currentDirectory: currentDirectory,
                     reviewSelection: options.reviewSelection,
                     outputFormat: options.outputFormat,
-                    swiftLintExecutableURL: swiftLintExecutableURL
+                    swiftLintAvailability: swiftLintAvailability
                 )
             case .changed:
                 return await reviewChanged(
                     from: currentDirectory,
                     reviewSelection: options.reviewSelection,
                     outputFormat: options.outputFormat,
-                    swiftLintExecutableURL: swiftLintExecutableURL
+                    swiftLintAvailability: swiftLintAvailability
                 )
             }
         } catch let error as ReviewCommandParsingError {
@@ -122,7 +124,7 @@ public enum ArcanCommand {
         currentDirectory: String,
         reviewSelection: ReviewSelection,
         outputFormat: ReviewOutputFormat,
-        swiftLintExecutableURL: URL?
+        swiftLintAvailability: SwiftLintAvailability
     ) async -> CommandResult {
         do {
             let selectedFile = try ExplicitSwiftFileSelector().select(path: path)
@@ -133,7 +135,7 @@ public enum ArcanCommand {
                 currentDirectory: currentDirectory,
                 reviewSelection: reviewSelection,
                 outputFormat: outputFormat,
-                swiftLintExecutableURL: swiftLintExecutableURL
+                swiftLintAvailability: swiftLintAvailability
             )
         } catch let error as SourceSelectionError {
             return CommandResult(
@@ -152,7 +154,7 @@ public enum ArcanCommand {
         from currentDirectory: String,
         reviewSelection: ReviewSelection,
         outputFormat: ReviewOutputFormat,
-        swiftLintExecutableURL: URL?
+        swiftLintAvailability: SwiftLintAvailability
     ) async -> CommandResult {
         do {
             let changes = try GitDiffProvider().extract(from: currentDirectory)
@@ -164,7 +166,7 @@ public enum ArcanCommand {
                 currentDirectory: currentDirectory,
                 reviewSelection: reviewSelection,
                 outputFormat: outputFormat,
-                swiftLintExecutableURL: swiftLintExecutableURL,
+                swiftLintAvailability: swiftLintAvailability,
                 changes: changes
             )
         } catch let error as GitRepositoryFinderError {
@@ -192,7 +194,7 @@ public enum ArcanCommand {
         currentDirectory: String,
         reviewSelection: ReviewSelection,
         outputFormat: ReviewOutputFormat,
-        swiftLintExecutableURL: URL?,
+        swiftLintAvailability: SwiftLintAvailability,
         changes: [CodeChange] = []
     ) async -> CommandResult {
         do {
@@ -204,7 +206,7 @@ public enum ArcanCommand {
             }
             let structureProvider = SwiftSyntaxStructureProvider()
             let registry = AnalyzerRegistryFactory(
-                swiftLintExecutableURL: swiftLintExecutableURL
+                swiftLintAvailability: swiftLintAvailability
             ).make(
                 configuration: environment.configuration,
                 structureProvider: structureProvider,
@@ -275,6 +277,11 @@ public enum ArcanCommand {
             return CommandResult(
                 output: "Error: \(error.localizedDescription)",
                 exitCode: 64
+            )
+        } catch let error as SwiftLintAvailabilityError {
+            return CommandResult(
+                output: "Error: \(error.localizedDescription)",
+                exitCode: 69
             )
         } catch {
             return CommandResult(

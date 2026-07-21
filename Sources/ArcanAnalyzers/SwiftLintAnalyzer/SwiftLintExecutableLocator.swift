@@ -9,11 +9,11 @@ public struct SwiftLintExecutableLocator: Sendable {
         self.environment = environment
     }
 
-    public func locate() -> URL? {
+    public func locate() -> SwiftLintAvailability {
         if let configuredPath = environment[
             "ARCAN_SWIFTLINT_EXECUTABLE"
-        ], let executable = executableURL(at: configuredPath) {
-            return executable
+        ] {
+            return configuredAvailability(at: configuredPath)
         }
 
         let searchDirectories = (environment["PATH"] ?? "")
@@ -30,11 +30,28 @@ public struct SwiftLintExecutableLocator: Sendable {
                 isDirectory: true
             ).appendingPathComponent("swiftlint")
             if let executable = executableURL(at: candidate.path) {
-                return executable
+                return .available(executable)
             }
         }
 
-        return nil
+        return .unavailable(.executableNotFound)
+    }
+
+    private func configuredAvailability(
+        at path: String
+    ) -> SwiftLintAvailability {
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(
+            atPath: url.path,
+            isDirectory: &isDirectory
+        ), !isDirectory.boolValue else {
+            return .unavailable(.configuredExecutableNotFound(path))
+        }
+        guard FileManager.default.isExecutableFile(atPath: url.path) else {
+            return .unavailable(.configuredExecutableNotRunnable(path))
+        }
+        return .available(url)
     }
 
     private func executableURL(at path: String) -> URL? {

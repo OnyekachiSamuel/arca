@@ -4,7 +4,7 @@ import Foundation
 
 let result = await ArcanCommand.run(
     arguments: Array(CommandLine.arguments.dropFirst()),
-    swiftLintExecutableURL: SwiftLintExecutableLocator().locate()
+    swiftLintAvailability: SwiftLintExecutableLocator().locate()
 )
 let stream = result.exitCode == 0 ? FileHandle.standardOutput : FileHandle.standardError
 

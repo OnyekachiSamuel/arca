@@ -17,6 +17,13 @@ public struct TerminalReporter: Reporter {
             "ARCAN Review Report",
             "\(report.findings.count) \(findingLabel)"
         ]
+        let skippedCount = report.analyzerResults.filter {
+            $0.executionStatus == .skipped
+        }.count
+        if skippedCount > 0 {
+            let analyzerLabel = skippedCount == 1 ? "analyzer" : "analyzers"
+            lines.append("\(skippedCount) \(analyzerLabel) skipped")
+        }
 
         for finding in report.findings {
             lines.append("")
@@ -28,6 +35,14 @@ public struct TerminalReporter: Reporter {
             lines.append("Explanation: \(finding.explanation)")
             appendEvidence(finding.evidence, to: &lines)
             appendSuggestion(finding.suggestion, to: &lines)
+        }
+
+        for diagnostic in report.analyzerResults.flatMap(\.diagnostics) {
+            lines.append("")
+            lines.append(
+                "\(severityLabel(for: diagnostic.severity, usesColor: usesColor)) "
+                    + "\(diagnostic.code): \(diagnostic.message)"
+            )
         }
 
         return lines.joined(separator: "\n")

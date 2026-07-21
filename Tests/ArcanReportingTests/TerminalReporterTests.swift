@@ -40,6 +40,41 @@ struct TerminalReporterTests {
         #expect(output.contains("\u{001B}[33m[WARNING]\u{001B}[0m"))
     }
 
+    @Test("skipped analyzers and diagnostics are visible")
+    func rendersSkippedAnalyzerDiagnostic() throws {
+        let report = ReviewReport(
+            schemaVersion: ReviewReport.currentSchemaVersion,
+            requestID: UUID(),
+            findings: [],
+            analyzerResults: [
+                AnalyzerResult(
+                    analyzerID: "swiftlint",
+                    findings: [],
+                    tool: ToolMetadata(name: "SwiftLint"),
+                    executionStatus: .skipped,
+                    diagnostics: [
+                        AnalyzerDiagnostic(
+                            code: "ARCAN-SWIFTLINT-UNAVAILABLE",
+                            severity: .warning,
+                            message: "SwiftLint was not found. Style analysis was skipped."
+                        )
+                    ]
+                )
+            ]
+        )
+        let reporter = TerminalReporter(outputIsTTY: { false })
+
+        let output = try reporter.render(report: report)
+
+        #expect(output == """
+        ARCAN Review Report
+        0 findings
+        1 analyzer skipped
+
+        [WARNING] ARCAN-SWIFTLINT-UNAVAILABLE: SwiftLint was not found. Style analysis was skipped.
+        """)
+    }
+
     private func makeReport() -> ReviewReport {
         let finding = Finding(
             id: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,

@@ -10,17 +10,20 @@ public struct SwiftLintAnalyzer: Analyzer {
     private let executableURL: URL
     private let workingDirectoryURL: URL
     private let timeout: Duration
+    private let availabilityPolicy: AnalyzerAvailabilityPolicy
     private let processRunner: any ProcessRunning
 
     public init(
         executableURL: URL,
         workingDirectoryURL: URL,
         timeout: Duration = .seconds(30),
+        availabilityPolicy: AnalyzerAvailabilityPolicy = .required,
         processRunner: any ProcessRunning
     ) {
         self.executableURL = executableURL
         self.workingDirectoryURL = workingDirectoryURL
         self.timeout = timeout
+        self.availabilityPolicy = availabilityPolicy
         self.processRunner = processRunner
     }
 
@@ -37,12 +40,23 @@ public struct SwiftLintAnalyzer: Analyzer {
         }
 
         let version = await loadVersion()
-        let result = try await processRunner.run(ProcessRequest(
-            executableURL: executableURL,
-            arguments: lintArguments(paths: paths),
-            workingDirectoryURL: workingDirectoryURL,
-            timeout: timeout
-        ))
+        let result: ProcessResult
+        do {
+            result = try await processRunner.run(ProcessRequest(
+                executableURL: executableURL,
+                arguments: lintArguments(paths: paths),
+                workingDirectoryURL: workingDirectoryURL,
+                timeout: timeout
+            ))
+        } catch let error as ProcessExecutionError {
+            guard let reason = unavailableReason(from: error) else {
+                throw error
+            }
+            return try await UnavailableSwiftLintAnalyzer(
+                reason: reason,
+                policy: availabilityPolicy
+            ).analyze(context: context)
+        }
 
         let violations = try decodeViolations(from: result)
         let findings = try violations
@@ -196,5 +210,23 @@ public struct SwiftLintAnalyzer: Analyzer {
         return standardError.isEmpty
             ? "No valid JSON diagnostics were produced."
             : standardError
+    }
+
+    private func unavailableReason(
+        from error: ProcessExecutionError
+    ) -> SwiftLintUnavailableReason? {
+        switch error {
+        case .executableNotFound(let path):
+            .configuredExecutableNotFound(path)
+        case .executableNotRunnable(let path):
+            .configuredExecutableNotRunnable(path)
+        case .couldNotStart(let path, let reason):
+            .executableCouldNotStart(path: path, reason: reason)
+        case .executableURLMustBeAbsolute,
+             .executableNotApproved,
+             .invalidTimeout,
+             .invalidWorkingDirectory:
+            nil
+        }
     }
 }
