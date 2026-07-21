@@ -59,8 +59,11 @@ public struct SwiftLintAnalyzer: Analyzer {
         }
 
         let violations = try decodeViolations(from: result)
+        let findingMapper = SwiftLintFindingMapper(
+            workingDirectoryURL: workingDirectoryURL
+        )
         let findings = try violations
-            .map(makeFinding)
+            .map(findingMapper.map)
             .sorted(by: findingsAreInStableOrder)
 
         return AnalyzerResult(
@@ -118,57 +121,6 @@ public struct SwiftLintAnalyzer: Analyzer {
                 throw SwiftLintAnalyzerError.invalidJSON
             }
         }
-    }
-
-    private func makeFinding(
-        _ violation: SwiftLintViolation
-    ) throws -> Finding {
-        Finding(
-            id: UUID(),
-            ruleID: "swiftlint.\(violation.ruleID)",
-            externalRuleID: violation.ruleID,
-            title: violation.type,
-            severity: try severity(from: violation.severity),
-            filePath: normalizedPath(violation.file),
-            range: sourceRange(for: violation),
-            explanation: violation.reason
-        )
-    }
-
-    private func severity(from value: String) throws -> Severity {
-        switch value.lowercased() {
-        case "warning":
-            .warning
-        case "error":
-            .error
-        default:
-            throw SwiftLintAnalyzerError.unsupportedSeverity(value)
-        }
-    }
-
-    private func sourceRange(
-        for violation: SwiftLintViolation
-    ) -> SourceRange? {
-        guard let line = violation.line, line > 0 else {
-            return nil
-        }
-        let column = max(1, violation.character ?? 1)
-        return SourceRange(
-            startLine: line,
-            startColumn: column,
-            endLine: line,
-            endColumn: column
-        )
-    }
-
-    private func normalizedPath(_ path: String) -> String {
-        let url: URL
-        if path.hasPrefix("/") {
-            url = URL(fileURLWithPath: path)
-        } else {
-            url = workingDirectoryURL.appendingPathComponent(path)
-        }
-        return url.standardizedFileURL.resolvingSymlinksInPath().path
     }
 
     private func findingsAreInStableOrder(

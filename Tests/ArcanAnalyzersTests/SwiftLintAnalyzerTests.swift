@@ -59,6 +59,7 @@ struct SwiftLintAnalyzerTests {
         #expect(first.ruleID == "swiftlint.force_cast")
         #expect(first.externalRuleID == "force_cast")
         #expect(first.title == "Force Cast")
+        #expect(first.category == .style)
         #expect(first.severity == .error)
         #expect(first.filePath == "/project/Sources/Alpha.swift")
         #expect(first.range == SourceRange(
@@ -70,6 +71,21 @@ struct SwiftLintAnalyzerTests {
         #expect(first.explanation == "Force casts should be avoided.")
         #expect(first.evidence.isEmpty)
         #expect(first.suggestion == nil)
+        #expect(first.metadata == [
+            "rule_id": .string("force_cast"),
+            "reason": .string("Force casts should be avoided."),
+            "line": .integer(3),
+            "character": .integer(5),
+            "severity": .string("Error"),
+            "type": .string("Force Cast"),
+            "file": .string("/project/Sources/Alpha.swift")
+        ])
+        let second = try #require(result.findings.last)
+        #expect(second.externalRuleID == "trailing_semicolon")
+        #expect(second.category == .style)
+        #expect(second.severity == .warning)
+        #expect(second.filePath == "/project/Sources/Zeta.swift")
+        #expect(second.metadata["severity"] == .string("Warning"))
 
         let requests = await runner.recordedRequests
         #expect(requests == [

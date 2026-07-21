@@ -20,13 +20,14 @@ struct ReviewCommandEndToEndTests {
         ])
         let output = String(decoding: result.standardOutput, as: UTF8.self)
         let errorOutput = String(decoding: result.standardError, as: UTF8.self)
+        let expectedPath = repositoryRelativePath(for: fixture)
 
         #expect(result.exitCode == 1, Comment(rawValue: errorOutput))
         #expect(result.standardError.isEmpty)
         #expect(output.contains("ARCAN-GOD-001"))
         #expect(
             output.contains(
-                "File: \(fixture.standardizedFileURL.path):1:1-"
+                "File: \(expectedPath):1:1-"
             )
         )
     }
@@ -55,6 +56,7 @@ struct ReviewCommandEndToEndTests {
             decoding: result.standardError,
             as: UTF8.self
         )
+        let expectedPath = repositoryRelativePath(for: fixture)
 
         #expect(result.exitCode == 1, Comment(rawValue: errorOutput))
         #expect(result.standardError.isEmpty)
@@ -62,9 +64,11 @@ struct ReviewCommandEndToEndTests {
             report.schemaVersion == ReviewReport.currentSchemaVersion
         )
         #expect(report.findings.first?.ruleID == "ARCAN-GOD-001")
+        #expect(report.findings.first?.filePath == expectedPath)
+        #expect(report.findings.first?.category == .antiPattern)
         #expect(
-            report.findings.first?.filePath
-                == fixture.standardizedFileURL.path
+            report.findings.first?.metadata["typeName"]
+                == .string("LargeCoordinator")
         )
         #expect(
             report.analyzerResults.first?.analyzerID == "god-object"
@@ -224,6 +228,20 @@ struct ReviewCommandEndToEndTests {
             standardError:
                 standardError.fileHandleForReading.readDataToEndOfFile()
         )
+    }
+
+    private func repositoryRelativePath(for file: URL) -> String {
+        let repository = URL(
+            fileURLWithPath: FileManager.default.currentDirectoryPath,
+            isDirectory: true
+        ).standardizedFileURL.resolvingSymlinksInPath()
+        let normalizedFile = file.standardizedFileURL.resolvingSymlinksInPath()
+        let repositoryComponents = repository.pathComponents
+        let fileComponents = normalizedFile.pathComponents
+        #expect(fileComponents.starts(with: repositoryComponents))
+        return fileComponents
+            .dropFirst(repositoryComponents.count)
+            .joined(separator: "/")
     }
 
     private func withTemporaryDirectory<Result>(

@@ -26,6 +26,8 @@ struct GodObjectAnalyzerTests {
         #expect(result.findings.count == 1)
         let finding = try #require(result.findings.first)
         #expect(finding.ruleID == "ARCAN-GOD-001")
+        #expect(finding.category == .antiPattern)
+        #expect(finding.severity == .warning)
         #expect(finding.filePath == source.path)
         #expect(finding.range == SourceRange(
             startLine: 1,
@@ -54,6 +56,14 @@ struct GodObjectAnalyzerTests {
                 "Keep only necessary coordination in the original type."
             ]
         ))
+        #expect(finding.metadata == [
+            "typeName": .string("LargeCoordinator"),
+            "typeKind": .string("class"),
+            "lineCount": .integer(9),
+            "methodCount": .integer(3),
+            "propertyCount": .integer(3),
+            "sourcePath": .string(source.path)
+        ])
     }
 
     @Test("small fixture produces no finding")

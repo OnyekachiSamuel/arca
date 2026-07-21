@@ -240,6 +240,7 @@ public enum ArcanCommand {
             )
             let request = ReviewRequest(
                 id: UUID(),
+                repositoryRoot: environment.repositoryRootURL?.path,
                 selectedFiles: paths,
                 changes: changes,
                 selectedReviewTypes: selectedReviewTypes,
@@ -354,14 +355,18 @@ public enum ArcanCommand {
         from currentDirectory: String
     ) throws -> ReviewEnvironment {
         let configurationDirectory: String
+        let repositoryRoot: String?
         do {
-            configurationDirectory = try GitRepositoryFinder().discover(
+            let discoveredRoot = try GitRepositoryFinder().discover(
                 from: currentDirectory
             )
+            configurationDirectory = discoveredRoot
+            repositoryRoot = discoveredRoot
         } catch let error as GitRepositoryFinderError {
             switch error {
             case .notRepository:
                 configurationDirectory = currentDirectory
+                repositoryRoot = nil
             case .commandCouldNotRun, .invalidOutput:
                 throw error
             }
@@ -375,6 +380,11 @@ public enum ArcanCommand {
             configuration: try ConfigurationLoader().load(
                 from: workingDirectoryURL
             ),
+            repositoryRootURL: repositoryRoot.map {
+                URL(fileURLWithPath: $0, isDirectory: true)
+                    .standardizedFileURL
+                    .resolvingSymlinksInPath()
+            },
             workingDirectoryURL: workingDirectoryURL
         )
     }
@@ -402,5 +412,6 @@ public enum ArcanCommand {
 
 private struct ReviewEnvironment {
     let configuration: ArcanConfiguration
+    let repositoryRootURL: URL?
     let workingDirectoryURL: URL
 }

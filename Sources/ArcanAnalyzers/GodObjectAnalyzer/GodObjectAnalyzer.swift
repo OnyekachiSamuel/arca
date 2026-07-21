@@ -30,9 +30,9 @@ public struct GodObjectAnalyzer: Analyzer {
                 guard evidence.count >= thresholds.minimumTriggeredSignals else {
                     return nil
                 }
-                return makeFinding(
-                    for: metrics,
-                    in: sourceFile,
+                return GodObjectFindingMapper(ruleMetadata: ruleMetadata).map(
+                    metrics: metrics,
+                    sourceFile: sourceFile,
                     evidence: evidence
                 )
             })
@@ -69,23 +69,5 @@ public struct GodObjectAnalyzer: Analyzer {
         }
 
         return evidence
-    }
-
-    private func makeFinding(
-        for metrics: TypeStructuralMetrics,
-        in sourceFile: SourceFile,
-        evidence: [Evidence]
-    ) -> Finding {
-        Finding(
-            id: UUID(),
-            ruleID: ruleMetadata.ruleID,
-            title: ruleMetadata.title,
-            severity: ruleMetadata.severity,
-            filePath: sourceFile.path,
-            range: metrics.range,
-            explanation: "Type '\(metrics.name)' \(ruleMetadata.explanation)",
-            evidence: evidence,
-            suggestion: ruleMetadata.suggestion
-        )
     }
 }

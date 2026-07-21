@@ -20,3 +20,13 @@ swift build
 
 Completed reports are written to standard output for both status `0` and
 status `1`. Errors are written to standard error.
+
+## Normalized findings
+
+JSON reports use schema version `4`. Findings inside a discovered Git
+repository use repository-relative paths; explicit files outside it retain
+canonical absolute paths. Source ranges are one-based and inclusive.
+
+Each finding has a canonical category and severity. Analyzer-specific input is
+retained in the finding's typed `metadata`, such as SwiftLint's original rule,
+severity and location or the God Object analyzer's structural metrics.

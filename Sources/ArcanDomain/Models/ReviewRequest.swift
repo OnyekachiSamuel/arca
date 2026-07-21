@@ -2,6 +2,7 @@ import Foundation
 
 public struct ReviewRequest: Codable, Equatable, Sendable {
     public let id: UUID
+    public let repositoryRoot: String?
     public let selectedFiles: [String]
     public let changes: [CodeChange]
     public let selectedReviewTypes: Set<ReviewType>
@@ -9,12 +10,14 @@ public struct ReviewRequest: Codable, Equatable, Sendable {
 
     public init(
         id: UUID,
+        repositoryRoot: String? = nil,
         selectedFiles: [String],
         changes: [CodeChange] = [],
         selectedReviewTypes: Set<ReviewType> = Set(ReviewType.allCases),
         configuration: ArcanConfiguration = .defaults
     ) {
         self.id = id
+        self.repositoryRoot = repositoryRoot
         self.selectedFiles = selectedFiles
         self.changes = changes
         self.selectedReviewTypes = selectedReviewTypes
@@ -23,6 +26,7 @@ public struct ReviewRequest: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id
+        case repositoryRoot
         case selectedFiles
         case changes
         case selectedReviewTypes
@@ -32,6 +36,10 @@ public struct ReviewRequest: Codable, Equatable, Sendable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
+        repositoryRoot = try container.decodeIfPresent(
+            String.self,
+            forKey: .repositoryRoot
+        )
         selectedFiles = try container.decode([String].self, forKey: .selectedFiles)
         changes = try container.decodeIfPresent(
             [CodeChange].self,

@@ -8,6 +8,7 @@ struct DomainModelCodableTests {
     func reviewRequest() throws {
         let request = ReviewRequest(
             id: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!,
+            repositoryRoot: "/Users/developer/Project",
             selectedFiles: ["Sources/App.swift", "Sources/Feature.swift"],
             changes: [
                 CodeChange(
@@ -55,6 +56,7 @@ struct DomainModelCodableTests {
             ruleID: "ARCAN-GOD-001",
             externalRuleID: "type_body_length",
             title: "God Object candidate",
+            category: .antiPattern,
             severity: .warning,
             filePath: "Sources/LargeCoordinator.swift",
             range: SourceRange(
@@ -71,7 +73,13 @@ struct DomainModelCodableTests {
                     thresholdValue: 25
                 )
             ],
-            suggestion: suggestion
+            suggestion: suggestion,
+            metadata: [
+                "typeName": .string("LargeCoordinator"),
+                "lineCount": .integer(30),
+                "isExtension": .boolean(false),
+                "score": .decimal(0.75)
+            ]
         )
         let analyzerResult = AnalyzerResult(
             analyzerID: "god-object",
@@ -93,11 +101,62 @@ struct DomainModelCodableTests {
         #expect(decoded == report)
         #expect(decoded.findings.first?.externalRuleID == "type_body_length")
         #expect(decoded.findings.first?.suggestion == suggestion)
+        #expect(decoded.findings.first?.category == .antiPattern)
+        #expect(
+            decoded.findings.first?.metadata["lineCount"] == .integer(30)
+        )
         #expect(
             decoded.analyzerResults.first?.tool
                 == ToolMetadata(name: "SwiftLint", version: "0.63.2")
         )
         #expect(decoded.analyzerResults.first == analyzerResult)
+    }
+
+    @Test("finding metadata values encode as JSON scalar values")
+    func findingMetadataScalars() throws {
+        let values: [String: FindingMetadataValue] = [
+            "string": .string("value"),
+            "integer": .integer(8),
+            "decimal": .decimal(1.5),
+            "boolean": .boolean(true)
+        ]
+
+        let data = try encodeToJSON(values)
+        let object = try #require(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        let decoded = try decodeFromJSON(
+            [String: FindingMetadataValue].self,
+            from: data
+        )
+
+        #expect(object["string"] as? String == "value")
+        #expect(object["integer"] as? Int == 8)
+        #expect(object["decimal"] as? Double == 1.5)
+        #expect(object["boolean"] as? Bool == true)
+        #expect(decoded == values)
+    }
+
+    @Test("legacy finding defaults category and metadata")
+    func legacyFindingDefaults() throws {
+        let data = Data(
+            """
+            {
+              "id": "11111111-2222-3333-4444-555555555555",
+              "ruleID": "legacy-rule",
+              "title": "Legacy finding",
+              "severity": "warning",
+              "filePath": "Sources/App.swift",
+              "explanation": "Created before normalized finding fields.",
+              "evidence": []
+            }
+            """.utf8
+        )
+
+        let finding = try decodeFromJSON(Finding.self, from: data)
+
+        #expect(finding.category == .uncategorized)
+        #expect(finding.metadata.isEmpty)
     }
 
     @Test("legacy analyzer result without duration defaults to zero")

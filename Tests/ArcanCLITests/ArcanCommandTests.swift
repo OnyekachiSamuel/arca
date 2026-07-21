@@ -67,13 +67,15 @@ struct ArcanCommandTests {
             try "struct App {}".write(to: file, atomically: true, encoding: .utf8)
 
             let result = await ArcanCommand.run(
-                arguments: ["review", "--file", file.path]
+                arguments: ["review", "--file", file.path],
+                currentDirectory: directory.path
             )
 
             #expect(result.exitCode == 0)
             #expect(result.exitStatus == .success)
             #expect(result.outputDestination == .standardOutput)
             #expect(result.reviewRequest?.selectedFiles == [file.path])
+            #expect(result.reviewRequest?.repositoryRoot == nil)
             #expect(result.output.hasPrefix("ARCAN Review Report"))
             #expect(
                 result.reviewRequest?.selectedReviewTypes
@@ -546,6 +548,11 @@ struct ArcanCommandTests {
 
             #expect(result.exitCode == 0)
             #expect(
+                result.reviewRequest?.repositoryRoot
+                    == directory.standardizedFileURL
+                        .resolvingSymlinksInPath().path
+            )
+            #expect(
                 result.reviewRequest?.selectedFiles
                     == [file.standardizedFileURL.resolvingSymlinksInPath().path]
             )
@@ -595,6 +602,12 @@ struct ArcanCommandTests {
 
             #expect(result.exitCode == 1)
             #expect(result.output.contains("ARCAN-GOD-001"))
+            #expect(result.output.contains("File: Sources/LargeType.swift:"))
+            #expect(
+                result.reviewRequest?.repositoryRoot
+                    == repository.standardizedFileURL
+                        .resolvingSymlinksInPath().path
+            )
             #expect(
                 result.reviewRequest?
                     .configuration

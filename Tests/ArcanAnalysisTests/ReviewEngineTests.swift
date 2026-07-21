@@ -13,6 +13,7 @@ struct ReviewEngineTests {
         let context = AnalysisContext(
             request: ReviewRequest(
                 id: requestID,
+                repositoryRoot: "/project",
                 selectedFiles: ["Sources/App.swift"]
             )
         )
@@ -21,14 +22,16 @@ struct ReviewEngineTests {
                 id: "first",
                 finding: finding(
                     id: "11111111-2222-3333-4444-555555555555",
-                    ruleID: "FIRST"
+                    ruleID: "FIRST",
+                    filePath: "/project/Sources/App.swift"
                 )
             ),
             ResultAnalyzer(
                 id: "second",
                 finding: finding(
                     id: "66666666-7777-8888-9999-AAAAAAAAAAAA",
-                    ruleID: "SECOND"
+                    ruleID: "SECOND",
+                    filePath: "/project/Sources/Other.swift"
                 )
             )
         ]
@@ -57,6 +60,14 @@ struct ReviewEngineTests {
                 == [4, 9]
         )
         #expect(report.findings.map(\.ruleID) == ["FIRST", "SECOND"])
+        #expect(
+            report.findings.map(\.filePath)
+                == ["Sources/App.swift", "Sources/Other.swift"]
+        )
+        #expect(
+            report.analyzerResults.flatMap(\.findings).map(\.filePath)
+                == ["Sources/App.swift", "Sources/Other.swift"]
+        )
     }
 
     @Test("engine builds an empty report when no analyzers are selected")
@@ -80,13 +91,17 @@ struct ReviewEngineTests {
         #expect(report.findings.isEmpty)
     }
 
-    private func finding(id: String, ruleID: String) -> Finding {
+    private func finding(
+        id: String,
+        ruleID: String,
+        filePath: String
+    ) -> Finding {
         Finding(
             id: UUID(uuidString: id)!,
             ruleID: ruleID,
             title: ruleID,
             severity: .warning,
-            filePath: "Sources/App.swift",
+            filePath: filePath,
             explanation: "\(ruleID) explanation"
         )
     }
