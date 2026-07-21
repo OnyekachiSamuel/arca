@@ -10,16 +10,22 @@ import Foundation
 
 public struct CommandResult: Equatable {
     public let output: String
-    public let exitCode: Int32
+    public let exitStatus: ArcanExitStatus
+    public let outputDestination: CommandOutputDestination
     public let reviewRequest: ReviewRequest?
+
+    public var exitCode: Int32 {
+        exitStatus.rawValue
+    }
 
     init(
         output: String,
-        exitCode: Int32,
+        exitStatus: ArcanExitStatus,
         reviewRequest: ReviewRequest? = nil
     ) {
         self.output = output
-        self.exitCode = exitCode
+        self.exitStatus = exitStatus
+        outputDestination = exitStatus.outputDestination
         self.reviewRequest = reviewRequest
     }
 }
@@ -39,6 +45,12 @@ public enum ArcanCommand {
       --format <format>       Select output format. Values: terminal, json.
       --debug                 Print loaded source and metadata.
       -h, --help              Show help information.
+
+    EXIT STATUS:
+      0  Review completed without findings.
+      1  Review completed with findings.
+      2  Invalid input or configuration.
+      3  Analyzer or internal execution failure.
     """
 
     static let rootHelp = """
@@ -62,9 +74,9 @@ public enum ArcanCommand {
     ) async -> CommandResult {
         switch arguments {
         case [], ["--help"], ["-h"]:
-            return CommandResult(output: rootHelp, exitCode: 0)
+            return CommandResult(output: rootHelp, exitStatus: .success)
         case ["review", "--help"], ["review", "-h"]:
-            return CommandResult(output: reviewHelp, exitCode: 0)
+            return CommandResult(output: reviewHelp, exitStatus: .success)
         default:
             break
         }
@@ -72,7 +84,7 @@ public enum ArcanCommand {
         guard arguments.first == "review" else {
             return CommandResult(
                 output: "Error: unknown command or option. Run 'arcan --help' for usage.",
-                exitCode: 64
+                exitStatus: .invalidInput
             )
         }
 
@@ -82,8 +94,8 @@ public enum ArcanCommand {
             )
             guard let source = options.source else {
                 return CommandResult(
-                    output: "No Swift file selected. Run 'arcan review --help' for usage.",
-                    exitCode: 0
+                    output: "Error: No review source selected. Use --file or --changed.",
+                    exitStatus: .invalidInput
                 )
             }
 
@@ -108,12 +120,12 @@ public enum ArcanCommand {
         } catch let error as ReviewCommandParsingError {
             return CommandResult(
                 output: "Error: \(error.localizedDescription)",
-                exitCode: 64
+                exitStatus: .invalidInput
             )
         } catch {
             return CommandResult(
-                output: "Error: unknown command or option. Run 'arcan --help' for usage.",
-                exitCode: 64
+                output: "Error: Review command failed unexpectedly.",
+                exitStatus: .executionFailure
             )
         }
     }
@@ -140,12 +152,12 @@ public enum ArcanCommand {
         } catch let error as SourceSelectionError {
             return CommandResult(
                 output: "Error: \(error.localizedDescription)",
-                exitCode: 64
+                exitStatus: .invalidInput
             )
         } catch {
             return CommandResult(
                 output: "Error: Review failed for Swift file: \(path)",
-                exitCode: 64
+                exitStatus: .executionFailure
             )
         }
     }
@@ -170,19 +182,26 @@ public enum ArcanCommand {
                 changes: changes
             )
         } catch let error as GitRepositoryFinderError {
+            let exitStatus: ArcanExitStatus
+            switch error {
+            case .notRepository:
+                exitStatus = .invalidInput
+            case .commandCouldNotRun, .invalidOutput:
+                exitStatus = .executionFailure
+            }
             return CommandResult(
                 output: "Error: \(error.localizedDescription)",
-                exitCode: 64
+                exitStatus: exitStatus
             )
         } catch let error as GitChangedSwiftFileFinderError {
             return CommandResult(
                 output: "Error: \(error.localizedDescription)",
-                exitCode: 64
+                exitStatus: .executionFailure
             )
         } catch {
             return CommandResult(
                 output: "Error: Could not select changed Swift files.",
-                exitCode: 64
+                exitStatus: .executionFailure
             )
         }
     }
@@ -236,7 +255,7 @@ public enum ArcanCommand {
                 """
                 return CommandResult(
                     output: output,
-                    exitCode: 0,
+                    exitStatus: .success,
                     reviewRequest: request
                 )
             }
@@ -260,33 +279,35 @@ public enum ArcanCommand {
             let reporter = reporter(for: outputFormat)
             return CommandResult(
                 output: try reporter.render(report: report),
-                exitCode: 0,
+                exitStatus: report.findings.isEmpty
+                    ? .success
+                    : .findingsDetected,
                 reviewRequest: request
             )
         } catch let error as ReviewCommandParsingError {
             return CommandResult(
                 output: "Error: \(error.localizedDescription)",
-                exitCode: 64
+                exitStatus: .invalidInput
             )
         } catch let error as ConfigurationLoadingError {
             return CommandResult(
                 output: "Error: \(error.localizedDescription)",
-                exitCode: 64
+                exitStatus: .invalidInput
             )
         } catch let error as SourceLoadingError {
             return CommandResult(
                 output: "Error: \(error.localizedDescription)",
-                exitCode: 64
+                exitStatus: .invalidInput
             )
         } catch let error as SwiftLintAvailabilityError {
             return CommandResult(
                 output: "Error: \(error.localizedDescription)",
-                exitCode: 69
+                exitStatus: .executionFailure
             )
         } catch {
             return CommandResult(
                 output: "Error: Review failed for \(failureDescription)",
-                exitCode: 64
+                exitStatus: .executionFailure
             )
         }
     }

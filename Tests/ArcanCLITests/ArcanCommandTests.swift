@@ -19,11 +19,19 @@ struct ArcanCommandTests {
           --format <format>       Select output format. Values: terminal, json.
           --debug                 Print loaded source and metadata.
           -h, --help              Show help information.
+
+        EXIT STATUS:
+          0  Review completed without findings.
+          1  Review completed with findings.
+          2  Invalid input or configuration.
+          3  Analyzer or internal execution failure.
         """
 
         let result = await ArcanCommand.run(arguments: ["review", "--help"])
 
         #expect(result.exitCode == 0)
+        #expect(result.exitStatus == .success)
+        #expect(result.outputDestination == .standardOutput)
         #expect(result.output == expected)
     }
 
@@ -34,8 +42,21 @@ struct ArcanCommandTests {
         #expect(
             result == CommandResult(
                 output: ArcanCommand.reviewHelp,
-                exitCode: 0
+                exitStatus: .success
             )
+        )
+    }
+
+    @Test("review without a source is an input error")
+    func reviewWithoutSourceReturnsInputError() async {
+        let result = await ArcanCommand.run(arguments: ["review"])
+
+        #expect(result.exitStatus == .invalidInput)
+        #expect(result.exitCode == 2)
+        #expect(result.outputDestination == .standardError)
+        #expect(
+            result.output
+                == "Error: No review source selected. Use --file or --changed."
         )
     }
 
@@ -50,6 +71,8 @@ struct ArcanCommandTests {
             )
 
             #expect(result.exitCode == 0)
+            #expect(result.exitStatus == .success)
+            #expect(result.outputDestination == .standardOutput)
             #expect(result.reviewRequest?.selectedFiles == [file.path])
             #expect(result.output.hasPrefix("ARCAN Review Report"))
             #expect(
@@ -142,7 +165,9 @@ struct ArcanCommandTests {
             )
             let finding = try #require(analyzerResult.findings.first)
 
-            #expect(result.exitCode == 0)
+            #expect(result.exitCode == 1)
+            #expect(result.exitStatus == .findingsDetected)
+            #expect(result.outputDestination == .standardOutput)
             #expect(
                 result.reviewRequest?.selectedReviewTypes == [.style]
             )
@@ -160,7 +185,8 @@ struct ArcanCommandTests {
             "--format", "xml"
         ])
 
-        #expect(result.exitCode == 64)
+        #expect(result.exitCode == 2)
+        #expect(result.outputDestination == .standardError)
         #expect(
             result.output
                 == "Error: Unsupported output format 'xml'. Available values: terminal, json."
@@ -175,7 +201,7 @@ struct ArcanCommandTests {
             "--format", "json"
         ])
 
-        #expect(result.exitCode == 64)
+        #expect(result.exitCode == 2)
         #expect(
             result.output
                 == "Error: Option '--format' may only be specified once."
@@ -199,7 +225,7 @@ struct ArcanCommandTests {
                 "--debug"
             ])
 
-            #expect(result.exitCode == 64)
+            #expect(result.exitCode == 2)
             #expect(
                 result.output
                     == "Error: Options '--debug' and '--format json' cannot be used together."
@@ -319,7 +345,7 @@ struct ArcanCommandTests {
                 "--review", "security"
             ])
 
-            #expect(result.exitCode == 64)
+            #expect(result.exitCode == 2)
             #expect(
                 result.output
                     == "Error: Unsupported review type 'security'."
@@ -421,7 +447,9 @@ struct ArcanCommandTests {
                 currentDirectory: directory.path
             )
 
-            #expect(result.exitCode == 69)
+            #expect(result.exitCode == 3)
+            #expect(result.exitStatus == .executionFailure)
+            #expect(result.outputDestination == .standardError)
             #expect(result.output == "Error: SwiftLint is required but unavailable: SwiftLint executable was not found. Install SwiftLint or set ARCAN_SWIFTLINT_EXECUTABLE.")
             #expect(result.reviewRequest == nil)
         }
@@ -474,7 +502,7 @@ struct ArcanCommandTests {
                 arguments: ["review", "--file", path]
             )
 
-            #expect(result.exitCode != 0)
+            #expect(result.exitCode == 2)
             #expect(result.output == "Error: Swift file does not exist: \(path)")
             #expect(result.reviewRequest == nil)
         }
@@ -565,7 +593,7 @@ struct ArcanCommandTests {
                 currentDirectory: sources.path
             )
 
-            #expect(result.exitCode == 0)
+            #expect(result.exitCode == 1)
             #expect(result.output.contains("ARCAN-GOD-001"))
             #expect(
                 result.reviewRequest?
@@ -600,7 +628,7 @@ struct ArcanCommandTests {
                 currentDirectory: directory.path
             )
 
-            #expect(result.exitCode == 64)
+            #expect(result.exitCode == 2)
             #expect(
                 result.output
                     == "Error: Unsupported configuration schema version: 99. Supported version: 1."

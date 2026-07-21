@@ -21,7 +21,8 @@ struct ReviewCommandEndToEndTests {
         let output = String(decoding: result.standardOutput, as: UTF8.self)
         let errorOutput = String(decoding: result.standardError, as: UTF8.self)
 
-        #expect(result.exitCode == 0, Comment(rawValue: errorOutput))
+        #expect(result.exitCode == 1, Comment(rawValue: errorOutput))
+        #expect(result.standardError.isEmpty)
         #expect(output.contains("ARCAN-GOD-001"))
         #expect(
             output.contains(
@@ -55,7 +56,7 @@ struct ReviewCommandEndToEndTests {
             as: UTF8.self
         )
 
-        #expect(result.exitCode == 0, Comment(rawValue: errorOutput))
+        #expect(result.exitCode == 1, Comment(rawValue: errorOutput))
         #expect(result.standardError.isEmpty)
         #expect(
             report.schemaVersion == ReviewReport.currentSchemaVersion
@@ -114,13 +115,95 @@ struct ReviewCommandEndToEndTests {
         )
     }
 
+    @Test("compiled CLI returns success for a clean review")
+    func returnsSuccessForCleanReview() throws {
+        let fixture = try #require(
+            Bundle.module.url(
+                forResource: "SmallType",
+                withExtension: "swift",
+                subdirectory: "Fixtures"
+            )
+        )
+        let result = try runArcan(arguments: [
+            "review",
+            "--file", fixture.path,
+            "--review", "god-object"
+        ])
+
+        #expect(result.exitCode == 0)
+        #expect(
+            String(decoding: result.standardOutput, as: UTF8.self)
+                .contains("0 findings")
+        )
+        #expect(result.standardError.isEmpty)
+    }
+
+    @Test("compiled CLI returns input error for an invalid option")
+    func returnsInputErrorForInvalidOption() throws {
+        let result = try runArcan(arguments: ["review", "--unknown"])
+
+        #expect(result.exitCode == 2)
+        #expect(result.standardOutput.isEmpty)
+        #expect(
+            String(decoding: result.standardError, as: UTF8.self)
+                .lowercased()
+                .contains("unknown review option")
+        )
+    }
+
+    @Test("compiled CLI returns execution failure when required SwiftLint is missing")
+    func returnsExecutionFailureForRequiredTool() throws {
+        try withTemporaryDirectory { directory in
+            let source = directory.appendingPathComponent("App.swift")
+            try "struct App {}".write(
+                to: source,
+                atomically: true,
+                encoding: .utf8
+            )
+            try """
+            {
+              "schemaVersion": 1,
+              "swiftLint": {
+                "availability": "required"
+              }
+            }
+            """.write(
+                to: directory.appendingPathComponent(".arcan.json"),
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = try runArcan(
+                arguments: [
+                    "review",
+                    "--file", source.path,
+                    "--review", "style"
+                ],
+                environment: [
+                    "ARCAN_SWIFTLINT_EXECUTABLE":
+                        "/definitely/missing/swiftlint"
+                ],
+                currentDirectoryURL: directory
+            )
+
+            #expect(result.exitCode == 3)
+            #expect(result.standardOutput.isEmpty)
+            #expect(
+                String(decoding: result.standardError, as: UTF8.self)
+                    .contains("SwiftLint is required but unavailable")
+            )
+        }
+    }
+
     private func runArcan(
         arguments: [String],
-        environment: [String: String] = [:]
+        environment: [String: String] = [:],
+        currentDirectoryURL: URL? = nil
     ) throws -> SubprocessResult {
         let process = Process()
         process.executableURL = try arcanExecutableURL()
         process.arguments = arguments
+        process.currentDirectoryURL = currentDirectoryURL
         process.environment = ProcessInfo.processInfo.environment.merging(
             environment,
             uniquingKeysWith: { _, override in override }
@@ -141,6 +224,19 @@ struct ReviewCommandEndToEndTests {
             standardError:
                 standardError.fileHandleForReading.readDataToEndOfFile()
         )
+    }
+
+    private func withTemporaryDirectory<Result>(
+        _ body: (URL) throws -> Result
+    ) throws -> Result {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        return try body(directory)
     }
 
     private func arcanExecutableURL() throws -> URL {
