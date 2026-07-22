@@ -6,7 +6,8 @@ public struct FindingNormalizer: Sendable {
 
     public func normalize(
         _ finding: Finding,
-        repositoryRoot: String?
+        repositoryRoot: String?,
+        sourceIdentifier: String? = nil
     ) throws -> Finding {
         try validate(finding.range, filePath: finding.filePath)
 
@@ -25,8 +26,24 @@ public struct FindingNormalizer: Sendable {
             explanation: finding.explanation,
             evidence: finding.evidence,
             suggestion: finding.suggestion,
+            sources: normalizedSources(
+                finding.sources,
+                adding: sourceIdentifier
+            ),
             metadata: finding.metadata
         )
+    }
+
+    private func normalizedSources(
+        _ sources: [String],
+        adding sourceIdentifier: String?
+    ) -> [String] {
+        var seen: Set<String> = []
+        var candidates = sources
+        if let sourceIdentifier {
+            candidates.append(sourceIdentifier)
+        }
+        return candidates.filter { seen.insert($0).inserted }
     }
 
     private func normalizedPath(

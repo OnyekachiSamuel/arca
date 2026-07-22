@@ -23,6 +23,14 @@ struct JSONReporterTests {
         #expect(!output.contains("ARCAN Review Report"))
         #expect(!output.contains("\u{001B}["))
         #expect(!output.contains("```"))
+        #expect(decoded.findings.first?.sources == ["god-object"])
+        let object = try #require(
+            JSONSerialization.jsonObject(
+                with: Data(output.utf8)
+            ) as? [String: Any]
+        )
+        let findings = try #require(object["findings"] as? [[String: Any]])
+        #expect(findings.first?["sources"] as? [String] == ["god-object"])
     }
 
     private func makeReport() -> ReviewReport {
@@ -34,7 +42,8 @@ struct JSONReporterTests {
             title: "God Object candidate",
             severity: .warning,
             filePath: "Sources/LargeCoordinator.swift",
-            explanation: "The type exceeds configured thresholds."
+            explanation: "The type exceeds configured thresholds.",
+            sources: ["god-object"]
         )
         return ReviewReport(
             schemaVersion: ReviewReport.currentSchemaVersion,

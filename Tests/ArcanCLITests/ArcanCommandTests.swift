@@ -177,6 +177,8 @@ struct ArcanCommandTests {
             #expect(analyzerResult.tool?.version == "test-version")
             #expect(finding.ruleID == "swiftlint.trailing_semicolon")
             #expect(finding.externalRuleID == "trailing_semicolon")
+            #expect(finding.sources == ["swiftlint"])
+            #expect(report.findings.first?.sources == ["swiftlint"])
         }
     }
 

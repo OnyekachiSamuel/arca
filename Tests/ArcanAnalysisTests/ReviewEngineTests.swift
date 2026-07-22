@@ -68,6 +68,14 @@ struct ReviewEngineTests {
             report.analyzerResults.flatMap(\.findings).map(\.filePath)
                 == ["Sources/App.swift", "Sources/Other.swift"]
         )
+        #expect(
+            report.findings.map(\.sources)
+                == [["first"], ["second"]]
+        )
+        #expect(
+            report.analyzerResults.flatMap(\.findings).map(\.sources)
+                == [["first"], ["second"]]
+        )
     }
 
     @Test("engine builds an empty report when no analyzers are selected")

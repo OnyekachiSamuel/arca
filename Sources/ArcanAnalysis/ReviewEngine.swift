@@ -26,7 +26,8 @@ public struct ReviewEngine: Sendable {
                 findings: try result.findings.map {
                     try findingNormalizer.normalize(
                         $0,
-                        repositoryRoot: context.request.repositoryRoot
+                        repositoryRoot: context.request.repositoryRoot,
+                        sourceIdentifier: result.analyzerID
                     )
                 },
                 tool: result.tool,

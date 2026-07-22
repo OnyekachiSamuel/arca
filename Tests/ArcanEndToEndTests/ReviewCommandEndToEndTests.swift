@@ -66,6 +66,11 @@ struct ReviewCommandEndToEndTests {
         #expect(report.findings.first?.ruleID == "ARCAN-GOD-001")
         #expect(report.findings.first?.filePath == expectedPath)
         #expect(report.findings.first?.category == .antiPattern)
+        #expect(report.findings.first?.sources == ["god-object"])
+        #expect(
+            report.analyzerResults.first?.findings.first?.sources
+                == ["god-object"]
+        )
         #expect(
             report.findings.first?.metadata["typeName"]
                 == .string("LargeCoordinator")

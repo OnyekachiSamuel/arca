@@ -23,10 +23,14 @@ status `1`. Errors are written to standard error.
 
 ## Normalized findings
 
-JSON reports use schema version `4`. Findings inside a discovered Git
+JSON reports use schema version `5`. Findings inside a discovered Git
 repository use repository-relative paths; explicit files outside it retain
 canonical absolute paths. Source ranges are one-based and inclusive.
 
 Each finding has a canonical category and severity. Analyzer-specific input is
 retained in the finding's typed `metadata`, such as SwiftLint's original rule,
 severity and location or the God Object analyzer's structural metrics.
+
+The `sources` array records stable analyzer identifiers such as `god-object`
+and `swiftlint`. An array is used so a future merged finding can retain every
+analyzer that detected it while keeping deterministic JSON order.

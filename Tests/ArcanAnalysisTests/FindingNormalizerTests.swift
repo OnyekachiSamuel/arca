@@ -19,7 +19,24 @@ struct FindingNormalizerTests {
         #expect(normalized.filePath == "Sources/App.swift")
         #expect(normalized.id == finding.id)
         #expect(normalized.category == .style)
+        #expect(normalized.sources == ["llm.general"])
         #expect(normalized.metadata == finding.metadata)
+    }
+
+    @Test("adds the analyzer source once while preserving stable order")
+    func addsAndDeduplicatesSource() throws {
+        let finding = makeFinding(
+            path: "/project/Sources/App.swift",
+            sources: ["llm.general", "god-object"]
+        )
+
+        let normalized = try FindingNormalizer().normalize(
+            finding,
+            repositoryRoot: "/project",
+            sourceIdentifier: "god-object"
+        )
+
+        #expect(normalized.sources == ["llm.general", "god-object"])
     }
 
     @Test("resolves an analyzer-relative path from the repository root")
@@ -99,7 +116,8 @@ struct FindingNormalizerTests {
             startColumn: 3,
             endLine: 2,
             endColumn: 8
-        )
+        ),
+        sources: [String] = ["llm.general"]
     ) -> Finding {
         Finding(
             id: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
@@ -111,6 +129,7 @@ struct FindingNormalizerTests {
             filePath: path,
             range: range,
             explanation: "Example finding.",
+            sources: sources,
             metadata: ["file": .string(path)]
         )
     }

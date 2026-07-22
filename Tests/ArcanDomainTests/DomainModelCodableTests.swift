@@ -74,6 +74,7 @@ struct DomainModelCodableTests {
                 )
             ],
             suggestion: suggestion,
+            sources: ["god-object", "llm.general"],
             metadata: [
                 "typeName": .string("LargeCoordinator"),
                 "lineCount": .integer(30),
@@ -102,6 +103,10 @@ struct DomainModelCodableTests {
         #expect(decoded.findings.first?.externalRuleID == "type_body_length")
         #expect(decoded.findings.first?.suggestion == suggestion)
         #expect(decoded.findings.first?.category == .antiPattern)
+        #expect(
+            decoded.findings.first?.sources
+                == ["god-object", "llm.general"]
+        )
         #expect(
             decoded.findings.first?.metadata["lineCount"] == .integer(30)
         )
@@ -156,6 +161,7 @@ struct DomainModelCodableTests {
         let finding = try decodeFromJSON(Finding.self, from: data)
 
         #expect(finding.category == .uncategorized)
+        #expect(finding.sources.isEmpty)
         #expect(finding.metadata.isEmpty)
     }
 

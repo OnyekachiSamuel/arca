@@ -12,6 +12,7 @@ public struct Finding: Codable, Equatable, Sendable, Identifiable {
     public let explanation: String
     public let evidence: [Evidence]
     public let suggestion: Suggestion?
+    public let sources: [String]
     public let metadata: [String: FindingMetadataValue]
 
     public init(
@@ -26,6 +27,7 @@ public struct Finding: Codable, Equatable, Sendable, Identifiable {
         explanation: String,
         evidence: [Evidence] = [],
         suggestion: Suggestion? = nil,
+        sources: [String] = [],
         metadata: [String: FindingMetadataValue] = [:]
     ) {
         self.id = id
@@ -39,6 +41,7 @@ public struct Finding: Codable, Equatable, Sendable, Identifiable {
         self.explanation = explanation
         self.evidence = evidence
         self.suggestion = suggestion
+        self.sources = sources
         self.metadata = metadata
     }
 
@@ -54,6 +57,7 @@ public struct Finding: Codable, Equatable, Sendable, Identifiable {
         case explanation
         case evidence
         case suggestion
+        case sources
         case metadata
     }
 
@@ -82,6 +86,10 @@ public struct Finding: Codable, Equatable, Sendable, Identifiable {
             Suggestion.self,
             forKey: .suggestion
         )
+        sources = try container.decodeIfPresent(
+            [String].self,
+            forKey: .sources
+        ) ?? []
         metadata = try container.decodeIfPresent(
             [String: FindingMetadataValue].self,
             forKey: .metadata
