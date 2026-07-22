@@ -34,3 +34,11 @@ severity and location or the God Object analyzer's structural metrics.
 The `sources` array records stable analyzer identifiers such as `god-object`
 and `swiftlint`. An array is used so a future merged finding can retain every
 analyzer that detected it while keeping deterministic JSON order.
+
+## LLM provider boundary
+
+`ArcanLLM` defines a provider-independent asynchronous interface with model,
+prompt, timeout and optional generation settings. Provider responses contain
+text, optional token counts and duration. No real local or remote provider is
+included yet; future adapters can implement the same interface without
+changing prompt or analysis components.
