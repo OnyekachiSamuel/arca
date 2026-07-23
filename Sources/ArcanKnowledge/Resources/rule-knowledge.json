@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "rules": [
+    {
+      "ruleID": "ARCAN-GOD-001",
+      "title": "God Object candidate",
+      "category": "antiPattern",
+      "defaultSeverity": "warning",
+      "definition": "A God Object candidate is a type that centralizes multiple unrelated responsibilities and exceeds multiple configured structural thresholds.",
+      "evidenceCriteria": [
+        "The type exceeds at least the configured minimum number of structural signals.",
+        "Its declaration line count exceeds the configured line threshold.",
+        "Its method count exceeds the configured method threshold.",
+        "Its stored-property count exceeds the configured property threshold."
+      ],
+      "refactoringGuardrails": [
+        "Group properties and methods by responsibility.",
+        "Extract each responsibility into a dedicated type.",
+        "Keep only necessary coordination in the original type."
+      ]
+    }
+  ]
+}

@@ -147,6 +147,20 @@
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "ArcanKnowledge"
+               BuildableName = "ArcanKnowledge"
+               BlueprintName = "ArcanKnowledge"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -273,6 +287,16 @@
                BlueprintIdentifier = "ArcanLLMTests"
                BuildableName = "ArcanLLMTests"
                BlueprintName = "ArcanLLMTests"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "ArcanKnowledgeTests"
+               BuildableName = "ArcanKnowledgeTests"
+               BlueprintName = "ArcanKnowledgeTests"
                ReferencedContainer = "container:">
             </BuildableReference>
          </TestableReference>
