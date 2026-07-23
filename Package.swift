@@ -36,7 +36,10 @@ let package = Package(
             dependencies: ["ArcanDomain"],
             resources: [.process("Resources")]
         ),
-        .target(name: "ArcanLLM"),
+        .target(
+            name: "ArcanLLM",
+            dependencies: ["ArcanDomain", "ArcanKnowledge"]
+        ),
         .target(name: "ArcanProcess"),
         .target(name: "ArcanAnalysis", dependencies: ["ArcanDomain"]),
         .target(
@@ -103,7 +106,11 @@ let package = Package(
             name: "ArcanKnowledgeTests",
             dependencies: ["ArcanDomain", "ArcanKnowledge"]
         ),
-        .testTarget(name: "ArcanLLMTests", dependencies: ["ArcanLLM"]),
+        .testTarget(
+            name: "ArcanLLMTests",
+            dependencies: ["ArcanDomain", "ArcanKnowledge", "ArcanLLM"],
+            resources: [.copy("Fixtures")]
+        ),
         .testTarget(
             name: "ArcanProcessTests",
             dependencies: ["ArcanProcess"]
