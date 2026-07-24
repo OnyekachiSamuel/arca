@@ -6,6 +6,7 @@ public struct SuggestionParser: Sendable {
     private static let maximumSummaryUTF8Bytes = 500
     private static let maximumStepCount = 20
     private static let maximumStepUTF8Bytes = 2_000
+    private static let maximumCodeExampleUTF8Bytes = 8_000
 
     public init() {}
 
@@ -66,7 +67,34 @@ public struct SuggestionParser: Sendable {
             return rejected("An LLM suggestion step exceeds the maximum size.")
         }
 
-        return .parsed(Suggestion(summary: summary, steps: steps))
+        if let codeExample = response.codeExample {
+            guard !codeExample.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            ).isEmpty else {
+                return rejected(
+                    "The LLM code example must not be empty when provided."
+                )
+            }
+            guard codeExample.utf8.count
+                <= Self.maximumCodeExampleUTF8Bytes else {
+                return rejected(
+                    "The LLM code example exceeds the maximum size."
+                )
+            }
+            guard !codeExample.contains("```") else {
+                return rejected(
+                    "The LLM code example must not contain Markdown fences."
+                )
+            }
+        }
+
+        return .parsed(
+            Suggestion(
+                summary: summary,
+                steps: steps,
+                codeExample: response.codeExample
+            )
+        )
     }
 
     private func extractJSON(from responseText: String) -> String? {
@@ -112,4 +140,5 @@ public struct SuggestionParser: Sendable {
 private struct SuggestionResponse: Decodable {
     let summary: String
     let steps: [String]
+    let codeExample: String?
 }

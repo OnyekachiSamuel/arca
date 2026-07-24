@@ -49,7 +49,12 @@ struct DomainModelCodableTests {
     func reviewReport() throws {
         let suggestion = Suggestion(
             summary: "Split networking from presentation logic.",
-            steps: ["Extract an API client", "Move view state into a view model"]
+            steps: ["Extract an API client", "Move view state into a view model"],
+            codeExample: """
+            struct APIClient {
+                func load() async throws {}
+            }
+            """
         )
         let finding = Finding(
             id: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
@@ -102,6 +107,10 @@ struct DomainModelCodableTests {
         #expect(decoded == report)
         #expect(decoded.findings.first?.externalRuleID == "type_body_length")
         #expect(decoded.findings.first?.suggestion == suggestion)
+        #expect(
+            decoded.findings.first?.suggestion?.codeExample
+                == suggestion.codeExample
+        )
         #expect(decoded.findings.first?.category == .antiPattern)
         #expect(
             decoded.findings.first?.sources
@@ -115,6 +124,86 @@ struct DomainModelCodableTests {
                 == ToolMetadata(name: "SwiftLint", version: "0.63.2")
         )
         #expect(decoded.analyzerResults.first == analyzerResult)
+    }
+
+    @Test("suggestions without a code example remain decodable")
+    func suggestionWithoutCodeExample() throws {
+        let data = Data(
+            """
+            {
+              "summary": "Extract a service.",
+              "steps": ["Move related methods."]
+            }
+            """.utf8
+        )
+
+        let suggestion = try decodeFromJSON(Suggestion.self, from: data)
+
+        #expect(suggestion.codeExample == nil)
+    }
+
+    @Test("copying a finding with a suggestion preserves detection data")
+    func findingWithSuggestionPreservesDetectionData() {
+        let original = Finding(
+            id: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
+            ruleID: "ARCAN-GOD-001",
+            externalRuleID: "external-rule",
+            title: "God Object candidate",
+            category: .antiPattern,
+            severity: .warning,
+            filePath: "Sources/App.swift",
+            range: SourceRange(
+                startLine: 2,
+                startColumn: 1,
+                endLine: 40,
+                endColumn: 2
+            ),
+            explanation: "The type exceeds multiple thresholds.",
+            evidence: [
+                Evidence(
+                    metric: "methods",
+                    observedValue: 30,
+                    thresholdValue: 25
+                )
+            ],
+            suggestion: Suggestion(
+                summary: "Generic guidance.",
+                steps: ["Split the type."]
+            ),
+            sources: ["god-object"],
+            metadata: ["typeName": .string("App")]
+        )
+        let targetedSuggestion = Suggestion(
+            summary: "Extract persistence from App.",
+            steps: ["Create an AppRepository."],
+            codeExample: "struct AppRepository {}"
+        )
+
+        let findingWithTargetedSuggestion = original.withSuggestion(
+            targetedSuggestion
+        )
+
+        #expect(findingWithTargetedSuggestion.suggestion == targetedSuggestion)
+        #expect(findingWithTargetedSuggestion.id == original.id)
+        #expect(findingWithTargetedSuggestion.ruleID == original.ruleID)
+        #expect(
+            findingWithTargetedSuggestion.externalRuleID
+                == original.externalRuleID
+        )
+        #expect(findingWithTargetedSuggestion.title == original.title)
+        #expect(findingWithTargetedSuggestion.category == original.category)
+        #expect(findingWithTargetedSuggestion.severity == original.severity)
+        #expect(findingWithTargetedSuggestion.filePath == original.filePath)
+        #expect(findingWithTargetedSuggestion.range == original.range)
+        #expect(
+            findingWithTargetedSuggestion.explanation == original.explanation
+        )
+        #expect(findingWithTargetedSuggestion.evidence == original.evidence)
+        #expect(findingWithTargetedSuggestion.sources == original.sources)
+        #expect(findingWithTargetedSuggestion.metadata == original.metadata)
+        #expect(
+            original.suggestion?.summary == "Generic guidance."
+        )
     }
 
     @Test("finding metadata values encode as JSON scalar values")

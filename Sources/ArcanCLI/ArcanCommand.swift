@@ -3,6 +3,8 @@ import ArcanAnalyzers
 import ArcanConfiguration
 import ArcanDomain
 import ArcanGit
+import ArcanKnowledge
+import ArcanLLM
 import ArcanReporting
 import ArcanSource
 import ArcanSwiftSyntax
@@ -72,6 +74,20 @@ public enum ArcanCommand {
             .executableNotFound
         )
     ) async -> CommandResult {
+        await execute(
+            arguments: arguments,
+            currentDirectory: currentDirectory,
+            swiftLintAvailability: swiftLintAvailability,
+            llmProvider: nil
+        )
+    }
+
+    static func execute(
+        arguments: [String],
+        currentDirectory: String,
+        swiftLintAvailability: SwiftLintAvailability,
+        llmProvider: (any LLMProvider)?
+    ) async -> CommandResult {
         switch arguments {
         case [], ["--help"], ["-h"]:
             return CommandResult(output: rootHelp, exitStatus: .success)
@@ -107,14 +123,16 @@ public enum ArcanCommand {
                     currentDirectory: currentDirectory,
                     reviewSelection: options.reviewSelection,
                     outputFormat: options.outputFormat,
-                    swiftLintAvailability: swiftLintAvailability
+                    swiftLintAvailability: swiftLintAvailability,
+                    llmProvider: llmProvider
                 )
             case .changed:
                 return await reviewChanged(
                     from: currentDirectory,
                     reviewSelection: options.reviewSelection,
                     outputFormat: options.outputFormat,
-                    swiftLintAvailability: swiftLintAvailability
+                    swiftLintAvailability: swiftLintAvailability,
+                    llmProvider: llmProvider
                 )
             }
         } catch let error as ReviewCommandParsingError {
@@ -136,7 +154,8 @@ public enum ArcanCommand {
         currentDirectory: String,
         reviewSelection: ReviewSelection,
         outputFormat: ReviewOutputFormat,
-        swiftLintAvailability: SwiftLintAvailability
+        swiftLintAvailability: SwiftLintAvailability,
+        llmProvider: (any LLMProvider)?
     ) async -> CommandResult {
         do {
             let selectedFile = try ExplicitSwiftFileSelector().select(path: path)
@@ -147,7 +166,8 @@ public enum ArcanCommand {
                 currentDirectory: currentDirectory,
                 reviewSelection: reviewSelection,
                 outputFormat: outputFormat,
-                swiftLintAvailability: swiftLintAvailability
+                swiftLintAvailability: swiftLintAvailability,
+                llmProvider: llmProvider
             )
         } catch let error as SourceSelectionError {
             return CommandResult(
@@ -166,7 +186,8 @@ public enum ArcanCommand {
         from currentDirectory: String,
         reviewSelection: ReviewSelection,
         outputFormat: ReviewOutputFormat,
-        swiftLintAvailability: SwiftLintAvailability
+        swiftLintAvailability: SwiftLintAvailability,
+        llmProvider: (any LLMProvider)?
     ) async -> CommandResult {
         do {
             let changes = try GitDiffProvider().extract(from: currentDirectory)
@@ -179,6 +200,7 @@ public enum ArcanCommand {
                 reviewSelection: reviewSelection,
                 outputFormat: outputFormat,
                 swiftLintAvailability: swiftLintAvailability,
+                llmProvider: llmProvider,
                 changes: changes
             )
         } catch let error as GitRepositoryFinderError {
@@ -214,6 +236,7 @@ public enum ArcanCommand {
         reviewSelection: ReviewSelection,
         outputFormat: ReviewOutputFormat,
         swiftLintAvailability: SwiftLintAvailability,
+        llmProvider: (any LLMProvider)?,
         changes: [CodeChange] = []
     ) async -> CommandResult {
         do {
@@ -273,9 +296,20 @@ public enum ArcanCommand {
                 sourceFiles: sources,
                 sourceContexts: sourceContexts
             )
-            let report = try await ReviewEngine().review(
+            let baselineReport = try await ReviewEngine().review(
                 analyzers: selectedAnalyzers,
                 context: context
+            )
+            let report = try await generateTargetedSuggestions(
+                in: baselineReport,
+                configuration: environment.configuration.llm,
+                llmProvider: llmProvider,
+                sourceFiles: sources,
+                sourceContexts: sourceContexts,
+                repositoryRoot: request.repositoryRoot,
+                contextProvider: SwiftSyntaxSourceContextProvider(
+                    structureProvider: structureProvider
+                )
             )
             let reporter = reporter(for: outputFormat)
             return CommandResult(
@@ -407,6 +441,203 @@ public enum ArcanCommand {
                 surroundingLineCount: sourceContextSurroundingLineCount
             )
         }
+    }
+
+    private static func generateTargetedSuggestions(
+        in report: ReviewReport,
+        configuration: LLMConfiguration?,
+        llmProvider: (any LLMProvider)?,
+        sourceFiles: [SourceFile],
+        sourceContexts: [SourceContextWindow],
+        repositoryRoot: String?,
+        contextProvider: any SourceContextProvider
+    ) async throws -> ReviewReport {
+        guard let configuration else { return report }
+
+        let knowledgeRegistry = try RuleKnowledgeRegistry.bundled()
+        guard let baseURL = URL(string: configuration.baseURL) else {
+            throw LLMServerProviderError.invalidServerConfiguration
+        }
+        let provider: any LLMProvider = llmProvider
+            ?? LLMServerProvider(
+                configuration: LLMServerConfiguration(
+                    providerID: configuration.providerID,
+                    baseURL: baseURL,
+                    completionPath: configuration.completionPath,
+                    apiKey: ProcessInfo.processInfo.environment[
+                        "ARCAN_LLM_API_KEY"
+                    ]
+                )
+            )
+        let generator = LLMSuggestionGenerator(
+            provider: provider,
+            promptBuilder: SuggestionPromptBuilder(
+                knowledgeProvider: knowledgeRegistry
+            ),
+            modelID: configuration.modelID,
+            timeout: .seconds(configuration.timeoutSeconds),
+            seed: configuration.seed,
+            temperature: configuration.temperature
+        )
+        var generatedResults: [AnalyzerResult] = []
+
+        for result in report.analyzerResults {
+            var findings: [Finding] = []
+            var diagnostics = result.diagnostics
+
+            for finding in result.findings {
+                guard knowledgeRegistry.knowledge(for: finding.ruleID) != nil
+                else {
+                    findings.append(finding)
+                    continue
+                }
+                guard let sourceContext = try sourceContext(
+                    for: finding,
+                    sourceFiles: sourceFiles,
+                    existingContexts: sourceContexts,
+                    repositoryRoot: repositoryRoot,
+                    provider: contextProvider
+                ) else {
+                    findings.append(finding)
+                    diagnostics.append(
+                        AnalyzerDiagnostic(
+                            code: "ARCAN-LLM-SUGGESTION-CONTEXT-UNAVAILABLE",
+                            severity: .warning,
+                            message: "A bounded source context was unavailable, so the deterministic suggestion was kept."
+                        )
+                    )
+                    continue
+                }
+
+                do {
+                    switch try await generator.generate(
+                        for: finding,
+                        sourceContext: sourceContext
+                    ) {
+                    case .parsed(let suggestion):
+                        findings.append(finding.withSuggestion(suggestion))
+                    case .rejected(let diagnostic):
+                        findings.append(finding)
+                        diagnostics.append(diagnostic)
+                    }
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    findings.append(finding)
+                    diagnostics.append(
+                        AnalyzerDiagnostic(
+                            code: "ARCAN-LLM-SUGGESTION-FAILED",
+                            severity: .warning,
+                            message: "The LLM suggestion could not be generated, so the deterministic suggestion was kept."
+                        )
+                    )
+                }
+            }
+
+            generatedResults.append(
+                AnalyzerResult(
+                    analyzerID: result.analyzerID,
+                    findings: findings,
+                    tool: result.tool,
+                    executionStatus: result.executionStatus,
+                    diagnostics: diagnostics,
+                    durationMilliseconds: result.durationMilliseconds
+                )
+            )
+        }
+
+        return ReviewReport(
+            schemaVersion: report.schemaVersion,
+            requestID: report.requestID,
+            findings: generatedResults.flatMap(\.findings),
+            analyzerResults: generatedResults
+        )
+    }
+
+    private static func sourceContext(
+        for finding: Finding,
+        sourceFiles: [SourceFile],
+        existingContexts: [SourceContextWindow],
+        repositoryRoot: String?,
+        provider: any SourceContextProvider
+    ) throws -> SourceContextWindow? {
+        guard let findingRange = finding.range,
+              let sourceFile = sourceFiles.first(where: {
+                  pathsReferToSameFile(
+                      $0.path,
+                      findingPath: finding.filePath,
+                      repositoryRoot: repositoryRoot
+                  )
+              }) else {
+            return nil
+        }
+
+        if let context = existingContexts
+            .filter({ $0.filePath == sourceFile.path })
+            .filter({
+                rangesOverlap(
+                    startLine: $0.changedLineRange.startLine,
+                    endLine: $0.changedLineRange.endLine,
+                    findingRange: findingRange
+                )
+            })
+            .sorted(by: {
+                $0.changedLineRange.startLine < $1.changedLineRange.startLine
+            })
+            .first {
+            return context
+        }
+
+        let endLine = min(findingRange.endLine, sourceFile.lineCount)
+        guard findingRange.startLine <= endLine else { return nil }
+
+        return try provider.contexts(
+            for: CodeChange(
+                filePath: sourceFile.path,
+                modifiedLineRanges: [
+                    ChangedLineRange(
+                        startLine: findingRange.startLine,
+                        endLine: endLine
+                    )
+                ]
+            ),
+            in: sourceFile,
+            surroundingLineCount: sourceContextSurroundingLineCount
+        ).first
+    }
+
+    private static func pathsReferToSameFile(
+        _ sourcePath: String,
+        findingPath: String,
+        repositoryRoot: String?
+    ) -> Bool {
+        let sourceURL = URL(fileURLWithPath: sourcePath)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        let findingURL: URL
+
+        if findingPath.hasPrefix("/") {
+            findingURL = URL(fileURLWithPath: findingPath)
+        } else if let repositoryRoot {
+            findingURL = URL(
+                fileURLWithPath: repositoryRoot,
+                isDirectory: true
+            ).appendingPathComponent(findingPath)
+        } else {
+            findingURL = URL(fileURLWithPath: findingPath)
+        }
+
+        return sourceURL.path
+            == findingURL.standardizedFileURL.resolvingSymlinksInPath().path
+    }
+
+    private static func rangesOverlap(
+        startLine: Int,
+        endLine: Int,
+        findingRange: SourceRange
+    ) -> Bool {
+        startLine <= findingRange.endLine
+            && endLine >= findingRange.startLine
     }
 }
 

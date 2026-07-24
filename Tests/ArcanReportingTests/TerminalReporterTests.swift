@@ -25,6 +25,12 @@ struct TerminalReporterTests {
         Suggestion: Split the type into smaller, focused components.
           1. Extract networking.
           2. Extract persistence.
+        Code example:
+        ```swift
+        struct NetworkClient {
+            func load() async throws {}
+        }
+        ```
         """
 
         #expect(output == expected)
@@ -100,7 +106,12 @@ struct TerminalReporterTests {
             ],
             suggestion: Suggestion(
                 summary: "Split the type into smaller, focused components.",
-                steps: ["Extract networking.", "Extract persistence."]
+                steps: ["Extract networking.", "Extract persistence."],
+                codeExample: """
+                struct NetworkClient {
+                    func load() async throws {}
+                }
+                """
             )
         )
         return ReviewReport(

@@ -102,5 +102,11 @@ public struct TerminalReporter: Reporter {
         for (index, step) in suggestion.steps.enumerated() {
             lines.append("  \(index + 1). \(step)")
         }
+        if let codeExample = suggestion.codeExample {
+            lines.append("Code example:")
+            lines.append("```swift")
+            lines.append(codeExample)
+            lines.append("```")
+        }
     }
 }

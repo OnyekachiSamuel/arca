@@ -33,6 +33,36 @@ struct SuggestionParserTests {
         )
     }
 
+    @Test("parses an optional Swift code example")
+    func parsesCodeExample() {
+        let parser = SuggestionParser()
+        let codeExample = """
+        final class AuthenticationService {
+            func logIn() async throws {}
+        }
+        """
+
+        let result = parser.parse(
+            """
+            {
+              "summary": "Extract authentication.",
+              "steps": ["Move login methods into a service."],
+              "codeExample": "final class AuthenticationService {\\n    func logIn() async throws {}\\n}"
+            }
+            """
+        )
+
+        #expect(
+            result == .parsed(
+                Suggestion(
+                    summary: "Extract authentication.",
+                    steps: ["Move login methods into a service."],
+                    codeExample: codeExample
+                )
+            )
+        )
+    }
+
     @Test("parses one JSON object wrapped in a Markdown fence")
     func parsesMarkdownWrappedJSON() {
         let parser = SuggestionParser()
@@ -106,10 +136,31 @@ struct SuggestionParserTests {
         let blankStep = parser.parse(
             #"{"summary":"Extract a service.","steps":["  "]}"#
         )
+        let blankCodeExample = parser.parse(
+            #"{"summary":"Extract a service.","steps":["Move methods."],"codeExample":"  "}"#
+        )
 
         expectRejected(emptySummary)
         expectRejected(emptySteps)
         expectRejected(blankStep)
+        expectRejected(blankCodeExample)
+    }
+
+    @Test("rejects Markdown fences inside the code example")
+    func rejectsFencedCodeExample() {
+        let parser = SuggestionParser()
+
+        let result = parser.parse(
+            """
+            {
+              "summary": "Extract a service.",
+              "steps": ["Move related methods."],
+              "codeExample": "```swift\\nstruct Service {}\\n```"
+            }
+            """
+        )
+
+        expectRejected(result)
     }
 
     @Test("rejects responses and fields beyond their fixed safety limits")
@@ -118,6 +169,7 @@ struct SuggestionParserTests {
         let oversizedResponse = String(repeating: "x", count: 16_001)
         let oversizedSummary = String(repeating: "s", count: 501)
         let oversizedStep = String(repeating: "x", count: 2_001)
+        let oversizedCodeExample = String(repeating: "x", count: 8_001)
         let tooManySteps = Array(repeating: "\"step\"", count: 21)
             .joined(separator: ",")
 
@@ -130,6 +182,11 @@ struct SuggestionParserTests {
         expectRejected(
             parser.parse(
                 #"{"summary":"Summary","steps":["\#(oversizedStep)"]}"#
+            )
+        )
+        expectRejected(
+            parser.parse(
+                #"{"summary":"Summary","steps":["step"],"codeExample":"\#(oversizedCodeExample)"}"#
             )
         )
         expectRejected(

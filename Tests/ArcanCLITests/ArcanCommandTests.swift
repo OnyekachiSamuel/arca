@@ -1,4 +1,5 @@
 import ArcanDomain
+import ArcanLLM
 import Foundation
 import Testing
 @testable import ArcanCLI
@@ -119,6 +120,157 @@ struct ArcanCommandTests {
             )
             #expect(!result.output.contains("ARCAN Review Report"))
             #expect(!result.output.contains("\u{001B}["))
+        }
+    }
+
+    @Test("LLM suggestions replace guidance without changing evidence")
+    func reviewGeneratesTargetedSuggestion() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent(
+                "CheckoutCoordinator.swift"
+            )
+            try """
+            final class CheckoutCoordinator {
+                let apiClient = APIClient()
+                let cache = Cache()
+
+                func loadOrder() {}
+                func saveOrder() {}
+            }
+            """.write(to: file, atomically: true, encoding: .utf8)
+            let configurationFile = directory.appendingPathComponent(
+                ".arcan.json"
+            )
+            try """
+            {
+              "schemaVersion": 1,
+              "godObject": {
+                "maximumLines": 1,
+                "maximumMethods": 1,
+                "maximumStoredProperties": 1,
+                "minimumTriggeredSignals": 2
+              }
+            }
+            """.write(
+                to: configurationFile,
+                atomically: true,
+                encoding: .utf8
+            )
+            let provider = CLIRecordingLLMProvider(
+                responseText: """
+                {
+                  "summary": "Extract persistence from CheckoutCoordinator.",
+                  "steps": ["Create a CheckoutRepository."],
+                  "codeExample": "struct CheckoutRepository {}"
+                }
+                """
+            )
+            let baselineResult = await ArcanCommand.execute(
+                arguments: [
+                    "review",
+                    "--file", file.path,
+                    "--review", "god-object",
+                    "--format", "json"
+                ],
+                currentDirectory: directory.path,
+                swiftLintAvailability: .unavailable(.executableNotFound),
+                llmProvider: provider
+            )
+            let baselineReport = try JSONDecoder().decode(
+                ReviewReport.self,
+                from: Data(baselineResult.output.utf8)
+            )
+            let baselineFinding = try #require(
+                baselineReport.findings.first
+            )
+
+            try """
+            {
+              "schemaVersion": 1,
+              "godObject": {
+                "maximumLines": 1,
+                "maximumMethods": 1,
+                "maximumStoredProperties": 1,
+                "minimumTriggeredSignals": 2
+              },
+              "llm": {
+                "providerID": "mock",
+                "baseURL": "http://127.0.0.1:8080",
+                "modelID": "mock-model",
+                "timeoutSeconds": 30
+              }
+            }
+            """.write(
+                to: configurationFile,
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.execute(
+                arguments: [
+                    "review",
+                    "--file", file.path,
+                    "--review", "god-object",
+                    "--format", "json"
+                ],
+                currentDirectory: directory.path,
+                swiftLintAvailability: .unavailable(.executableNotFound),
+                llmProvider: provider
+            )
+            let report = try JSONDecoder().decode(
+                ReviewReport.self,
+                from: Data(result.output.utf8)
+            )
+            let finding = try #require(report.findings.first)
+            let analyzerFinding = try #require(
+                report.analyzerResults.first?.findings.first
+            )
+
+            #expect(result.exitStatus == .findingsDetected)
+            #expect(finding.ruleID == "ARCAN-GOD-001")
+            #expect(finding.evidence == baselineFinding.evidence)
+            #expect(finding.range == baselineFinding.range)
+            #expect(finding.severity == baselineFinding.severity)
+            #expect(finding.sources == baselineFinding.sources)
+            #expect(
+                baselineFinding.suggestion?.summary
+                    == "Split the type into smaller, focused components."
+            )
+            #expect(
+                finding.suggestion?.summary
+                    == "Extract persistence from CheckoutCoordinator."
+            )
+            #expect(
+                finding.suggestion?.codeExample
+                    == "struct CheckoutRepository {}"
+            )
+            #expect(analyzerFinding == finding)
+            #expect(await provider.requestCount == 1)
+
+            let failedResult = await ArcanCommand.execute(
+                arguments: [
+                    "review",
+                    "--file", file.path,
+                    "--review", "god-object",
+                    "--format", "json"
+                ],
+                currentDirectory: directory.path,
+                swiftLintAvailability: .unavailable(.executableNotFound),
+                llmProvider: CLIFailingLLMProvider()
+            )
+            let failedReport = try JSONDecoder().decode(
+                ReviewReport.self,
+                from: Data(failedResult.output.utf8)
+            )
+            let failedFinding = try #require(failedReport.findings.first)
+
+            #expect(failedFinding.evidence == baselineFinding.evidence)
+            #expect(failedFinding.suggestion == baselineFinding.suggestion)
+            #expect(
+                failedReport.analyzerResults.first?.diagnostics.contains {
+                    $0.code == "ARCAN-LLM-SUGGESTION-FAILED"
+                } == true
+            )
         }
     }
 
@@ -693,4 +845,35 @@ struct ArcanCommandTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         return try await body(directory)
     }
+}
+
+private actor CLIRecordingLLMProvider: LLMProvider {
+    let id = "mock"
+    private let responseText: String
+    private(set) var requestCount = 0
+
+    init(responseText: String) {
+        self.responseText = responseText
+    }
+
+    func submit(_ request: LLMRequest) async throws -> LLMResponse {
+        requestCount += 1
+        return LLMResponse(
+            text: responseText,
+            usage: LLMUsageMetadata(),
+            durationMilliseconds: 1
+        )
+    }
+}
+
+private struct CLIFailingLLMProvider: LLMProvider {
+    let id = "failing"
+
+    func submit(_ request: LLMRequest) async throws -> LLMResponse {
+        throw CLILLMProviderError.unavailable
+    }
+}
+
+private enum CLILLMProviderError: Error {
+    case unavailable
 }

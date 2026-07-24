@@ -4,27 +4,32 @@ public struct ArcanConfiguration: Codable, Equatable, Sendable {
     public static let defaults = ArcanConfiguration(
         schemaVersion: currentSchemaVersion,
         godObjectThresholds: GodObjectThresholds(),
-        swiftLint: SwiftLintConfiguration()
+        swiftLint: SwiftLintConfiguration(),
+        llm: nil
     )
 
     public let schemaVersion: Int
     public let godObjectThresholds: GodObjectThresholds
     public let swiftLint: SwiftLintConfiguration
+    public let llm: LLMConfiguration?
 
     public init(
         schemaVersion: Int,
         godObjectThresholds: GodObjectThresholds,
-        swiftLint: SwiftLintConfiguration = SwiftLintConfiguration()
+        swiftLint: SwiftLintConfiguration = SwiftLintConfiguration(),
+        llm: LLMConfiguration? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.godObjectThresholds = godObjectThresholds
         self.swiftLint = swiftLint
+        self.llm = llm
     }
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion
         case godObjectThresholds
         case swiftLint
+        case llm
     }
 
     public init(from decoder: any Decoder) throws {
@@ -38,5 +43,9 @@ public struct ArcanConfiguration: Codable, Equatable, Sendable {
             SwiftLintConfiguration.self,
             forKey: .swiftLint
         ) ?? SwiftLintConfiguration()
+        llm = try container.decodeIfPresent(
+            LLMConfiguration.self,
+            forKey: .llm
+        )
     }
 }

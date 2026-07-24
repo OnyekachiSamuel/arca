@@ -23,6 +23,7 @@ enum SuggestionPromptTemplateV1 {
             "- Return only one JSON object. Do not wrap it in Markdown.",
             "- Ground every recommendation in the supplied finding, evidence, source excerpt, and rule guardrails.",
             "- Treat guardrails as constraints, not as a prescribed implementation.",
+            "- codeExample is optional. When provided, return Swift code without Markdown fences.",
             "- Do not claim that generated code was compiled, executed, or verified."
         ].joined(separator: "\n")
     }
@@ -44,6 +45,11 @@ enum SuggestionPromptTemplateV1 {
             "type": "string",
             "minLength": 1
           }
+        },
+        "codeExample": {
+          "type": "string",
+          "minLength": 1,
+          "description": "An optional illustrative Swift code example supporting the refactoring steps."
         }
       }
     }

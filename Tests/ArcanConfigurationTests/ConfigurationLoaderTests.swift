@@ -11,6 +11,90 @@ struct ConfigurationLoaderTests {
             let configuration = try ConfigurationLoader().load(from: directory)
 
             #expect(configuration == .defaults)
+            #expect(configuration.llm == nil)
+        }
+    }
+
+    @Test("LLM suggestion configuration is loaded")
+    func llmSuggestionConfigurationIsLoaded() throws {
+        try withTemporaryDirectory { directory in
+            try writeConfiguration(
+                """
+                {
+                  "schemaVersion": 1,
+                  "llm": {
+                    "providerID": "local-qwen",
+                    "baseURL": "http://127.0.0.1:8080",
+                    "completionPath": "/v1/chat/completions",
+                    "modelID": "qwen2.5-coder",
+                    "timeoutSeconds": 120,
+                    "temperature": 0.2,
+                    "seed": 42
+                  }
+                }
+                """,
+                to: directory
+            )
+
+            let configuration = try ConfigurationLoader().load(from: directory)
+            let llm = try #require(configuration.llm)
+
+            #expect(llm.providerID == "local-qwen")
+            #expect(llm.baseURL == "http://127.0.0.1:8080")
+            #expect(llm.completionPath == "/v1/chat/completions")
+            #expect(llm.modelID == "qwen2.5-coder")
+            #expect(llm.timeoutSeconds == 120)
+            #expect(llm.temperature == 0.2)
+            #expect(llm.seed == 42)
+        }
+    }
+
+    @Test("LLM configuration requires a server URL and model")
+    func llmConfigurationRequiresConnectionDetails() throws {
+        try withTemporaryDirectory { directory in
+            try writeConfiguration(
+                """
+                {
+                  "schemaVersion": 1,
+                  "llm": {}
+                }
+                """,
+                to: directory
+            )
+
+            #expect(
+                throws: ConfigurationLoadingError.invalidValue(
+                    field: "llm.baseURL",
+                    reason: "is required."
+                )
+            ) {
+                try ConfigurationLoader().load(from: directory)
+            }
+        }
+    }
+
+    @Test("unknown LLM fields produce a diagnostic")
+    func unknownLLMFieldIsRejected() throws {
+        try withTemporaryDirectory { directory in
+            try writeConfiguration(
+                """
+                {
+                  "schemaVersion": 1,
+                  "llm": {
+                    "suggestionsEnabled": false
+                  }
+                }
+                """,
+                to: directory
+            )
+
+            #expect(
+                throws: ConfigurationLoadingError.unknownField(
+                    "llm.suggestionsEnabled"
+                )
+            ) {
+                try ConfigurationLoader().load(from: directory)
+            }
         }
     }
 

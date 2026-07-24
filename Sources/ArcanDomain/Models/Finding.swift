@@ -45,6 +45,24 @@ public struct Finding: Codable, Equatable, Sendable, Identifiable {
         self.metadata = metadata
     }
 
+    public func withSuggestion(_ suggestion: Suggestion) -> Finding {
+        Finding(
+            id: id,
+            ruleID: ruleID,
+            externalRuleID: externalRuleID,
+            title: title,
+            category: category,
+            severity: severity,
+            filePath: filePath,
+            range: range,
+            explanation: explanation,
+            evidence: evidence,
+            suggestion: suggestion,
+            sources: sources,
+            metadata: metadata
+        )
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id
         case ruleID

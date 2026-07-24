@@ -69,6 +69,8 @@ let package = Package(
                 "ArcanConfiguration",
                 "ArcanDomain",
                 "ArcanGit",
+                "ArcanKnowledge",
+                "ArcanLLM",
                 "ArcanProcess",
                 "ArcanReporting",
                 "ArcanSource",
@@ -85,6 +87,7 @@ let package = Package(
                 "ArcanAnalysis",
                 "ArcanCLI",
                 "ArcanDomain",
+                "ArcanLLM",
                 "ArcanProcess"
             ]
         ),
