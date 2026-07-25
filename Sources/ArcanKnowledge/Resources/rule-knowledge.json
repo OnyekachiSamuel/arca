@@ -1,9 +1,10 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "rules": [
     {
       "ruleID": "ARCAN-GOD-001",
       "title": "God Object candidate",
+      "group": "codeSmellsAndAntiPatterns",
       "category": "antiPattern",
       "defaultSeverity": "warning",
       "definition": "A God Object candidate is a type that centralizes multiple unrelated responsibilities and exceeds multiple configured structural thresholds.",
@@ -13,10 +14,73 @@
         "Its method count exceeds the configured method threshold.",
         "Its stored-property count exceeds the configured property threshold."
       ],
+      "classificationGuidance": [
+        "Require evidence of multiple responsibilities or multiple structural signals.",
+        "Do not classify a type as a God Object based on line count alone.",
+        "Distinguish a deliberately thin coordinator or facade from a type that owns unrelated business responsibilities."
+      ],
+      "severityGuidance": [
+        "Use warning when the type exceeds multiple configured structural thresholds.",
+        "Increase severity only when broad coupling or unrelated responsibilities create a substantial maintenance risk."
+      ],
       "refactoringGuardrails": [
         "Group properties and methods by responsibility.",
         "Extract each responsibility into a dedicated type.",
         "Keep only necessary coordination in the original type."
+      ]
+    },
+    {
+      "ruleID": "ARCAN-FEATURE-ENVY-001",
+      "title": "Feature Envy candidate",
+      "group": "codeSmellsAndAntiPatterns",
+      "category": "antiPattern",
+      "defaultSeverity": "warning",
+      "definition": "A Feature Envy candidate is a method or computed property that depends more heavily on the data or behaviour of another type than on the type where it is declared.",
+      "evidenceCriteria": [
+        "The declaration repeatedly reads properties or invokes methods belonging to another type.",
+        "The declaration uses little state or behaviour from its own containing type.",
+        "The externally accessed members form a cohesive operation that could reasonably belong to the other type."
+      ],
+      "classificationGuidance": [
+        "Require concrete references to the envied type and its members.",
+        "Do not classify ordinary collaboration or a single delegated call as Feature Envy.",
+        "Consider whether moving the behaviour would improve cohesion without exposing private implementation details."
+      ],
+      "severityGuidance": [
+        "Use warning when repeated external access clearly weakens cohesion.",
+        "Use info when the evidence is limited or the collaboration may be intentional."
+      ],
+      "refactoringGuardrails": [
+        "Preserve ownership boundaries and existing behaviour.",
+        "Move behaviour only when the destination type can own it cohesively.",
+        "Avoid exposing additional mutable state solely to enable the move."
+      ]
+    },
+    {
+      "ruleID": "ARCAN-LONG-METHOD-001",
+      "title": "Long Method candidate",
+      "group": "codeSmellsAndAntiPatterns",
+      "category": "antiPattern",
+      "defaultSeverity": "warning",
+      "definition": "A Long Method candidate is a function whose size and number of distinct responsibilities make its behaviour difficult to understand, test or change safely.",
+      "evidenceCriteria": [
+        "The function exceeds the configured method line threshold.",
+        "The function contains several distinct phases or responsibilities.",
+        "Deep nesting, repeated conditionals or many local variables increase the effort required to follow its control flow."
+      ],
+      "classificationGuidance": [
+        "Do not classify a function based only on its physical line count.",
+        "Require evidence that the function combines distinct operations or has difficult control flow.",
+        "Treat generated code, declarative data construction and straightforward mappings cautiously."
+      ],
+      "severityGuidance": [
+        "Use warning when size and multiple responsibilities occur together.",
+        "Use info when the function is long but remains linear and cohesive."
+      ],
+      "refactoringGuardrails": [
+        "Extract operations around meaningful responsibilities rather than arbitrary line ranges.",
+        "Preserve execution order, error handling and observable side effects.",
+        "Avoid creating small methods whose names do not clarify intent."
       ]
     }
   ]

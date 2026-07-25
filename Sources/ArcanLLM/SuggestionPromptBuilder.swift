@@ -39,7 +39,7 @@ public struct SuggestionPromptBuilder: Sendable {
 
         let payload = SuggestionPromptInput(
             finding: makeFindingInput(from: finding),
-            rule: knowledge,
+            rule: makeRuleInput(from: knowledge),
             sourceContext: makeSourceInput(from: sourceContext)
         )
         let inputJSON = try encode(payload)
@@ -59,6 +59,20 @@ public struct SuggestionPromptBuilder: Sendable {
             templateID: SuggestionPromptTemplateV1.id,
             templateVersion: SuggestionPromptTemplateV1.version,
             text: promptText
+        )
+    }
+
+    private func makeRuleInput(
+        from knowledge: RuleKnowledge
+    ) -> SuggestionRuleInput {
+        SuggestionRuleInput(
+            ruleID: knowledge.ruleID,
+            title: knowledge.title,
+            category: knowledge.category,
+            defaultSeverity: knowledge.defaultSeverity,
+            definition: knowledge.definition,
+            evidenceCriteria: knowledge.evidenceCriteria,
+            refactoringGuardrails: knowledge.refactoringGuardrails
         )
     }
 
@@ -161,8 +175,18 @@ public struct SuggestionPromptBuilder: Sendable {
 
 private struct SuggestionPromptInput: Encodable {
     let finding: SuggestionFindingInput
-    let rule: RuleKnowledge
+    let rule: SuggestionRuleInput
     let sourceContext: SuggestionSourceInput
+}
+
+private struct SuggestionRuleInput: Encodable {
+    let ruleID: String
+    let title: String
+    let category: FindingCategory
+    let defaultSeverity: Severity
+    let definition: String
+    let evidenceCriteria: [String]
+    let refactoringGuardrails: [String]
 }
 
 private struct SuggestionFindingInput: Encodable {

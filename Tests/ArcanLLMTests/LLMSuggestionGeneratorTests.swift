@@ -158,16 +158,36 @@ private actor RecordingLLMProvider: LLMProvider {
 }
 
 private struct StubKnowledgeProvider: RuleKnowledgeProviding {
+    var allKnowledge: [RuleKnowledge] {
+        [godObjectKnowledge]
+    }
+
     func knowledge(for ruleID: String) -> RuleKnowledge? {
         guard ruleID == "ARCAN-GOD-001" else { return nil }
+        return godObjectKnowledge
+    }
 
-        return RuleKnowledge(
-            ruleID: ruleID,
+    func knowledge(
+        in group: RuleKnowledgeGroup
+    ) -> [RuleKnowledge] {
+        allKnowledge.filter { $0.group == group }
+    }
+
+    private var godObjectKnowledge: RuleKnowledge {
+        RuleKnowledge(
+            ruleID: "ARCAN-GOD-001",
             title: "God Object candidate",
+            group: .codeSmellsAndAntiPatterns,
             category: .antiPattern,
             defaultSeverity: .warning,
             definition: "A type has too many responsibilities.",
             evidenceCriteria: ["Multiple structural thresholds are exceeded."],
+            classificationGuidance: [
+                "Require evidence of multiple responsibilities."
+            ],
+            severityGuidance: [
+                "Use warning when multiple signals are present."
+            ],
             refactoringGuardrails: ["Preserve observable behaviour."]
         )
     }

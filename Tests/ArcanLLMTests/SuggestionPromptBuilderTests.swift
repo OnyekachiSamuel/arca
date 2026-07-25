@@ -150,11 +150,18 @@ struct SuggestionPromptBuilderTests {
         RuleKnowledge(
             ruleID: "ARCAN-GOD-001",
             title: "God Object candidate",
+            group: .codeSmellsAndAntiPatterns,
             category: .antiPattern,
             defaultSeverity: .warning,
             definition: "A type centralizes multiple unrelated responsibilities.",
             evidenceCriteria: [
                 "Multiple configured structural thresholds are exceeded."
+            ],
+            classificationGuidance: [
+                "Require evidence of multiple responsibilities."
+            ],
+            severityGuidance: [
+                "Use warning when multiple signals are present."
             ],
             refactoringGuardrails: [
                 "Separate unrelated responsibilities.",
@@ -262,8 +269,18 @@ struct SuggestionPromptBuilderTests {
 private struct StubRuleKnowledgeProvider: RuleKnowledgeProviding {
     let knowledge: RuleKnowledge?
 
+    var allKnowledge: [RuleKnowledge] {
+        knowledge.map { [$0] } ?? []
+    }
+
     func knowledge(for ruleID: String) -> RuleKnowledge? {
         guard knowledge?.ruleID == ruleID else { return nil }
         return knowledge
+    }
+
+    func knowledge(
+        in group: RuleKnowledgeGroup
+    ) -> [RuleKnowledge] {
+        allKnowledge.filter { $0.group == group }
     }
 }

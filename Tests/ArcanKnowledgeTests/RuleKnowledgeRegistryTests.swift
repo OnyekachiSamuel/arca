@@ -9,12 +9,21 @@ struct RuleKnowledgeRegistryTests {
     func returnsGodObjectKnowledge() throws {
         let registry = try RuleKnowledgeRegistry.bundled()
 
+        #expect(
+            registry.allKnowledge.map(\.ruleID) == [
+                "ARCAN-GOD-001",
+                "ARCAN-FEATURE-ENVY-001",
+                "ARCAN-LONG-METHOD-001"
+            ]
+        )
+
         let knowledge = try #require(
             registry.knowledge(for: "ARCAN-GOD-001")
         )
 
         #expect(knowledge.ruleID == "ARCAN-GOD-001")
         #expect(knowledge.title == "God Object candidate")
+        #expect(knowledge.group == .codeSmellsAndAntiPatterns)
         #expect(knowledge.category == .antiPattern)
         #expect(knowledge.defaultSeverity == .warning)
         #expect(
@@ -27,6 +36,19 @@ struct RuleKnowledgeRegistryTests {
                 "Its declaration line count exceeds the configured line threshold.",
                 "Its method count exceeds the configured method threshold.",
                 "Its stored-property count exceeds the configured property threshold."
+            ]
+        )
+        #expect(
+            knowledge.classificationGuidance == [
+                "Require evidence of multiple responsibilities or multiple structural signals.",
+                "Do not classify a type as a God Object based on line count alone.",
+                "Distinguish a deliberately thin coordinator or facade from a type that owns unrelated business responsibilities."
+            ]
+        )
+        #expect(
+            knowledge.severityGuidance == [
+                "Use warning when the type exceeds multiple configured structural thresholds.",
+                "Increase severity only when broad coupling or unrelated responsibilities create a substantial maintenance risk."
             ]
         )
         #expect(
@@ -52,14 +74,75 @@ struct RuleKnowledgeRegistryTests {
             try RuleKnowledgeRegistry.bundled()
 
         #expect(provider.knowledge(for: "ARCAN-GOD-001") != nil)
+        #expect(provider.allKnowledge.count == 3)
+        #expect(
+            provider.knowledge(in: .codeSmellsAndAntiPatterns).count == 3
+        )
+    }
+
+    @Test("returns rules by group in resource order")
+    func returnsRulesByGroup() throws {
+        let data = try makeDocument(
+            rules: [
+                makeRule(
+                    ruleID: "ARCAN-GOD-001",
+                    title: "God Object candidate",
+                    group: "codeSmellsAndAntiPatterns",
+                    category: "antiPattern"
+                ),
+                makeRule(
+                    ruleID: "ARCAN-TCA-001",
+                    title: "TCA rule",
+                    group: "tcaArchitecture",
+                    category: "architecture"
+                ),
+                makeRule(
+                    ruleID: "ARCAN-LONG-METHOD-001",
+                    title: "Long Method candidate",
+                    group: "codeSmellsAndAntiPatterns",
+                    category: "antiPattern"
+                ),
+                makeRule(
+                    ruleID: "ARCAN-TEAM-001",
+                    title: "Team convention",
+                    group: "teamConventions",
+                    category: "teamConvention"
+                )
+            ]
+        )
+        let registry = try RuleKnowledgeRegistry(data: data)
+
+        #expect(
+            registry.allKnowledge.map(\.ruleID) == [
+                "ARCAN-GOD-001",
+                "ARCAN-TCA-001",
+                "ARCAN-LONG-METHOD-001",
+                "ARCAN-TEAM-001"
+            ]
+        )
+        #expect(
+            registry.knowledge(in: .codeSmellsAndAntiPatterns)
+                .map(\.ruleID) == [
+                    "ARCAN-GOD-001",
+                    "ARCAN-LONG-METHOD-001"
+                ]
+        )
+        #expect(
+            registry.knowledge(in: .tcaArchitecture)
+                .map(\.ruleID) == ["ARCAN-TCA-001"]
+        )
+        #expect(
+            registry.knowledge(in: .teamConventions)
+                .map(\.ruleID) == ["ARCAN-TEAM-001"]
+        )
     }
 
     @Test("rejects an unsupported knowledge schema version")
     func rejectsUnsupportedSchemaVersion() throws {
-        let data = try makeDocument(schemaVersion: 2)
+        let data = try makeDocument(schemaVersion: 3)
 
         expectLoadingError(
-            .unsupportedSchemaVersion(2),
+            .unsupportedSchemaVersion(3),
             whenLoading: data
         )
     }
@@ -90,6 +173,56 @@ struct RuleKnowledgeRegistryTests {
         )
     }
 
+    @Test("rejects rules without classification guidance")
+    func rejectsMissingClassificationGuidance() throws {
+        let data = try makeDocument(
+            rules: [makeRule(classificationGuidance: [])]
+        )
+
+        expectLoadingError(
+            .invalidRule(
+                ruleID: "ARCAN-GOD-001",
+                reason: "must contain at least one classification guidance item."
+            ),
+            whenLoading: data
+        )
+    }
+
+    @Test("rejects rules without severity guidance")
+    func rejectsMissingSeverityGuidance() throws {
+        let data = try makeDocument(
+            rules: [makeRule(severityGuidance: [])]
+        )
+
+        expectLoadingError(
+            .invalidRule(
+                ruleID: "ARCAN-GOD-001",
+                reason: "must contain at least one severity guidance item."
+            ),
+            whenLoading: data
+        )
+    }
+
+    @Test("rejects a category that does not match its rule group")
+    func rejectsMismatchedGroupAndCategory() throws {
+        let data = try makeDocument(
+            rules: [
+                makeRule(
+                    group: "tcaArchitecture",
+                    category: "antiPattern"
+                )
+            ]
+        )
+
+        expectLoadingError(
+            .invalidRule(
+                ruleID: "ARCAN-GOD-001",
+                reason: "category 'antiPattern' does not match group 'tcaArchitecture'."
+            ),
+            whenLoading: data
+        )
+    }
+
     @Test("rejects malformed JSON")
     func rejectsMalformedJSON() {
         expectLoadingError(
@@ -99,7 +232,7 @@ struct RuleKnowledgeRegistryTests {
     }
 
     private func makeDocument(
-        schemaVersion: Int = 1,
+        schemaVersion: Int = 2,
         rules: [[String: Any]]? = nil
     ) throws -> Data {
         try JSONSerialization.data(
@@ -111,15 +244,28 @@ struct RuleKnowledgeRegistryTests {
     }
 
     private func makeRule(
-        evidenceCriteria: [String] = ["A structural threshold is exceeded."]
+        ruleID: String = "ARCAN-GOD-001",
+        title: String = "God Object candidate",
+        group: String = "codeSmellsAndAntiPatterns",
+        category: String = "antiPattern",
+        evidenceCriteria: [String] = ["A structural threshold is exceeded."],
+        classificationGuidance: [String] = [
+            "Require evidence of multiple responsibilities."
+        ],
+        severityGuidance: [String] = [
+            "Use warning when multiple signals are present."
+        ]
     ) -> [String: Any] {
         [
-            "ruleID": "ARCAN-GOD-001",
-            "title": "God Object candidate",
-            "category": "antiPattern",
+            "ruleID": ruleID,
+            "title": title,
+            "group": group,
+            "category": category,
             "defaultSeverity": "warning",
             "definition": "A type has accumulated too many responsibilities.",
             "evidenceCriteria": evidenceCriteria,
+            "classificationGuidance": classificationGuidance,
+            "severityGuidance": severityGuidance,
             "refactoringGuardrails": ["Extract focused types."]
         ]
     }

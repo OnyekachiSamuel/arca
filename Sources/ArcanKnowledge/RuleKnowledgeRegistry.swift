@@ -1,9 +1,11 @@
+import ArcanDomain
 import Foundation
 
 public struct RuleKnowledgeRegistry: RuleKnowledgeProviding {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     private let knowledgeByRuleID: [String: RuleKnowledge]
+    public let allKnowledge: [RuleKnowledge]
 
     public init(data: Data) throws {
         let document: RuleKnowledgeDocument
@@ -42,6 +44,7 @@ public struct RuleKnowledgeRegistry: RuleKnowledgeProviding {
         }
 
         knowledgeByRuleID = indexedKnowledge
+        allKnowledge = document.rules
     }
 
     public static func bundled() throws -> RuleKnowledgeRegistry {
@@ -65,6 +68,12 @@ public struct RuleKnowledgeRegistry: RuleKnowledgeProviding {
 
     public func knowledge(for ruleID: String) -> RuleKnowledge? {
         knowledgeByRuleID[ruleID]
+    }
+
+    public func knowledge(
+        in group: RuleKnowledgeGroup
+    ) -> [RuleKnowledge] {
+        allKnowledge.filter { $0.group == group }
     }
 
     private static func validate(_ knowledge: RuleKnowledge) throws {
@@ -106,6 +115,42 @@ public struct RuleKnowledgeRegistry: RuleKnowledgeProviding {
             )
         }
 
+        guard !knowledge.classificationGuidance.isEmpty else {
+            throw invalidRule(
+                knowledge,
+                reason: """
+                must contain at least one classification guidance item.
+                """
+            )
+        }
+
+        guard knowledge.classificationGuidance.allSatisfy({
+            !$0.trimmed.isEmpty
+        }) else {
+            throw invalidRule(
+                knowledge,
+                reason: """
+                classification guidance must not contain empty values.
+                """
+            )
+        }
+
+        guard !knowledge.severityGuidance.isEmpty else {
+            throw invalidRule(
+                knowledge,
+                reason: "must contain at least one severity guidance item."
+            )
+        }
+
+        guard knowledge.severityGuidance.allSatisfy({
+            !$0.trimmed.isEmpty
+        }) else {
+            throw invalidRule(
+                knowledge,
+                reason: "severity guidance must not contain empty values."
+            )
+        }
+
         guard !knowledge.refactoringGuardrails.isEmpty else {
             throw invalidRule(
                 knowledge,
@@ -120,6 +165,29 @@ public struct RuleKnowledgeRegistry: RuleKnowledgeProviding {
                 knowledge,
                 reason: "refactoring guardrails must not contain empty values."
             )
+        }
+
+        guard knowledge.category == expectedCategory(for: knowledge.group)
+        else {
+            throw invalidRule(
+                knowledge,
+                reason: """
+                category '\(knowledge.category.rawValue)' does not match group '\(knowledge.group.rawValue)'.
+                """
+            )
+        }
+    }
+
+    private static func expectedCategory(
+        for group: RuleKnowledgeGroup
+    ) -> FindingCategory {
+        switch group {
+        case .codeSmellsAndAntiPatterns:
+            .antiPattern
+        case .tcaArchitecture:
+            .architecture
+        case .teamConventions:
+            .teamConvention
         }
     }
 
