@@ -35,6 +35,20 @@ The `sources` array records stable analyzer identifiers such as `god-object`
 and `swiftlint`. An array is used so a future merged finding can retain every
 analyzer that detected it while keeping deterministic JSON order.
 
+## Complete-file LLM analysis context
+
+LLM source analysis is prepared one selected Swift file at a time. An explicit
+file contributes only that file, while changed-file review contributes one
+independent context for each selected current file together with its added,
+modified and deleted line ranges. ARCAN does not scan or include the whole
+repository automatically.
+
+Source content is preserved without truncation or rewriting. The default
+complete-file limit is 64,000 UTF-8 bytes. A file above that limit is skipped
+for LLM analysis with an explicit warning, while smaller selected files and
+static analyzers can continue. The complete-file limit and the later total
+prompt limit are separate controls.
+
 ## LLM provider boundary
 
 `ArcanLLM` defines a provider-independent asynchronous interface with model,
