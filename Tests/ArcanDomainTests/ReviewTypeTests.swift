@@ -13,7 +13,19 @@ struct ReviewTypeTests {
         #expect(
             ReviewType.teamConvention.commandLineName == "team-convention"
         )
-        #expect(ReviewType.generalLLM.commandLineName == "general-llm")
+    }
+
+    @Test("review types describe review concerns, not analyzer mechanisms")
+    func excludesAnalyzerMechanisms() {
+        #expect(
+            Set(ReviewType.allCases) == [
+                .godObject,
+                .tcaArchitecture,
+                .style,
+                .teamConvention
+            ]
+        )
+        #expect(ReviewType(commandLineName: "general-llm") == nil)
     }
 
     @Test("command-line names are converted to review types")

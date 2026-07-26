@@ -5,7 +5,6 @@ public enum ReviewType: String, Codable, CaseIterable, Sendable {
     case tcaArchitecture
     case style
     case teamConvention
-    case generalLLM
 
     public var commandLineName: String {
         switch self {
@@ -17,8 +16,6 @@ public enum ReviewType: String, Codable, CaseIterable, Sendable {
             "style"
         case .teamConvention:
             "team-convention"
-        case .generalLLM:
-            "general-llm"
         }
     }
 

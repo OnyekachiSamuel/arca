@@ -510,6 +510,31 @@ struct ArcanCommandTests {
         }
     }
 
+    @Test("LLM is an analyzer mechanism, not a review type")
+    func generalLLMReviewTypeIsRejected() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "struct App {}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+
+            let result = await ArcanCommand.run(arguments: [
+                "review",
+                "--file", file.path,
+                "--review", "general-llm"
+            ])
+
+            #expect(result.exitCode == 2)
+            #expect(
+                result.output
+                    == "Error: Unsupported review type 'general-llm'."
+            )
+            #expect(result.reviewRequest == nil)
+        }
+    }
+
     @Test("optional unavailable SwiftLint returns a skipped style result")
     func optionalUnavailableSwiftLintIsSkipped() async throws {
         try await withTemporaryDirectory { directory in
