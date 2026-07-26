@@ -13,7 +13,8 @@ struct RuleKnowledgeRegistryTests {
             registry.allKnowledge.map(\.ruleID) == [
                 "ARCAN-GOD-001",
                 "ARCAN-FEATURE-ENVY-001",
-                "ARCAN-LONG-METHOD-001"
+                "ARCAN-LONG-METHOD-001",
+                "ARCAN-STYLE-001"
             ]
         )
 
@@ -74,7 +75,7 @@ struct RuleKnowledgeRegistryTests {
             try RuleKnowledgeRegistry.bundled()
 
         #expect(provider.knowledge(for: "ARCAN-GOD-001") != nil)
-        #expect(provider.allKnowledge.count == 3)
+        #expect(provider.allKnowledge.count == 4)
         #expect(
             provider.knowledge(in: .codeSmellsAndAntiPatterns).count == 3
         )
@@ -107,6 +108,12 @@ struct RuleKnowledgeRegistryTests {
                     title: "Team convention",
                     group: "teamConventions",
                     category: "teamConvention"
+                ),
+                makeRule(
+                    ruleID: "ARCAN-STYLE-001",
+                    title: "Style rule",
+                    group: "style",
+                    category: "style"
                 )
             ]
         )
@@ -117,7 +124,8 @@ struct RuleKnowledgeRegistryTests {
                 "ARCAN-GOD-001",
                 "ARCAN-TCA-001",
                 "ARCAN-LONG-METHOD-001",
-                "ARCAN-TEAM-001"
+                "ARCAN-TEAM-001",
+                "ARCAN-STYLE-001"
             ]
         )
         #expect(
@@ -134,6 +142,10 @@ struct RuleKnowledgeRegistryTests {
         #expect(
             registry.knowledge(in: .teamConventions)
                 .map(\.ruleID) == ["ARCAN-TEAM-001"]
+        )
+        #expect(
+            registry.knowledge(in: .style)
+                .map(\.ruleID) == ["ARCAN-STYLE-001"]
         )
     }
 

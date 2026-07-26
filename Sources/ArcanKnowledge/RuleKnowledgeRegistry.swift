@@ -186,6 +186,8 @@ public struct RuleKnowledgeRegistry: RuleKnowledgeProviding {
             .antiPattern
         case .tcaArchitecture:
             .architecture
+        case .style:
+            .style
         case .teamConventions:
             .teamConvention
         }

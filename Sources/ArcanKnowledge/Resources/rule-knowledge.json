@@ -82,6 +82,33 @@
         "Preserve execution order, error handling and observable side effects.",
         "Avoid creating small methods whose names do not clarify intent."
       ]
+    },
+    {
+      "ruleID": "ARCAN-STYLE-001",
+      "title": "Readability and idiomatic Swift candidate",
+      "group": "style",
+      "category": "style",
+      "defaultSeverity": "info",
+      "definition": "A style candidate is source whose naming, structure or expression is unnecessarily difficult to read or departs from clear, idiomatic Swift in a way that is visible in the supplied file.",
+      "evidenceCriteria": [
+        "The issue is visible directly in the supplied source rather than inferred from an unavailable project convention.",
+        "The source uses unclear naming, avoidable structural noise or a non-idiomatic construct that materially reduces readability.",
+        "The concern is not merely a subjective formatting preference already better handled by an automatic formatter."
+      ],
+      "classificationGuidance": [
+        "Report only issues that affect comprehension or maintainability.",
+        "Do not report whitespace, indentation or other formatter-owned differences.",
+        "Do not invent team-specific conventions that were not supplied."
+      ],
+      "severityGuidance": [
+        "Use info for localized readability or idiom improvements.",
+        "Use warning only when the style issue creates a meaningful risk of misunderstanding or incorrect maintenance."
+      ],
+      "refactoringGuardrails": [
+        "Preserve observable behaviour.",
+        "Prefer the smallest change that makes intent clearer.",
+        "Do not replace clear code solely to demonstrate a different syntax."
+      ]
     }
   ]
 }
