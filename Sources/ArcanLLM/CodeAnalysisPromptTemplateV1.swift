@@ -19,6 +19,7 @@ enum CodeAnalysisPromptTemplateV1 {
             "- Use changed ranges as attention signals, not as a restriction. A finding may span unchanged lines when the visible file-level evidence supports it.",
             "- Deleted ranges refer to the previous file version. Do not invent deleted source that is not present in the current source.",
             "- Report only rule IDs supplied in INPUT_DATA.",
+            "- Repeat the supplied file path exactly in every finding.",
             "- Do not provide refactoring suggestions, refactoring steps, or replacement code.",
             "",
             "INPUT_DATA",
@@ -50,6 +51,7 @@ enum CodeAnalysisPromptTemplateV1 {
             "additionalProperties": false,
             "required": [
               "ruleID",
+              "filePath",
               "explanation",
               "severity",
               "startLine",
@@ -58,6 +60,10 @@ enum CodeAnalysisPromptTemplateV1 {
             ],
             "properties": {
               "ruleID": {
+                "type": "string",
+                "minLength": 1
+              },
+              "filePath": {
                 "type": "string",
                 "minLength": 1
               },

@@ -21,7 +21,9 @@ public struct CodeAnalysisPromptBuilder: Sendable {
         }
 
         let sortedRules = try validatedRules(rules)
-        let sourceLines = makeSourceLines(from: context.sourceContent)
+        let sourceLines = SourceTextLineExtractor.lines(
+            in: context.sourceContent
+        )
 
         guard sourceLines.count == context.lineCount else {
             throw CodeAnalysisPromptBuildingError.sourceLineCountMismatch(
@@ -80,28 +82,6 @@ public struct CodeAnalysisPromptBuilder: Sendable {
         }
 
         return rules.sorted { $0.ruleID < $1.ruleID }
-    }
-
-    private func makeSourceLines(from source: String) -> [String] {
-        guard !source.isEmpty else { return [] }
-
-        var lines: [String] = []
-        var currentLine = ""
-
-        for character in source {
-            if character.isNewline {
-                lines.append(currentLine)
-                currentLine = ""
-            } else {
-                currentLine.append(character)
-            }
-        }
-
-        if source.last?.isNewline != true {
-            lines.append(currentLine)
-        }
-
-        return lines
     }
 
     private func makeRuleInput(

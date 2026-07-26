@@ -17,7 +17,9 @@ public struct SuggestionParser: Sendable {
             )
         }
 
-        guard let jsonText = extractJSON(from: responseText),
+        guard let jsonText = LLMJSONDocumentExtractor.extract(
+            from: responseText
+        ),
               let jsonData = jsonText.data(using: .utf8) else {
             return rejected(
                 "The LLM suggestion response is not a supported JSON document."
@@ -95,35 +97,6 @@ public struct SuggestionParser: Sendable {
                 codeExample: response.codeExample
             )
         )
-    }
-
-    private func extractJSON(from responseText: String) -> String? {
-        let trimmedResponse = responseText.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
-
-        guard trimmedResponse.hasPrefix("```") else {
-            return trimmedResponse
-        }
-
-        let lines = trimmedResponse.components(separatedBy: .newlines)
-        guard lines.count >= 3,
-              lines.first == "```" || lines.first == "```json",
-              lines.last == "```" else {
-            return nil
-        }
-
-        let jsonText = lines
-            .dropFirst()
-            .dropLast()
-            .joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !jsonText.contains("```") else {
-            return nil
-        }
-
-        return jsonText
     }
 
     private func rejected(_ message: String) -> SuggestionParsingResult {
