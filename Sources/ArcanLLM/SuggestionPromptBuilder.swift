@@ -81,16 +81,20 @@ public struct SuggestionPromptBuilder: Sendable {
     ) -> SuggestionFindingInput {
         SuggestionFindingInput(
             ruleID: finding.ruleID,
-            title: redactCommonSecrets(in: finding.title),
+            title: PromptTextRedactor.redactCommonSecrets(in: finding.title),
             category: finding.category,
             severity: finding.severity,
             filePath: promptFilePath(from: finding.filePath),
             range: finding.range,
-            explanation: redactCommonSecrets(in: finding.explanation),
+            explanation: PromptTextRedactor.redactCommonSecrets(
+                in: finding.explanation
+            ),
             evidence: finding.evidence
                 .map { evidence in
                     Evidence(
-                        metric: redactCommonSecrets(in: evidence.metric),
+                        metric: PromptTextRedactor.redactCommonSecrets(
+                            in: evidence.metric
+                        ),
                         observedValue: evidence.observedValue,
                         thresholdValue: evidence.thresholdValue
                     )
@@ -105,7 +109,9 @@ public struct SuggestionPromptBuilder: Sendable {
         SuggestionSourceInput(
             changedLineRange: context.changedLineRange,
             includedLineRange: context.includedLineRange,
-            sourceText: redactCommonSecrets(in: context.sourceText)
+            sourceText: PromptTextRedactor.redactCommonSecrets(
+                in: context.sourceText
+            )
         )
     }
 
@@ -128,7 +134,7 @@ public struct SuggestionPromptBuilder: Sendable {
             safePath = path
         }
 
-        return redactCommonSecrets(in: safePath)
+        return PromptTextRedactor.redactCommonSecrets(in: safePath)
     }
 
     private func encode(_ input: SuggestionPromptInput) throws -> String {
@@ -147,30 +153,6 @@ public struct SuggestionPromptBuilder: Sendable {
         }
     }
 
-    private func redactCommonSecrets(in text: String) -> String {
-        let replacements = [
-            SecretReplacement(
-                pattern: #"(?i)(\b(?:let|var)\s+(?:(?:password|passwd|token|api_?key|secret|access_?key)|[A-Za-z_][A-Za-z0-9_]*(?:password|passwd|token|api_?key|secret|access_?key)[A-Za-z0-9_]*)\s*(?::[^=\n]+)?=\s*)\"(?:\\.|[^\"\\])*\""#,
-                template: #"$1\"[REDACTED]\""#
-            ),
-            SecretReplacement(
-                pattern: #"(?i)(\bBearer\s+)[A-Za-z0-9._~+/=-]{8,}"#,
-                template: "$1[REDACTED]"
-            ),
-            SecretReplacement(
-                pattern: #"\b(?:sk-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})\b"#,
-                template: "[REDACTED]"
-            ),
-            SecretReplacement(
-                pattern: #"-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----[\s\S]*?-----END(?: [A-Z0-9]+)? PRIVATE KEY-----"#,
-                template: "[REDACTED PRIVATE KEY]"
-            )
-        ]
-
-        return replacements.reduce(text) { redactedText, replacement in
-            replacement.apply(to: redactedText)
-        }
-    }
 }
 
 private struct SuggestionPromptInput: Encodable {
@@ -204,22 +186,4 @@ private struct SuggestionSourceInput: Encodable {
     let changedLineRange: ChangedLineRange
     let includedLineRange: SourceLineRange
     let sourceText: String
-}
-
-private struct SecretReplacement {
-    let pattern: String
-    let template: String
-
-    func apply(to text: String) -> String {
-        guard let expression = try? NSRegularExpression(pattern: pattern) else {
-            return text
-        }
-
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        return expression.stringByReplacingMatches(
-            in: text,
-            range: range,
-            withTemplate: template
-        )
-    }
 }
