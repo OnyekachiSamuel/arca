@@ -47,6 +47,8 @@ let package = Package(
             dependencies: [
                 "ArcanAnalysis",
                 "ArcanDomain",
+                "ArcanKnowledge",
+                "ArcanLLM",
                 "ArcanProcess"
             ]
         ),
@@ -87,6 +89,7 @@ let package = Package(
                 "ArcanAnalysis",
                 "ArcanCLI",
                 "ArcanDomain",
+                "ArcanKnowledge",
                 "ArcanLLM",
                 "ArcanProcess"
             ]
@@ -128,6 +131,8 @@ let package = Package(
                 "ArcanAnalysis",
                 "ArcanAnalyzers",
                 "ArcanDomain",
+                "ArcanKnowledge",
+                "ArcanLLM",
                 "ArcanProcess",
                 "ArcanSource",
                 "ArcanSwiftSyntax"

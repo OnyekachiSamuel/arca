@@ -4,7 +4,7 @@ import Foundation
 
 public struct CodeAnalysisResponseParser: Sendable {
     private let knowledgeProvider: any RuleKnowledgeProviding
-    private let sourceIdentifier: String
+    private let sourceIdentifiers: [String]
     private let limits: CodeAnalysisResponseLimits
 
     public init(
@@ -13,7 +13,17 @@ public struct CodeAnalysisResponseParser: Sendable {
         limits: CodeAnalysisResponseLimits = .default
     ) {
         self.knowledgeProvider = knowledgeProvider
-        self.sourceIdentifier = sourceIdentifier
+        sourceIdentifiers = [sourceIdentifier]
+        self.limits = limits
+    }
+
+    public init(
+        knowledgeProvider: any RuleKnowledgeProviding,
+        sourceIdentifiers: [String],
+        limits: CodeAnalysisResponseLimits = .default
+    ) {
+        self.knowledgeProvider = knowledgeProvider
+        self.sourceIdentifiers = Self.unique(sourceIdentifiers)
         self.limits = limits
     }
 
@@ -28,7 +38,8 @@ public struct CodeAnalysisResponseParser: Sendable {
                 message: "Code-analysis response limits must be greater than zero."
             )
         }
-        guard !sourceIdentifier.trimmed.isEmpty else {
+        guard !sourceIdentifiers.isEmpty,
+              sourceIdentifiers.allSatisfy({ !$0.trimmed.isEmpty }) else {
             return rejected(
                 code: "ARCAN-LLM-ANALYSIS-INVALID-CONFIGURATION",
                 message: "The LLM code analyzer source identifier must not be empty."
@@ -189,7 +200,7 @@ public struct CodeAnalysisResponseParser: Sendable {
                 proposedSeverity: response.severity,
                 proposedCategory: knowledge.category,
                 evidence: evidence,
-                sourceIdentifiers: [sourceIdentifier],
+                sourceIdentifiers: sourceIdentifiers,
                 analyzerMetadata: analyzerMetadata
             ))
         } catch {
@@ -198,6 +209,11 @@ public struct CodeAnalysisResponseParser: Sendable {
                 message: "Finding \(findingIndex) could not be converted into a candidate finding."
             ))
         }
+    }
+
+    private static func unique(_ values: [String]) -> [String] {
+        var encountered: Set<String> = []
+        return values.filter { encountered.insert($0).inserted }
     }
 
     private func validatedEvidence(

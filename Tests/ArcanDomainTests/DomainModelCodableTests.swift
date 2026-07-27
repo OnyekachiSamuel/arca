@@ -271,6 +271,69 @@ struct DomainModelCodableTests {
         #expect(decoded.tool == nil)
         #expect(decoded.executionStatus == .completed)
         #expect(decoded.diagnostics.isEmpty)
+        #expect(decoded.candidates.isEmpty)
+        #expect(decoded.llmExecutionMetadata == nil)
+    }
+
+    @Test("LLM analyzer candidates and execution metadata round trip")
+    func llmAnalyzerResultRoundTrip() throws {
+        let candidate = try FindingCandidate(
+            candidateID: UUID(
+                uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
+            )!,
+            ruleID: "ARCAN-GOD-001",
+            title: "God Object candidate",
+            explanation: "The type has unrelated responsibilities.",
+            filePath: "Sources/App.swift",
+            range: SourceRange(
+                startLine: 1,
+                startColumn: 1,
+                endLine: 3,
+                endColumn: 2
+            ),
+            proposedSeverity: .warning,
+            proposedCategory: .antiPattern,
+            evidence: [
+                .sourceCode(SourceCodeEvidence(
+                    description: "Several responsibilities are present.",
+                    range: SourceRange(
+                        startLine: 1,
+                        startColumn: 1,
+                        endLine: 3,
+                        endColumn: 2
+                    ),
+                    excerpt: "struct App {}"
+                ))
+            ],
+            sourceIdentifiers: [
+                "llm-code-analysis",
+                "llm-provider:ollama",
+                "llm-model:qwen"
+            ]
+        )
+        let result = AnalyzerResult(
+            analyzerID: "llm-code-analysis",
+            findings: [],
+            candidates: [candidate],
+            llmExecutionMetadata: LLMAnalyzerExecutionMetadata(
+                providerID: "ollama",
+                modelID: "qwen",
+                requestCount: 2,
+                usage: LLMTokenUsageMetadata(
+                    inputTokens: 100,
+                    outputTokens: 20,
+                    totalTokens: 120
+                ),
+                providerDurationMilliseconds: 45
+            )
+        )
+
+        let decoded = try decodeFromJSON(
+            AnalyzerResult.self,
+            from: encodeToJSON(result)
+        )
+
+        #expect(decoded == result)
     }
 
     @Test("skipped analyzer result preserves its diagnostic")

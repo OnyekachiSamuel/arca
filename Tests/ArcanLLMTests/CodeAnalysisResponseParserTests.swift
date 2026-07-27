@@ -70,6 +70,30 @@ struct CodeAnalysisResponseParserTests {
         #expect(result.diagnostics.isEmpty)
     }
 
+    @Test("candidate preserves stable analyzer provider and model sources")
+    func preservesMultipleSources() throws {
+        let parser = CodeAnalysisResponseParser(
+            knowledgeProvider: knowledgeProvider,
+            sourceIdentifiers: [
+                "llm-code-analysis",
+                "llm-provider:ollama",
+                "llm-model:qwen",
+                "llm-code-analysis"
+            ]
+        )
+
+        let result = parser.parse(validResponse, context: context)
+        let candidate = try #require(result.candidates.first)
+
+        #expect(
+            candidate.sourceIdentifiers == [
+                "llm-code-analysis",
+                "llm-provider:ollama",
+                "llm-model:qwen"
+            ]
+        )
+    }
+
     @Test("one JSON document may be wrapped in a Markdown fence")
     func acceptsMarkdownWrappedJSON() {
         let result = parser.parse(

@@ -32,7 +32,15 @@ struct AnalyzerRunnerTests {
         let analyzerResult = AnalyzerResult(
             analyzerID: "mock",
             findings: [],
-            tool: ToolMetadata(name: "MockTool", version: "1.2.3")
+            candidates: [try candidate()],
+            tool: ToolMetadata(name: "MockTool", version: "1.2.3"),
+            llmExecutionMetadata: LLMAnalyzerExecutionMetadata(
+                providerID: "mock-provider",
+                modelID: "mock-model",
+                requestCount: 1,
+                usage: LLMTokenUsageMetadata(totalTokens: 12),
+                providerDurationMilliseconds: 5
+            )
         )
         let recorder = RecordAnalysisContext()
         let analyzer = MockAnalyzer(
@@ -54,6 +62,11 @@ struct AnalyzerRunnerTests {
             )
         )
         #expect(result.durationMilliseconds == 8)
+        #expect(result.candidates == analyzerResult.candidates)
+        #expect(
+            result.llmExecutionMetadata
+                == analyzerResult.llmExecutionMetadata
+        )
         #expect(analyzer.id == "mock")
         #expect(analyzer.supportedReviewTypes == [.godObject, .style])
         let receivedContext = await recorder.receivedContext
@@ -175,6 +188,37 @@ struct AnalyzerRunnerTests {
             "failing-start"
         ])
     }
+}
+
+private func candidate() throws -> FindingCandidate {
+    try FindingCandidate(
+        candidateID: UUID(),
+        ruleID: "ARCAN-GOD-001",
+        title: "God Object candidate",
+        explanation: "Explanation",
+        filePath: "Sources/App.swift",
+        range: SourceRange(
+            startLine: 1,
+            startColumn: 1,
+            endLine: 1,
+            endColumn: 2
+        ),
+        proposedSeverity: .warning,
+        proposedCategory: .antiPattern,
+        evidence: [
+            .sourceCode(SourceCodeEvidence(
+                description: "Evidence",
+                range: SourceRange(
+                    startLine: 1,
+                    startColumn: 1,
+                    endLine: 1,
+                    endColumn: 2
+                ),
+                excerpt: "s"
+            ))
+        ],
+        sourceIdentifiers: ["llm-code-analysis"]
+    )
 }
 
 private struct MockAnalyzer: Analyzer {

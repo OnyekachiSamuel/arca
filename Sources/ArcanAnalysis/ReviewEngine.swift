@@ -30,10 +30,12 @@ public struct ReviewEngine: Sendable {
                         sourceIdentifier: result.analyzerID
                     )
                 },
+                candidates: result.candidates,
                 tool: result.tool,
                 executionStatus: result.executionStatus,
                 diagnostics: result.diagnostics,
-                durationMilliseconds: result.durationMilliseconds
+                durationMilliseconds: result.durationMilliseconds,
+                llmExecutionMetadata: result.llmExecutionMetadata
             )
         }
 

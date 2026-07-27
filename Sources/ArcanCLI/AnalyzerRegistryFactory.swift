@@ -1,6 +1,8 @@
 import ArcanAnalysis
 import ArcanAnalyzers
 import ArcanDomain
+import ArcanKnowledge
+import ArcanLLM
 import ArcanProcess
 import Foundation
 
@@ -19,7 +21,9 @@ struct AnalyzerRegistryFactory: Sendable {
     func make(
         configuration: ArcanConfiguration,
         structureProvider: any SwiftStructureProvider,
-        workingDirectoryURL: URL
+        workingDirectoryURL: URL,
+        llmProvider: (any LLMProvider)? = nil,
+        knowledgeProvider: (any RuleKnowledgeProviding)? = nil
     ) -> AnalyzerRegistry {
         var analyzers: [any Analyzer] = [
             GodObjectAnalyzer(
@@ -48,6 +52,19 @@ struct AnalyzerRegistryFactory: Sendable {
             analyzers.append(UnavailableSwiftLintAnalyzer(
                 reason: reason,
                 policy: configuration.swiftLint.availability
+            ))
+        }
+
+        if let llmConfiguration = configuration.llm,
+           let llmProvider,
+           let knowledgeProvider {
+            analyzers.append(LLMCodeAnalyzer(
+                provider: llmProvider,
+                knowledgeProvider: knowledgeProvider,
+                modelID: llmConfiguration.modelID,
+                timeout: .seconds(llmConfiguration.timeoutSeconds),
+                seed: llmConfiguration.seed,
+                temperature: llmConfiguration.temperature
             ))
         }
 
