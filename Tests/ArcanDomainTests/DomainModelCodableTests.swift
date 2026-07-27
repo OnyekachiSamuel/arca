@@ -89,7 +89,7 @@ struct DomainModelCodableTests {
         )
         let analyzerResult = AnalyzerResult(
             analyzerID: "god-object",
-            findings: [finding],
+            candidates: [],
             tool: ToolMetadata(name: "SwiftLint", version: "0.63.2"),
             durationMilliseconds: 17
         )
@@ -254,25 +254,24 @@ struct DomainModelCodableTests {
         #expect(finding.metadata.isEmpty)
     }
 
-    @Test("legacy analyzer result without duration defaults to zero")
-    func legacyAnalyzerResultDuration() throws {
+    @Test("analyzer result requires the candidate contract")
+    func analyzerResultRequiresCandidates() throws {
         let data = Data(
             """
             {
-              "analyzerID": "legacy",
-              "findings": []
+              "analyzerID": "invalid",
+              "tool": null,
+              "executionStatus": "completed",
+              "diagnostics": [],
+              "durationMilliseconds": 0,
+              "llmExecutionMetadata": null
             }
             """.utf8
         )
 
-        let decoded = try decodeFromJSON(AnalyzerResult.self, from: data)
-
-        #expect(decoded.durationMilliseconds == 0)
-        #expect(decoded.tool == nil)
-        #expect(decoded.executionStatus == .completed)
-        #expect(decoded.diagnostics.isEmpty)
-        #expect(decoded.candidates.isEmpty)
-        #expect(decoded.llmExecutionMetadata == nil)
+        #expect(throws: DecodingError.self) {
+            try decodeFromJSON(AnalyzerResult.self, from: data)
+        }
     }
 
     @Test("LLM analyzer candidates and execution metadata round trip")
@@ -313,7 +312,6 @@ struct DomainModelCodableTests {
         )
         let result = AnalyzerResult(
             analyzerID: "llm-code-analysis",
-            findings: [],
             candidates: [candidate],
             llmExecutionMetadata: LLMAnalyzerExecutionMetadata(
                 providerID: "ollama",
@@ -336,11 +334,29 @@ struct DomainModelCodableTests {
         #expect(decoded == result)
     }
 
+    @Test("review analysis requires candidates in its serialized contract")
+    func reviewAnalysisRequiresCandidates() {
+        let data = Data(
+            """
+            {
+              "schemaVersion": 1,
+              "requestID": "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
+              "analyzerResults": [],
+              "diagnostics": []
+            }
+            """.utf8
+        )
+
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(ReviewAnalysisResult.self, from: data)
+        }
+    }
+
     @Test("skipped analyzer result preserves its diagnostic")
     func skippedAnalyzerResult() throws {
         let result = AnalyzerResult(
             analyzerID: "swiftlint",
-            findings: [],
+            candidates: [],
             tool: ToolMetadata(name: "SwiftLint"),
             executionStatus: .skipped,
             diagnostics: [

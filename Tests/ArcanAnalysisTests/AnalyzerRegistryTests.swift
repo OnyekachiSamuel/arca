@@ -92,6 +92,6 @@ private struct RegistryTestAnalyzer: Analyzer {
     let supportedReviewTypes: Set<ReviewType>
 
     func analyze(context: AnalysisContext) async throws -> AnalyzerResult {
-        AnalyzerResult(analyzerID: id, findings: [])
+        AnalyzerResult(analyzerID: id, candidates: [])
     }
 }

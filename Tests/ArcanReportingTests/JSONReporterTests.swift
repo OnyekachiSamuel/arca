@@ -5,59 +5,60 @@ import Testing
 
 @Suite("JSON reporter")
 struct JSONReporterTests {
-    @Test("output decodes to the original versioned report")
-    func rendersDecodableReport() throws {
-        let report = makeReport()
-        let reporter: any Reporter = JSONReporter()
+    @Test("output decodes to the original analysis result")
+    func rendersDecodableAnalysis() throws {
+        let analysis = try makeAnalysis()
 
-        let output = try reporter.render(report: report)
+        let output = try JSONReporter().render(analysis: analysis)
         let decoded = try JSONDecoder().decode(
-            ReviewReport.self,
+            ReviewAnalysisResult.self,
             from: Data(output.utf8)
         )
 
-        #expect(decoded == report)
-        #expect(
-            decoded.schemaVersion == ReviewReport.currentSchemaVersion
-        )
-        #expect(!output.contains("ARCAN Review Report"))
-        #expect(!output.contains("\u{001B}["))
-        #expect(!output.contains("```"))
-        #expect(decoded.findings.first?.sources == ["god-object"])
-        let object = try #require(
-            JSONSerialization.jsonObject(
-                with: Data(output.utf8)
-            ) as? [String: Any]
-        )
-        let findings = try #require(object["findings"] as? [[String: Any]])
-        #expect(findings.first?["sources"] as? [String] == ["god-object"])
+        #expect(decoded == analysis)
+        #expect(decoded.candidates.first?.sourceIdentifiers == ["god-object"])
     }
 
-    private func makeReport() -> ReviewReport {
-        let finding = Finding(
-            id: UUID(
-                uuidString: "11111111-2222-3333-4444-555555555555"
-            )!,
-            ruleID: "ARCAN-GOD-001",
-            title: "God Object candidate",
-            severity: .warning,
-            filePath: "Sources/LargeCoordinator.swift",
-            explanation: "The type exceeds configured thresholds.",
-            sources: ["god-object"]
-        )
-        return ReviewReport(
-            schemaVersion: ReviewReport.currentSchemaVersion,
-            requestID: UUID(
-                uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
-            )!,
-            findings: [finding],
+    private func makeAnalysis() throws -> ReviewAnalysisResult {
+        let candidate = try makeCandidate()
+        return ReviewAnalysisResult(
+            schemaVersion: ReviewAnalysisResult.currentSchemaVersion,
+            requestID: UUID(),
+            candidates: [candidate],
             analyzerResults: [
                 AnalyzerResult(
                     analyzerID: "god-object",
-                    findings: [finding],
+                    candidates: [candidate],
                     durationMilliseconds: 12
                 )
-            ]
+            ],
+            diagnostics: []
         )
     }
+}
+
+private func makeCandidate() throws -> FindingCandidate {
+    try FindingCandidate(
+        candidateID: UUID(),
+        ruleID: "ARCAN-GOD-001",
+        title: "God Object candidate",
+        explanation: "The type exceeds multiple thresholds.",
+        filePath: "Sources/App.swift",
+        range: SourceRange(
+            startLine: 1,
+            startColumn: 1,
+            endLine: 20,
+            endColumn: 2
+        ),
+        proposedSeverity: .warning,
+        proposedCategory: .antiPattern,
+        evidence: [
+            .metric(MetricEvidence(
+                metricName: "methods",
+                observedValue: 30,
+                thresholdValue: 25
+            ))
+        ],
+        sourceIdentifiers: ["god-object"]
+    )
 }

@@ -1,26 +1,33 @@
 import ArcanDomain
 import Foundation
 
-struct GodObjectFindingMapper: Sendable {
+struct GodObjectCandidateMapper: Sendable {
     let ruleMetadata: GodObjectRuleMetadata
+    let analyzerID: String
 
     func map(
         metrics: TypeStructuralMetrics,
         sourceFile: SourceFile,
         evidence: [Evidence]
-    ) -> Finding {
-        Finding(
-            id: UUID(),
+    ) throws -> FindingCandidate {
+        try FindingCandidate(
+            candidateID: UUID(),
             ruleID: ruleMetadata.ruleID,
             title: ruleMetadata.title,
-            category: ruleMetadata.category,
-            severity: ruleMetadata.severity,
+            explanation: "Type '\(metrics.name)' \(ruleMetadata.explanation)",
             filePath: sourceFile.path,
             range: metrics.range,
-            explanation: "Type '\(metrics.name)' \(ruleMetadata.explanation)",
-            evidence: evidence,
-            suggestion: ruleMetadata.suggestion,
-            metadata: [
+            proposedSeverity: ruleMetadata.severity,
+            proposedCategory: ruleMetadata.category,
+            evidence: evidence.map {
+                .metric(MetricEvidence(
+                    metricName: $0.metric,
+                    observedValue: $0.observedValue,
+                    thresholdValue: $0.thresholdValue
+                ))
+            },
+            sourceIdentifiers: [analyzerID],
+            analyzerMetadata: [
                 "typeName": .string(metrics.name),
                 "typeKind": .string(metrics.kind.rawValue),
                 "lineCount": .integer(metrics.lineCount),

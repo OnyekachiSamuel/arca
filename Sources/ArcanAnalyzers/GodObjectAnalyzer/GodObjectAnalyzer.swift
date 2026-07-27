@@ -21,24 +21,27 @@ public struct GodObjectAnalyzer: Analyzer {
     }
 
     public func analyze(context: AnalysisContext) async throws -> AnalyzerResult {
-        var findings: [Finding] = []
+        var candidates: [FindingCandidate] = []
 
         for sourceFile in context.sourceFiles {
             let extractedMetrics = try structureProvider.extractMetrics(from: sourceFile)
-            findings.append(contentsOf: extractedMetrics.compactMap { metrics in
+            for metrics in extractedMetrics {
                 let evidence = triggeredEvidence(for: metrics)
                 guard evidence.count >= thresholds.minimumTriggeredSignals else {
-                    return nil
+                    continue
                 }
-                return GodObjectFindingMapper(ruleMetadata: ruleMetadata).map(
+                candidates.append(try GodObjectCandidateMapper(
+                    ruleMetadata: ruleMetadata,
+                    analyzerID: id
+                ).map(
                     metrics: metrics,
                     sourceFile: sourceFile,
                     evidence: evidence
-                )
-            })
+                ))
+            }
         }
 
-        return AnalyzerResult(analyzerID: id, findings: findings)
+        return AnalyzerResult(analyzerID: id, candidates: candidates)
     }
 
     private func triggeredEvidence(

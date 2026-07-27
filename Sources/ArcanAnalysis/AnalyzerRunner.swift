@@ -21,7 +21,6 @@ public struct AnalyzerRunner: Sendable {
 
         return AnalyzerResult(
             analyzerID: result.analyzerID,
-            findings: result.findings,
             candidates: result.candidates,
             tool: result.tool,
             executionStatus: result.executionStatus,

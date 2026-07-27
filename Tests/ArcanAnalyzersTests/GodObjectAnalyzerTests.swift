@@ -23,40 +23,37 @@ struct GodObjectAnalyzerTests {
         let result = try await analyzer.analyze(context: context(for: source))
 
         #expect(result.analyzerID == "god-object")
-        #expect(result.findings.count == 1)
-        let finding = try #require(result.findings.first)
-        #expect(finding.ruleID == "ARCAN-GOD-001")
-        #expect(finding.category == .antiPattern)
-        #expect(finding.severity == .warning)
-        #expect(finding.filePath == source.path)
-        #expect(finding.range == SourceRange(
+        #expect(result.candidates.count == 1)
+        let candidate = try #require(result.candidates.first)
+        #expect(candidate.ruleID == "ARCAN-GOD-001")
+        #expect(candidate.proposedCategory == .antiPattern)
+        #expect(candidate.proposedSeverity == .warning)
+        #expect(candidate.filePath == source.path)
+        #expect(candidate.range == SourceRange(
             startLine: 1,
             startColumn: 1,
             endLine: 9,
             endColumn: 2
         ))
-        #expect(finding.evidence == [
-            Evidence(metric: "lines", observedValue: 9, thresholdValue: 8),
-            Evidence(metric: "methods", observedValue: 3, thresholdValue: 2),
-            Evidence(
-                metric: "storedProperties",
+        #expect(candidate.evidence == [
+            .metric(MetricEvidence(
+                metricName: "lines", observedValue: 9, thresholdValue: 8
+            )),
+            .metric(MetricEvidence(
+                metricName: "methods", observedValue: 3, thresholdValue: 2
+            )),
+            .metric(MetricEvidence(
+                metricName: "storedProperties",
                 observedValue: 3,
                 thresholdValue: 2
-            )
+            ))
         ])
         #expect(
-            finding.explanation
+            candidate.explanation
                 == "Type 'LargeCoordinator' exceeds multiple configured structural thresholds, suggesting it may have too many responsibilities."
         )
-        #expect(finding.suggestion == Suggestion(
-            summary: "Split the type into smaller, focused components.",
-            steps: [
-                "Group related properties and methods by responsibility.",
-                "Extract each responsibility into a dedicated type.",
-                "Keep only necessary coordination in the original type."
-            ]
-        ))
-        #expect(finding.metadata == [
+        #expect(candidate.sourceIdentifiers == ["god-object"])
+        #expect(candidate.analyzerMetadata == [
             "typeName": .string("LargeCoordinator"),
             "typeKind": .string("class"),
             "lineCount": .integer(9),
@@ -86,7 +83,7 @@ struct GodObjectAnalyzerTests {
 
         let result = try await analyzer.analyze(context: context(for: source))
 
-        #expect(result.findings.isEmpty)
+        #expect(result.candidates.isEmpty)
     }
 
     @Test("values equal to thresholds do not trigger a finding")
@@ -112,7 +109,7 @@ struct GodObjectAnalyzerTests {
 
         let result = try await analyze(metrics: [metrics], thresholds: thresholds)
 
-        #expect(result.findings.isEmpty)
+        #expect(result.candidates.isEmpty)
     }
 
     @Test("multiple signals are required by default")
@@ -134,8 +131,8 @@ struct GodObjectAnalyzerTests {
             thresholds: thresholds
         )
 
-        #expect(oneSignalResult.findings.isEmpty)
-        #expect(twoSignalResult.findings.count == 1)
+        #expect(oneSignalResult.candidates.isEmpty)
+        #expect(twoSignalResult.candidates.count == 1)
     }
 
     @Test("required signal count is configurable")
@@ -152,7 +149,7 @@ struct GodObjectAnalyzerTests {
             thresholds: thresholds
         )
 
-        #expect(result.findings.count == 1)
+        #expect(result.candidates.count == 1)
     }
 
     private func analyze(

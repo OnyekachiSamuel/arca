@@ -77,7 +77,7 @@ struct ArcanCommandTests {
             #expect(result.outputDestination == .standardOutput)
             #expect(result.reviewRequest?.selectedFiles == [file.path])
             #expect(result.reviewRequest?.repositoryRoot == nil)
-            #expect(result.output.hasPrefix("ARCAN Review Report"))
+            #expect(result.output.hasPrefix("ARCAN Review Analysis"))
             #expect(
                 result.reviewRequest?.selectedReviewTypes
                     == [.godObject, .style]
@@ -102,13 +102,14 @@ struct ArcanCommandTests {
                 "--format", "json"
             ])
             let report = try JSONDecoder().decode(
-                ReviewReport.self,
+                ReviewAnalysisResult.self,
                 from: Data(result.output.utf8)
             )
 
             #expect(result.exitCode == 0)
             #expect(
-                report.schemaVersion == ReviewReport.currentSchemaVersion
+                report.schemaVersion
+                    == ReviewAnalysisResult.currentSchemaVersion
             )
             #expect(
                 report.analyzerResults.map(\.analyzerID)
@@ -118,159 +119,8 @@ struct ArcanCommandTests {
                 report.analyzerResults.map(\.executionStatus)
                     == [.completed, .skipped]
             )
-            #expect(!result.output.contains("ARCAN Review Report"))
+            #expect(!result.output.contains("ARCAN Review Analysis"))
             #expect(!result.output.contains("\u{001B}["))
-        }
-    }
-
-    @Test("LLM suggestions replace guidance without changing evidence")
-    func reviewGeneratesTargetedSuggestion() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent(
-                "CheckoutCoordinator.swift"
-            )
-            try """
-            final class CheckoutCoordinator {
-                let apiClient = APIClient()
-                let cache = Cache()
-
-                func loadOrder() {}
-                func saveOrder() {}
-            }
-            """.write(to: file, atomically: true, encoding: .utf8)
-            let configurationFile = directory.appendingPathComponent(
-                ".arcan.json"
-            )
-            try """
-            {
-              "schemaVersion": 1,
-              "godObject": {
-                "maximumLines": 1,
-                "maximumMethods": 1,
-                "maximumStoredProperties": 1,
-                "minimumTriggeredSignals": 2
-              }
-            }
-            """.write(
-                to: configurationFile,
-                atomically: true,
-                encoding: .utf8
-            )
-            let provider = CLIRecordingLLMProvider(
-                responseText: """
-                {
-                  "summary": "Extract persistence from CheckoutCoordinator.",
-                  "steps": ["Create a CheckoutRepository."],
-                  "codeExample": "struct CheckoutRepository {}"
-                }
-                """
-            )
-            let baselineResult = await ArcanCommand.execute(
-                arguments: [
-                    "review",
-                    "--file", file.path,
-                    "--review", "god-object",
-                    "--format", "json"
-                ],
-                currentDirectory: directory.path,
-                swiftLintAvailability: .unavailable(.executableNotFound),
-                llmProvider: provider
-            )
-            let baselineReport = try JSONDecoder().decode(
-                ReviewReport.self,
-                from: Data(baselineResult.output.utf8)
-            )
-            let baselineFinding = try #require(
-                baselineReport.findings.first
-            )
-
-            try """
-            {
-              "schemaVersion": 1,
-              "godObject": {
-                "maximumLines": 1,
-                "maximumMethods": 1,
-                "maximumStoredProperties": 1,
-                "minimumTriggeredSignals": 2
-              },
-              "llm": {
-                "providerID": "mock",
-                "baseURL": "http://127.0.0.1:8080",
-                "modelID": "mock-model",
-                "timeoutSeconds": 30
-              }
-            }
-            """.write(
-                to: configurationFile,
-                atomically: true,
-                encoding: .utf8
-            )
-
-            let result = await ArcanCommand.execute(
-                arguments: [
-                    "review",
-                    "--file", file.path,
-                    "--review", "god-object",
-                    "--format", "json"
-                ],
-                currentDirectory: directory.path,
-                swiftLintAvailability: .unavailable(.executableNotFound),
-                llmProvider: provider
-            )
-            let report = try JSONDecoder().decode(
-                ReviewReport.self,
-                from: Data(result.output.utf8)
-            )
-            let finding = try #require(report.findings.first)
-            let analyzerFinding = try #require(
-                report.analyzerResults.first?.findings.first
-            )
-
-            #expect(result.exitStatus == .findingsDetected)
-            #expect(finding.ruleID == "ARCAN-GOD-001")
-            #expect(finding.evidence == baselineFinding.evidence)
-            #expect(finding.range == baselineFinding.range)
-            #expect(finding.severity == baselineFinding.severity)
-            #expect(finding.sources == baselineFinding.sources)
-            #expect(
-                baselineFinding.suggestion?.summary
-                    == "Split the type into smaller, focused components."
-            )
-            #expect(
-                finding.suggestion?.summary
-                    == "Extract persistence from CheckoutCoordinator."
-            )
-            #expect(
-                finding.suggestion?.codeExample
-                    == "struct CheckoutRepository {}"
-            )
-            #expect(analyzerFinding == finding)
-            #expect(await provider.requestCount == 1)
-
-            let failedResult = await ArcanCommand.execute(
-                arguments: [
-                    "review",
-                    "--file", file.path,
-                    "--review", "god-object",
-                    "--format", "json"
-                ],
-                currentDirectory: directory.path,
-                swiftLintAvailability: .unavailable(.executableNotFound),
-                llmProvider: CLIFailingLLMProvider()
-            )
-            let failedReport = try JSONDecoder().decode(
-                ReviewReport.self,
-                from: Data(failedResult.output.utf8)
-            )
-            let failedFinding = try #require(failedReport.findings.first)
-
-            #expect(failedFinding.evidence == baselineFinding.evidence)
-            #expect(failedFinding.suggestion == baselineFinding.suggestion)
-            #expect(
-                failedReport.analyzerResults.first?.diagnostics.contains {
-                    $0.code == "ARCAN-LLM-SUGGESTION-FAILED"
-                } == true
-            )
         }
     }
 
@@ -311,13 +161,13 @@ struct ArcanCommandTests {
                 swiftLintAvailability: .available(executable)
             )
             let report = try JSONDecoder().decode(
-                ReviewReport.self,
+                ReviewAnalysisResult.self,
                 from: Data(result.output.utf8)
             )
             let analyzerResult = try #require(
                 report.analyzerResults.first
             )
-            let finding = try #require(analyzerResult.findings.first)
+            let candidate = try #require(analyzerResult.candidates.first)
 
             #expect(result.exitCode == 1)
             #expect(result.exitStatus == .findingsDetected)
@@ -327,10 +177,15 @@ struct ArcanCommandTests {
             )
             #expect(analyzerResult.analyzerID == "swiftlint")
             #expect(analyzerResult.tool?.version == "test-version")
-            #expect(finding.ruleID == "swiftlint.trailing_semicolon")
-            #expect(finding.externalRuleID == "trailing_semicolon")
-            #expect(finding.sources == ["swiftlint"])
-            #expect(report.findings.first?.sources == ["swiftlint"])
+            #expect(candidate.ruleID == "swiftlint.trailing_semicolon")
+            #expect(
+                candidate.analyzerMetadata["rule_id"]
+                    == .string("trailing_semicolon")
+            )
+            #expect(candidate.sourceIdentifiers == ["swiftlint"])
+            #expect(
+                report.candidates.first?.sourceIdentifiers == ["swiftlint"]
+            )
         }
     }
 
@@ -555,7 +410,7 @@ struct ArcanCommandTests {
             #expect(
                 result.reviewRequest?.selectedReviewTypes == [.style]
             )
-            #expect(result.output.contains("0 findings"))
+            #expect(result.output.contains("0 candidates"))
             #expect(result.output.contains("1 analyzer skipped"))
             #expect(
                 result.output.contains("ARCAN-SWIFTLINT-UNAVAILABLE")
@@ -580,7 +435,7 @@ struct ArcanCommandTests {
                 "--format", "json"
             ])
             let report = try JSONDecoder().decode(
-                ReviewReport.self,
+                ReviewAnalysisResult.self,
                 from: Data(result.output.utf8)
             )
             let analyzerResult = try #require(
@@ -589,7 +444,7 @@ struct ArcanCommandTests {
 
             #expect(result.exitCode == 0)
             #expect(analyzerResult.executionStatus == .skipped)
-            #expect(analyzerResult.findings.isEmpty)
+            #expect(analyzerResult.candidates.isEmpty)
             #expect(
                 analyzerResult.diagnostics.map(\.code)
                     == ["ARCAN-SWIFTLINT-UNAVAILABLE"]

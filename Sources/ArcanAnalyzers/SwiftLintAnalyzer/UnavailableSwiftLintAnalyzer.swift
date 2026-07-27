@@ -23,7 +23,7 @@ public struct UnavailableSwiftLintAnalyzer: Analyzer {
         case .optional:
             AnalyzerResult(
                 analyzerID: id,
-                findings: [],
+                candidates: [],
                 tool: ToolMetadata(name: "SwiftLint"),
                 executionStatus: .skipped,
                 diagnostics: [

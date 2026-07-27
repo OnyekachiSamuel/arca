@@ -1,5 +1,5 @@
 import ArcanDomain
 
 public protocol Reporter: Sendable {
-    func render(report: ReviewReport) throws -> String
+    func render(analysis: ReviewAnalysisResult) throws -> String
 }

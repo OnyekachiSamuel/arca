@@ -1,9 +1,11 @@
 public enum FindingEvidence: Codable, Equatable, Sendable {
     case metric(MetricEvidence)
+    case analyzer(AnalyzerEvidence)
     case sourceCode(SourceCodeEvidence)
 
     private enum Kind: String, Codable {
         case metric
+        case analyzer
         case sourceCode
     }
 
@@ -15,6 +17,7 @@ public enum FindingEvidence: Codable, Equatable, Sendable {
         case description
         case range
         case excerpt
+        case externalRuleID
     }
 
     public init(from decoder: any Decoder) throws {
@@ -35,6 +38,23 @@ public enum FindingEvidence: Codable, Equatable, Sendable {
                     thresholdValue: try container.decode(
                         Int.self,
                         forKey: .thresholdValue
+                    )
+                )
+            )
+        case .analyzer:
+            self = .analyzer(
+                AnalyzerEvidence(
+                    description: try container.decode(
+                        String.self,
+                        forKey: .description
+                    ),
+                    externalRuleID: try container.decodeIfPresent(
+                        String.self,
+                        forKey: .externalRuleID
+                    ),
+                    range: try container.decodeIfPresent(
+                        SourceRange.self,
+                        forKey: .range
                     )
                 )
             )
@@ -76,6 +96,14 @@ public enum FindingEvidence: Codable, Equatable, Sendable {
                 evidence.thresholdValue,
                 forKey: .thresholdValue
             )
+        case .analyzer(let evidence):
+            try container.encode(Kind.analyzer, forKey: .kind)
+            try container.encode(evidence.description, forKey: .description)
+            try container.encodeIfPresent(
+                evidence.externalRuleID,
+                forKey: .externalRuleID
+            )
+            try container.encodeIfPresent(evidence.range, forKey: .range)
         case .sourceCode(let evidence):
             try container.encode(Kind.sourceCode, forKey: .kind)
             try container.encode(

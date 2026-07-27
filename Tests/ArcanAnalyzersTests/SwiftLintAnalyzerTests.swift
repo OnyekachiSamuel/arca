@@ -54,13 +54,12 @@ struct SwiftLintAnalyzerTests {
             name: "SwiftLint",
             version: "0.63.2"
         ))
-        #expect(result.findings.count == 2)
-        let first = try #require(result.findings.first)
+        #expect(result.candidates.count == 2)
+        let first = try #require(result.candidates.first)
         #expect(first.ruleID == "swiftlint.force_cast")
-        #expect(first.externalRuleID == "force_cast")
         #expect(first.title == "Force Cast")
-        #expect(first.category == .style)
-        #expect(first.severity == .error)
+        #expect(first.proposedCategory == .style)
+        #expect(first.proposedSeverity == .error)
         #expect(first.filePath == "/project/Sources/Alpha.swift")
         #expect(first.range == SourceRange(
             startLine: 3,
@@ -69,9 +68,15 @@ struct SwiftLintAnalyzerTests {
             endColumn: 5
         ))
         #expect(first.explanation == "Force casts should be avoided.")
-        #expect(first.evidence.isEmpty)
-        #expect(first.suggestion == nil)
-        #expect(first.metadata == [
+        #expect(first.evidence == [
+            .analyzer(AnalyzerEvidence(
+                description: "Force casts should be avoided.",
+                externalRuleID: "force_cast",
+                range: first.range
+            ))
+        ])
+        #expect(first.sourceIdentifiers == ["swiftlint"])
+        #expect(first.analyzerMetadata == [
             "rule_id": .string("force_cast"),
             "reason": .string("Force casts should be avoided."),
             "line": .integer(3),
@@ -80,12 +85,17 @@ struct SwiftLintAnalyzerTests {
             "type": .string("Force Cast"),
             "file": .string("/project/Sources/Alpha.swift")
         ])
-        let second = try #require(result.findings.last)
-        #expect(second.externalRuleID == "trailing_semicolon")
-        #expect(second.category == .style)
-        #expect(second.severity == .warning)
+        let second = try #require(result.candidates.last)
+        #expect(
+            second.analyzerMetadata["rule_id"]
+                == .string("trailing_semicolon")
+        )
+        #expect(second.proposedCategory == .style)
+        #expect(second.proposedSeverity == .warning)
         #expect(second.filePath == "/project/Sources/Zeta.swift")
-        #expect(second.metadata["severity"] == .string("Warning"))
+        #expect(
+            second.analyzerMetadata["severity"] == .string("Warning")
+        )
 
         let requests = await runner.recordedRequests
         #expect(requests == [
@@ -136,7 +146,7 @@ struct SwiftLintAnalyzerTests {
             context: analysisContext(paths: ["/project/App.swift"])
         )
 
-        #expect(result.findings.map(\.externalRuleID) == ["example_rule"])
+        #expect(result.candidates.map(\.ruleID) == ["swiftlint.example_rule"])
     }
 
     @Test("continues when the tool version is unavailable")
@@ -158,7 +168,7 @@ struct SwiftLintAnalyzerTests {
             name: "SwiftLint",
             version: nil
         ))
-        #expect(result.findings.isEmpty)
+        #expect(result.candidates.isEmpty)
     }
 
     @Test("reports malformed SwiftLint JSON")
@@ -246,8 +256,9 @@ struct SwiftLintAnalyzerTests {
         )
 
         #expect(
-            result.findings.contains {
-                $0.externalRuleID == "trailing_semicolon"
+            result.candidates.contains {
+                $0.analyzerMetadata["rule_id"]
+                    == .string("trailing_semicolon")
             }
         )
         #expect(result.tool?.version?.isEmpty == false)
@@ -346,7 +357,7 @@ struct SwiftLintAnalyzerTests {
 
         #expect(result.analyzerID == "swiftlint")
         #expect(result.executionStatus == .skipped)
-        #expect(result.findings.isEmpty)
+        #expect(result.candidates.isEmpty)
         #expect(result.tool == ToolMetadata(name: "SwiftLint"))
         #expect(
             result.diagnostics.map(\.code)

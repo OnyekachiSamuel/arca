@@ -73,7 +73,7 @@ struct FindingCandidateCodableTests {
         )
     }
 
-    @Test("evidence JSON identifies metric and source-code variants")
+    @Test("evidence JSON identifies metric, analyzer and source-code variants")
     func evidenceKinds() throws {
         let evidence: [FindingEvidence] = [
             .metric(
@@ -81,6 +81,13 @@ struct FindingCandidateCodableTests {
                     metricName: "lineCount",
                     observedValue: 420,
                     thresholdValue: 300
+                )
+            ),
+            .analyzer(
+                AnalyzerEvidence(
+                    description: "SwiftLint reported a force cast.",
+                    externalRuleID: "force_cast",
+                    range: nil
                 )
             ),
             .sourceCode(
@@ -109,9 +116,39 @@ struct FindingCandidateCodableTests {
 
         #expect(objects.map { $0["kind"] as? String } == [
             "metric",
+            "analyzer",
             "sourceCode"
         ])
         #expect(decoded == evidence)
+    }
+
+    @Test("unlocated analyzer candidates remain representable")
+    func unlocatedCandidateRoundTrip() throws {
+        let candidate = try FindingCandidate(
+            candidateID: UUID(),
+            ruleID: "swiftlint.example",
+            title: "Example",
+            explanation: "External analyzer output.",
+            filePath: "Sources/App.swift",
+            range: nil,
+            proposedSeverity: .warning,
+            proposedCategory: .style,
+            evidence: [
+                .analyzer(AnalyzerEvidence(
+                    description: "External analyzer output.",
+                    externalRuleID: "example"
+                ))
+            ],
+            sourceIdentifiers: ["swiftlint"]
+        )
+
+        let decoded = try JSONDecoder().decode(
+            FindingCandidate.self,
+            from: JSONEncoder().encode(candidate)
+        )
+
+        #expect(decoded == candidate)
+        #expect(decoded.range == nil)
     }
 
     @Test("candidate requires at least one source identifier")

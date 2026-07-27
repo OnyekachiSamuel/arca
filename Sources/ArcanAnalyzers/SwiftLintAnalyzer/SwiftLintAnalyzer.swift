@@ -34,7 +34,7 @@ public struct SwiftLintAnalyzer: Analyzer {
         guard !paths.isEmpty else {
             return AnalyzerResult(
                 analyzerID: id,
-                findings: [],
+                candidates: [],
                 tool: ToolMetadata(name: "SwiftLint")
             )
         }
@@ -59,16 +59,17 @@ public struct SwiftLintAnalyzer: Analyzer {
         }
 
         let violations = try decodeViolations(from: result)
-        let findingMapper = SwiftLintFindingMapper(
-            workingDirectoryURL: workingDirectoryURL
+        let candidateMapper = SwiftLintCandidateMapper(
+            workingDirectoryURL: workingDirectoryURL,
+            analyzerID: id
         )
-        let findings = try violations
-            .map(findingMapper.map)
-            .sorted(by: findingsAreInStableOrder)
+        let candidates = try violations
+            .map(candidateMapper.map)
+            .sorted(by: candidatesAreInStableOrder)
 
         return AnalyzerResult(
             analyzerID: id,
-            findings: findings,
+            candidates: candidates,
             tool: ToolMetadata(name: "SwiftLint", version: version)
         )
     }
@@ -123,21 +124,21 @@ public struct SwiftLintAnalyzer: Analyzer {
         }
     }
 
-    private func findingsAreInStableOrder(
-        _ left: Finding,
-        _ right: Finding
+    private func candidatesAreInStableOrder(
+        _ left: FindingCandidate,
+        _ right: FindingCandidate
     ) -> Bool {
         let leftLocation = (
             left.filePath,
             left.range?.startLine ?? 0,
             left.range?.startColumn ?? 0,
-            left.externalRuleID ?? ""
+            left.ruleID
         )
         let rightLocation = (
             right.filePath,
             right.range?.startLine ?? 0,
             right.range?.startColumn ?? 0,
-            right.externalRuleID ?? ""
+            right.ruleID
         )
 
         if leftLocation.0 != rightLocation.0 {

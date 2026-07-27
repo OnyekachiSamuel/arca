@@ -11,7 +11,7 @@ public struct FindingCandidate:
     public let title: String
     public let explanation: String
     public let filePath: String
-    public let range: SourceRange
+    public let range: SourceRange?
     public let proposedSeverity: Severity
     public let proposedCategory: FindingCategory
     public let evidence: [FindingEvidence]
@@ -28,7 +28,7 @@ public struct FindingCandidate:
         title: String,
         explanation: String,
         filePath: String,
-        range: SourceRange,
+        range: SourceRange?,
         proposedSeverity: Severity,
         proposedCategory: FindingCategory,
         evidence: [FindingEvidence],
@@ -47,7 +47,7 @@ public struct FindingCandidate:
         guard !filePath.isBlank else {
             throw FindingCandidateValidationError.missingFilePath
         }
-        guard Self.isValid(range) else {
+        guard range.map(Self.isValid) ?? true else {
             throw FindingCandidateValidationError.invalidSourceRange
         }
         guard !evidence.isEmpty else {
@@ -105,7 +105,10 @@ public struct FindingCandidate:
                 forKey: .explanation
             ),
             filePath: container.decode(String.self, forKey: .filePath),
-            range: container.decode(SourceRange.self, forKey: .range),
+            range: container.decodeIfPresent(
+                SourceRange.self,
+                forKey: .range
+            ),
             proposedSeverity: container.decode(
                 Severity.self,
                 forKey: .proposedSeverity
@@ -137,7 +140,7 @@ public struct FindingCandidate:
         try container.encode(title, forKey: .title)
         try container.encode(explanation, forKey: .explanation)
         try container.encode(filePath, forKey: .filePath)
-        try container.encode(range, forKey: .range)
+        try container.encodeIfPresent(range, forKey: .range)
         try container.encode(proposedSeverity, forKey: .proposedSeverity)
         try container.encode(proposedCategory, forKey: .proposedCategory)
         try container.encode(evidence, forKey: .evidence)
@@ -151,6 +154,8 @@ public struct FindingCandidate:
         switch evidence {
         case .metric:
             true
+        case .analyzer(let analyzerEvidence):
+            analyzerEvidence.range.map(isValid) ?? true
         case .sourceCode(let sourceCodeEvidence):
             isValid(sourceCodeEvidence.range)
         }

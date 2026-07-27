@@ -10,14 +10,16 @@ public struct TerminalReporter: Reporter {
         }
     }
 
-    public func render(report: ReviewReport) throws -> String {
+    public func render(analysis: ReviewAnalysisResult) throws -> String {
         let usesColor = outputIsTTY()
-        let findingLabel = report.findings.count == 1 ? "finding" : "findings"
+        let candidateLabel = analysis.candidates.count == 1
+            ? "candidate"
+            : "candidates"
         var lines = [
-            "ARCAN Review Report",
-            "\(report.findings.count) \(findingLabel)"
+            "ARCAN Review Analysis",
+            "\(analysis.candidates.count) \(candidateLabel)"
         ]
-        let skippedCount = report.analyzerResults.filter {
+        let skippedCount = analysis.analyzerResults.filter {
             $0.executionStatus == .skipped
         }.count
         if skippedCount > 0 {
@@ -25,19 +27,18 @@ public struct TerminalReporter: Reporter {
             lines.append("\(skippedCount) \(analyzerLabel) skipped")
         }
 
-        for finding in report.findings {
+        for candidate in analysis.candidates {
             lines.append("")
             lines.append(
-                "\(severityLabel(for: finding.severity, usesColor: usesColor)) "
-                    + "\(finding.ruleID): \(finding.title)"
+                "\(severityLabel(for: candidate.proposedSeverity, usesColor: usesColor)) "
+                    + "\(candidate.ruleID): \(candidate.title)"
             )
-            lines.append("File: \(location(for: finding))")
-            lines.append("Explanation: \(finding.explanation)")
-            appendEvidence(finding.evidence, to: &lines)
-            appendSuggestion(finding.suggestion, to: &lines)
+            lines.append("File: \(location(for: candidate))")
+            lines.append("Explanation: \(candidate.explanation)")
+            appendEvidence(candidate.evidence, to: &lines)
         }
 
-        for diagnostic in report.analyzerResults.flatMap(\.diagnostics) {
+        for diagnostic in analysis.diagnostics {
             lines.append("")
             lines.append(
                 "\(severityLabel(for: diagnostic.severity, usesColor: usesColor)) "
@@ -69,44 +70,33 @@ public struct TerminalReporter: Reporter {
         return "\u{001B}[\(colorCode)m\(label)\u{001B}[0m"
     }
 
-    private func location(for finding: Finding) -> String {
-        guard let range = finding.range else {
-            return finding.filePath
+    private func location(for candidate: FindingCandidate) -> String {
+        guard let range = candidate.range else {
+            return candidate.filePath
         }
-        return "\(finding.filePath):\(range.startLine):\(range.startColumn)"
+        return "\(candidate.filePath):\(range.startLine):\(range.startColumn)"
             + "-\(range.endLine):\(range.endColumn)"
     }
 
     private func appendEvidence(
-        _ evidence: [Evidence],
+        _ evidence: [FindingEvidence],
         to lines: inout [String]
     ) {
         guard !evidence.isEmpty else { return }
 
         lines.append("Evidence:")
         for item in evidence {
-            lines.append(
-                "  - \(item.metric): \(item.observedValue) "
-                    + "(threshold: \(item.thresholdValue))"
-            )
-        }
-    }
-
-    private func appendSuggestion(
-        _ suggestion: Suggestion?,
-        to lines: inout [String]
-    ) {
-        guard let suggestion else { return }
-
-        lines.append("Suggestion: \(suggestion.summary)")
-        for (index, step) in suggestion.steps.enumerated() {
-            lines.append("  \(index + 1). \(step)")
-        }
-        if let codeExample = suggestion.codeExample {
-            lines.append("Code example:")
-            lines.append("```swift")
-            lines.append(codeExample)
-            lines.append("```")
+            switch item {
+            case .metric(let metric):
+                lines.append(
+                    "  - \(metric.metricName): \(metric.observedValue) "
+                        + "(threshold: \(metric.thresholdValue))"
+                )
+            case .analyzer(let analyzer):
+                lines.append("  - \(analyzer.description)")
+            case .sourceCode(let sourceCode):
+                lines.append("  - \(sourceCode.description)")
+            }
         }
     }
 }

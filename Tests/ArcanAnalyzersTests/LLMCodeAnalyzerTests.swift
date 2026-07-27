@@ -22,7 +22,6 @@ struct LLMCodeAnalyzerTests {
         ]))
 
         #expect(result.analyzerID == "llm-code-analysis")
-        #expect(result.findings.isEmpty)
         #expect(result.candidates.map(\.filePath) == [
             "First.swift", "Second.swift"
         ])

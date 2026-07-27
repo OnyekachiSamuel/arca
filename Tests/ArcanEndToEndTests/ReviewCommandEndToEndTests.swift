@@ -48,7 +48,7 @@ struct ReviewCommandEndToEndTests {
             "--format", "json"
         ])
         let report = try JSONDecoder().decode(
-            ReviewReport.self,
+            ReviewAnalysisResult.self,
             from: result.standardOutput
         )
         let output = String(decoding: result.standardOutput, as: UTF8.self)
@@ -61,18 +61,18 @@ struct ReviewCommandEndToEndTests {
         #expect(result.exitCode == 1, Comment(rawValue: errorOutput))
         #expect(result.standardError.isEmpty)
         #expect(
-            report.schemaVersion == ReviewReport.currentSchemaVersion
+            report.schemaVersion == ReviewAnalysisResult.currentSchemaVersion
         )
-        #expect(report.findings.first?.ruleID == "ARCAN-GOD-001")
-        #expect(report.findings.first?.filePath == expectedPath)
-        #expect(report.findings.first?.category == .antiPattern)
-        #expect(report.findings.first?.sources == ["god-object"])
+        #expect(report.candidates.first?.ruleID == "ARCAN-GOD-001")
+        #expect(report.candidates.first?.filePath == expectedPath)
+        #expect(report.candidates.first?.proposedCategory == .antiPattern)
+        #expect(report.candidates.first?.sourceIdentifiers == ["god-object"])
         #expect(
-            report.analyzerResults.first?.findings.first?.sources
+            report.analyzerResults.first?.candidates.first?.sourceIdentifiers
                 == ["god-object"]
         )
         #expect(
-            report.findings.first?.metadata["typeName"]
+            report.candidates.first?.analyzerMetadata["typeName"]
                 == .string("LargeCoordinator")
         )
         #expect(
@@ -107,7 +107,7 @@ struct ReviewCommandEndToEndTests {
             ]
         )
         let report = try JSONDecoder().decode(
-            ReviewReport.self,
+            ReviewAnalysisResult.self,
             from: result.standardOutput
         )
         let analyzerResult = try #require(
@@ -142,7 +142,7 @@ struct ReviewCommandEndToEndTests {
         #expect(result.exitCode == 0)
         #expect(
             String(decoding: result.standardOutput, as: UTF8.self)
-                .contains("0 findings")
+                .contains("0 candidates")
         )
         #expect(result.standardError.isEmpty)
     }

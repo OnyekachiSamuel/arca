@@ -142,7 +142,6 @@ public struct LLMCodeAnalyzer: Analyzer {
     ) -> AnalyzerResult {
         AnalyzerResult(
             analyzerID: id,
-            findings: [],
             candidates: candidates,
             tool: ToolMetadata(name: provider.id, version: modelID),
             executionStatus: executionStatus,

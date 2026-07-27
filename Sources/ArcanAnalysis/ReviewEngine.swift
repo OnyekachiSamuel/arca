@@ -2,48 +2,36 @@ import ArcanDomain
 
 public struct ReviewEngine: Sendable {
     private let runner: AnalyzerRunner
-    private let findingNormalizer: FindingNormalizer
+    private let candidateAggregator: FindingCandidateAggregator
 
     public init(
         runner: AnalyzerRunner = AnalyzerRunner(),
-        findingNormalizer: FindingNormalizer = FindingNormalizer()
+        candidateAggregator: FindingCandidateAggregator =
+            FindingCandidateAggregator()
     ) {
         self.runner = runner
-        self.findingNormalizer = findingNormalizer
+        self.candidateAggregator = candidateAggregator
     }
 
     public func review(
         analyzers: [any Analyzer],
         context: AnalysisContext
-    ) async throws -> ReviewReport {
+    ) async throws -> ReviewAnalysisResult {
         let rawAnalyzerResults = try await runner.run(
             analyzers,
             context: context
         )
-        let analyzerResults = try rawAnalyzerResults.map { result in
-            AnalyzerResult(
-                analyzerID: result.analyzerID,
-                findings: try result.findings.map {
-                    try findingNormalizer.normalize(
-                        $0,
-                        repositoryRoot: context.request.repositoryRoot,
-                        sourceIdentifier: result.analyzerID
-                    )
-                },
-                candidates: result.candidates,
-                tool: result.tool,
-                executionStatus: result.executionStatus,
-                diagnostics: result.diagnostics,
-                durationMilliseconds: result.durationMilliseconds,
-                llmExecutionMetadata: result.llmExecutionMetadata
-            )
-        }
+        let aggregation = try candidateAggregator.aggregate(
+            rawAnalyzerResults,
+            repositoryRoot: context.request.repositoryRoot
+        )
 
-        return ReviewReport(
-            schemaVersion: ReviewReport.currentSchemaVersion,
+        return ReviewAnalysisResult(
+            schemaVersion: ReviewAnalysisResult.currentSchemaVersion,
             requestID: context.request.id,
-            findings: analyzerResults.flatMap(\.findings),
-            analyzerResults: analyzerResults
+            candidates: aggregation.candidates,
+            analyzerResults: aggregation.analyzerResults,
+            diagnostics: aggregation.analyzerResults.flatMap(\.diagnostics)
         )
     }
 }

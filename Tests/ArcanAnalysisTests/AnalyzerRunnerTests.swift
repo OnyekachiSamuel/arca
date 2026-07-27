@@ -31,7 +31,6 @@ struct AnalyzerRunnerTests {
         )
         let analyzerResult = AnalyzerResult(
             analyzerID: "mock",
-            findings: [],
             candidates: [try candidate()],
             tool: ToolMetadata(name: "MockTool", version: "1.2.3"),
             llmExecutionMetadata: LLMAnalyzerExecutionMetadata(
@@ -54,7 +53,6 @@ struct AnalyzerRunnerTests {
         let result = try await runner.run(analyzer, context: context)
 
         #expect(result.analyzerID == "mock")
-        #expect(result.findings.isEmpty)
         #expect(
             result.tool == ToolMetadata(
                 name: "MockTool",
@@ -248,7 +246,7 @@ private struct RecordingAnalyzer: Analyzer {
 
     func analyze(context: AnalysisContext) async throws -> AnalyzerResult {
         await recorder.recordInvocation()
-        return AnalyzerResult(analyzerID: id, findings: [])
+        return AnalyzerResult(analyzerID: id, candidates: [])
     }
 }
 
@@ -268,7 +266,7 @@ private struct OrderedAnalyzer: Analyzer {
     func analyze(context: AnalysisContext) async throws -> AnalyzerResult {
         await recorder.record("\(id)-start")
         await recorder.record("\(id)-end")
-        return AnalyzerResult(analyzerID: id, findings: [])
+        return AnalyzerResult(analyzerID: id, candidates: [])
     }
 }
 
