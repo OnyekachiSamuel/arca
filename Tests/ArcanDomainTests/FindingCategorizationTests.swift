@@ -12,6 +12,7 @@ struct FindingCategorizationTests {
                 candidateIDs: [
                     UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
                 ],
+                sourceIdentifiers: ["god-object"],
                 assessment: .confirmed,
                 category: .antiPattern,
                 severity: .warning,

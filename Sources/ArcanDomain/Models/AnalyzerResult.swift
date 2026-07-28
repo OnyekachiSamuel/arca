@@ -7,7 +7,7 @@ public struct AnalyzerResult: Codable, Equatable, Sendable {
     public let executionStatus: AnalyzerExecutionStatus
     public let diagnostics: [AnalyzerDiagnostic]
     public let durationMilliseconds: Int
-    public let llmExecutionMetadata: LLMAnalyzerExecutionMetadata?
+    public let llmExecutionMetadata: LLMExecutionMetadata?
 
     public init(
         analyzerID: String,
@@ -16,7 +16,7 @@ public struct AnalyzerResult: Codable, Equatable, Sendable {
         executionStatus: AnalyzerExecutionStatus = .completed,
         diagnostics: [AnalyzerDiagnostic] = [],
         durationMilliseconds: Int = 0,
-        llmExecutionMetadata: LLMAnalyzerExecutionMetadata? = nil
+        llmExecutionMetadata: LLMExecutionMetadata? = nil
     ) {
         self.analyzerID = analyzerID
         self.candidates = candidates

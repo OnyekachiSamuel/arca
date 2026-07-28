@@ -33,7 +33,7 @@ struct AnalyzerRunnerTests {
             analyzerID: "mock",
             candidates: [try candidate()],
             tool: ToolMetadata(name: "MockTool", version: "1.2.3"),
-            llmExecutionMetadata: LLMAnalyzerExecutionMetadata(
+            llmExecutionMetadata: LLMExecutionMetadata(
                 providerID: "mock-provider",
                 modelID: "mock-model",
                 requestCount: 1,

@@ -1,8 +1,4 @@
-public struct LLMAnalyzerExecutionMetadata:
-    Codable,
-    Equatable,
-    Sendable
-{
+public struct LLMExecutionMetadata: Codable, Equatable, Sendable {
     public let providerID: String
     public let modelID: String
     public let requestCount: Int

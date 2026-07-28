@@ -38,7 +38,7 @@ struct LLMCodeAnalyzerTests {
         )
         #expect(
             result.llmExecutionMetadata
-                == LLMAnalyzerExecutionMetadata(
+                == LLMExecutionMetadata(
                     providerID: "mock-provider",
                     modelID: "mock-model",
                     requestCount: 2,

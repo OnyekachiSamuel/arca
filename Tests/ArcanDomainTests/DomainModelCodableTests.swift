@@ -313,7 +313,7 @@ struct DomainModelCodableTests {
         let result = AnalyzerResult(
             analyzerID: "llm-code-analysis",
             candidates: [candidate],
-            llmExecutionMetadata: LLMAnalyzerExecutionMetadata(
+            llmExecutionMetadata: LLMExecutionMetadata(
                 providerID: "ollama",
                 modelID: "qwen",
                 requestCount: 2,

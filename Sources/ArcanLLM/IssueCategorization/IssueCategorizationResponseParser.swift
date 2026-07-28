@@ -73,6 +73,9 @@ public struct IssueCategorizationResponseParser: Sendable {
         }
 
         let suppliedIDs = Set(candidates.map(\.candidateID))
+        let candidatesByID = Dictionary(
+            uniqueKeysWithValues: candidates.map { ($0.candidateID, $0) }
+        )
         var referencedIDs: Set<UUID> = []
         var decisions: [FindingCategorizationDecision] = []
 
@@ -130,6 +133,10 @@ public struct IssueCategorizationResponseParser: Sendable {
 
             decisions.append(FindingCategorizationDecision(
                 candidateIDs: decision.candidateIDs,
+                sourceIdentifiers: sourceIdentifiers(
+                    for: decision.candidateIDs,
+                    candidatesByID: candidatesByID
+                ),
                 assessment: decision.assessment,
                 category: decision.category,
                 severity: decision.severity,
@@ -157,6 +164,16 @@ public struct IssueCategorizationResponseParser: Sendable {
             ),
             diagnostics: []
         )
+    }
+
+    private func sourceIdentifiers(
+        for candidateIDs: [UUID],
+        candidatesByID: [UUID: FindingCandidate]
+    ) -> [String] {
+        var encountered: Set<String> = []
+        return candidateIDs.flatMap {
+            candidatesByID[$0]?.sourceIdentifiers ?? []
+        }.filter { encountered.insert($0).inserted }
     }
 
     private func invalidJSON() -> IssueCategorizationParsingResult {

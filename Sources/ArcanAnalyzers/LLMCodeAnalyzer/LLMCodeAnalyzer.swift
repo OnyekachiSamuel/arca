@@ -146,7 +146,7 @@ public struct LLMCodeAnalyzer: Analyzer {
             tool: ToolMetadata(name: provider.id, version: modelID),
             executionStatus: executionStatus,
             diagnostics: diagnostics,
-            llmExecutionMetadata: LLMAnalyzerExecutionMetadata(
+            llmExecutionMetadata: LLMExecutionMetadata(
                 providerID: provider.id,
                 modelID: modelID,
                 requestCount: metrics.requestCount,

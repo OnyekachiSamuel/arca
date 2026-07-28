@@ -1,11 +1,8 @@
 import Foundation
 
-public struct FindingCategorizationDecision:
-    Codable,
-    Equatable,
-    Sendable
-{
+public struct FindingCategorizationDecision: Codable, Equatable, Sendable {
     public let candidateIDs: [UUID]
+    public let sourceIdentifiers: [String]
     public let assessment: FindingAssessment
     public let category: FindingCategory
     public let severity: Severity
@@ -15,6 +12,7 @@ public struct FindingCategorizationDecision:
 
     public init(
         candidateIDs: [UUID],
+        sourceIdentifiers: [String],
         assessment: FindingAssessment,
         category: FindingCategory,
         severity: Severity,
@@ -23,6 +21,7 @@ public struct FindingCategorizationDecision:
         rationale: String
     ) {
         self.candidateIDs = candidateIDs
+        self.sourceIdentifiers = sourceIdentifiers
         self.assessment = assessment
         self.category = category
         self.severity = severity
