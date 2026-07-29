@@ -49,6 +49,82 @@ public struct TerminalReporter: Reporter {
         return lines.joined(separator: "\n")
     }
 
+    public func render(report: ReviewReport) throws -> String {
+        let usesColor = outputIsTTY()
+        let counts = report.counts
+        var lines = [
+            "ARCAN Categorized Review",
+            "Summary: \(report.categorizationSummary ?? "Categorization unavailable.")",
+            "",
+            "Counts:",
+            "  Candidates: \(counts.totalCandidates)",
+            "  Confirmed: \(counts.confirmed)",
+            "  Rejected: \(counts.rejected)",
+            "  Uncertain: \(counts.uncertain)",
+            "",
+            "Findings by category:"
+        ]
+        if counts.findingsPerCategory.isEmpty {
+            lines.append("  None")
+        } else {
+            lines.append(contentsOf: counts.findingsPerCategory.map {
+                "  \($0.category.rawValue): \($0.count)"
+            })
+        }
+
+        appendFindings(
+            report.confirmedFindings,
+            heading: "Confirmed findings:",
+            usesColor: usesColor,
+            to: &lines
+        )
+        appendFindings(
+            report.uncertainFindings,
+            heading: "Uncertain findings:",
+            usesColor: usesColor,
+            to: &lines
+        )
+
+        for diagnostic in report.diagnostics {
+            lines.append("")
+            lines.append(
+                "\(severityLabel(for: diagnostic.severity, usesColor: usesColor)) "
+                    + "\(diagnostic.code): \(diagnostic.message)"
+            )
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    private func appendFindings(
+        _ findings: [Finding],
+        heading: String,
+        usesColor: Bool,
+        to lines: inout [String]
+    ) {
+        guard !findings.isEmpty else { return }
+        lines.append("")
+        lines.append(heading)
+
+        for finding in findings {
+            lines.append("")
+            lines.append(
+                "\(severityLabel(for: finding.severity, usesColor: usesColor)) "
+                    + "\(finding.ruleID): \(finding.title)"
+            )
+            lines.append("Assessment: \(finding.assessment.rawValue)")
+            lines.append("Sources: \(finding.sources.joined(separator: ", "))")
+            lines.append("Candidates:")
+            for candidate in finding.candidates {
+                lines.append(
+                    "  - \(candidate.candidateID.uuidString) "
+                        + location(for: candidate)
+                )
+            }
+            lines.append("Rationale: \(finding.classificationRationale)")
+        }
+    }
+
     private func severityLabel(
         for severity: Severity,
         usesColor: Bool

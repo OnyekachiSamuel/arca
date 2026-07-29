@@ -97,8 +97,8 @@ struct LLMSuggestionGeneratorTests {
         #expect(diagnostic.code == "ARCAN-LLM-SUGGESTION-INVALID")
     }
 
-    private var finding: Finding {
-        Finding(
+    private var finding: SuggestionFinding {
+        SuggestionFinding(
             id: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
             ruleID: "ARCAN-GOD-001",
             title: "God Object candidate",

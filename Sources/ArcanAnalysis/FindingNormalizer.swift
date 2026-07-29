@@ -5,13 +5,13 @@ public struct FindingNormalizer: Sendable {
     public init() {}
 
     public func normalize(
-        _ finding: Finding,
+        _ finding: SuggestionFinding,
         repositoryRoot: String?,
         sourceIdentifier: String? = nil
-    ) throws -> Finding {
+    ) throws -> SuggestionFinding {
         try validate(finding.range, filePath: finding.filePath)
 
-        return Finding(
+        return SuggestionFinding(
             id: finding.id,
             ruleID: finding.ruleID,
             externalRuleID: finding.externalRuleID,

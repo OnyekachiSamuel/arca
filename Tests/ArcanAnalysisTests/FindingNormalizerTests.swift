@@ -118,8 +118,8 @@ struct FindingNormalizerTests {
             endColumn: 8
         ),
         sources: [String] = ["llm.general"]
-    ) -> Finding {
-        Finding(
+    ) -> SuggestionFinding {
+        SuggestionFinding(
             id: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
             ruleID: "swiftlint.example",
             externalRuleID: "example",

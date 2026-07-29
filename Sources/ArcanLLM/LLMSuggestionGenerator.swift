@@ -28,7 +28,7 @@ public struct LLMSuggestionGenerator: Sendable {
     }
 
     public func generate(
-        for finding: Finding,
+        for finding: SuggestionFinding,
         sourceContext: SourceContextWindow
     ) async throws -> SuggestionParsingResult {
         let prompt = try promptBuilder.build(

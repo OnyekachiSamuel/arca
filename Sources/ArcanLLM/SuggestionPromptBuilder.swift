@@ -15,7 +15,7 @@ public struct SuggestionPromptBuilder: Sendable {
     }
 
     public func build(
-        finding: Finding,
+        finding: SuggestionFinding,
         sourceContext: SourceContextWindow
     ) throws -> SuggestionPrompt {
         guard limits.maximumSourceUTF8Bytes > 0,
@@ -77,7 +77,7 @@ public struct SuggestionPromptBuilder: Sendable {
     }
 
     private func makeFindingInput(
-        from finding: Finding
+        from finding: SuggestionFinding
     ) -> SuggestionFindingInput {
         SuggestionFindingInput(
             ruleID: finding.ruleID,

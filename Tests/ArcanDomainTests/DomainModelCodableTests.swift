@@ -47,22 +47,14 @@ struct DomainModelCodableTests {
 
     @Test("review report encoding and decoding of values")
     func reviewReport() throws {
-        let suggestion = Suggestion(
-            summary: "Split networking from presentation logic.",
-            steps: ["Extract an API client", "Move view state into a view model"],
-            codeExample: """
-            struct APIClient {
-                func load() async throws {}
-            }
-            """
-        )
-        let finding = Finding(
-            id: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
+        let candidateID = UUID(
+            uuidString: "11111111-2222-3333-4444-555555555555"
+        )!
+        let candidate = try FindingCandidate(
+            candidateID: candidateID,
             ruleID: "ARCAN-GOD-001",
-            externalRuleID: "type_body_length",
             title: "God Object candidate",
-            category: .antiPattern,
-            severity: .warning,
+            explanation: "The type has too many responsibilities.",
             filePath: "Sources/LargeCoordinator.swift",
             range: SourceRange(
                 startLine: 1,
@@ -70,22 +62,26 @@ struct DomainModelCodableTests {
                 endLine: 30,
                 endColumn: 2
             ),
-            explanation: "The type has too many responsibilities.",
-            evidence: [
-                Evidence(
-                    metric: "methods",
-                    observedValue: 30,
-                    thresholdValue: 25
-                )
-            ],
-            suggestion: suggestion,
-            sources: ["god-object", "llm.general"],
-            metadata: [
-                "typeName": .string("LargeCoordinator"),
-                "lineCount": .integer(30),
-                "isExtension": .boolean(false),
-                "score": .decimal(0.75)
-            ]
+            proposedSeverity: .warning,
+            proposedCategory: .antiPattern,
+            evidence: [.metric(MetricEvidence(
+                metricName: "methods",
+                observedValue: 30,
+                thresholdValue: 25
+            ))],
+            sourceIdentifiers: ["god-object"]
+        )
+        let finding = Finding(
+            id: candidateID,
+            candidateIDs: [candidateID],
+            assessment: .confirmed,
+            ruleID: "ARCAN-GOD-001",
+            title: "God Object",
+            category: .antiPattern,
+            severity: .warning,
+            classificationRationale: "The evidence supports the issue.",
+            sources: ["god-object"],
+            candidates: [candidate]
         )
         let analyzerResult = AnalyzerResult(
             analyzerID: "god-object",
@@ -96,8 +92,28 @@ struct DomainModelCodableTests {
         let report = ReviewReport(
             schemaVersion: ReviewReport.currentSchemaVersion,
             requestID: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!,
-            findings: [finding],
-            analyzerResults: [analyzerResult]
+            categorizationSummary: "One issue was confirmed.",
+            confirmedFindings: [finding],
+            uncertainFindings: [],
+            candidates: [candidate],
+            categorizationDecisions: [],
+            counts: ReviewReportCounts(
+                totalCandidates: 1,
+                confirmed: 1,
+                rejected: 0,
+                uncertain: 0,
+                findingsPerCategory: [
+                    CategoryFindingCount(category: .antiPattern, count: 1)
+                ]
+            ),
+            diagnostics: [],
+            analyzerResults: [analyzerResult],
+            categorizationExecutionMetadata: LLMExecutionMetadata(
+                providerID: "ollama",
+                modelID: "qwen",
+                requestCount: 1,
+                providerDurationMilliseconds: 10
+            )
         )
 
         let data = try encodeToJSON(report)
@@ -105,20 +121,9 @@ struct DomainModelCodableTests {
         let decoded = try decodeFromJSON(ReviewReport.self, from: data)
 
         #expect(decoded == report)
-        #expect(decoded.findings.first?.externalRuleID == "type_body_length")
-        #expect(decoded.findings.first?.suggestion == suggestion)
-        #expect(
-            decoded.findings.first?.suggestion?.codeExample
-                == suggestion.codeExample
-        )
-        #expect(decoded.findings.first?.category == .antiPattern)
-        #expect(
-            decoded.findings.first?.sources
-                == ["god-object", "llm.general"]
-        )
-        #expect(
-            decoded.findings.first?.metadata["lineCount"] == .integer(30)
-        )
+        #expect(decoded.schemaVersion == 1)
+        #expect(decoded.confirmedFindings.first?.category == .antiPattern)
+        #expect(decoded.confirmedFindings.first?.candidates == [candidate])
         #expect(
             decoded.analyzerResults.first?.tool
                 == ToolMetadata(name: "SwiftLint", version: "0.63.2")
@@ -144,7 +149,7 @@ struct DomainModelCodableTests {
 
     @Test("copying a finding with a suggestion preserves detection data")
     func findingWithSuggestionPreservesDetectionData() {
-        let original = Finding(
+        let original = SuggestionFinding(
             id: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
             ruleID: "ARCAN-GOD-001",
             externalRuleID: "external-rule",
@@ -229,29 +234,6 @@ struct DomainModelCodableTests {
         #expect(object["decimal"] as? Double == 1.5)
         #expect(object["boolean"] as? Bool == true)
         #expect(decoded == values)
-    }
-
-    @Test("legacy finding defaults category and metadata")
-    func legacyFindingDefaults() throws {
-        let data = Data(
-            """
-            {
-              "id": "11111111-2222-3333-4444-555555555555",
-              "ruleID": "legacy-rule",
-              "title": "Legacy finding",
-              "severity": "warning",
-              "filePath": "Sources/App.swift",
-              "explanation": "Created before normalized finding fields.",
-              "evidence": []
-            }
-            """.utf8
-        )
-
-        let finding = try decodeFromJSON(Finding.self, from: data)
-
-        #expect(finding.category == .uncategorized)
-        #expect(finding.sources.isEmpty)
-        #expect(finding.metadata.isEmpty)
     }
 
     @Test("analyzer result requires the candidate contract")

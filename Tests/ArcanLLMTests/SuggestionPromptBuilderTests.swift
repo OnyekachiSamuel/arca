@@ -170,8 +170,8 @@ struct SuggestionPromptBuilderTests {
         )
     }
 
-    private var godObjectFinding: Finding {
-        Finding(
+    private var godObjectFinding: SuggestionFinding {
+        SuggestionFinding(
             id: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!,
             ruleID: "ARCAN-GOD-001",
             title: "God Object candidate",
