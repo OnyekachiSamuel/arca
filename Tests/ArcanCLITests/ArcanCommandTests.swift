@@ -6,6 +6,187 @@ import Testing
 
 @Suite("Arcan command")
 struct ArcanCommandTests {
+    @Test("configured file review runs detection, categorization, and reporting")
+    func runsConfiguredFilePipeline() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "struct App {\n    let value = 1\n    func run() {}\n}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+            try writeLLMConfiguration(
+                to: directory,
+                godObjectThresholds: true
+            )
+            let provider = CLIPipelineLLMProvider(filePath: "App.swift")
+
+            let result = await ArcanCommand.execute(
+                arguments: [
+                    "review", "--file", file.path,
+                    "--review", "god-object",
+                    "--format", "json"
+                ],
+                currentDirectory: directory.path,
+                swiftLintAvailability: .unavailable(.executableNotFound),
+                llmProvider: provider
+            )
+            let report = try JSONDecoder().decode(
+                ReviewReport.self,
+                from: Data(result.output.utf8)
+            )
+            let prompts = await provider.prompts
+
+            #expect(
+                result.exitStatus == .findingsDetected,
+                Comment(rawValue: result.output)
+            )
+            #expect(prompts.count == 2)
+            #expect(prompts[0].contains("arcan.code-analysis/v1"))
+            #expect(prompts[1].contains("arcan.issue-categorization/v1"))
+            #expect(report.candidates.count == 2)
+            let confirmedFinding = try #require(
+                report.confirmedFindings.first,
+                Comment(rawValue: result.output)
+            )
+            #expect(
+                confirmedFinding.candidateIDs
+                    == report.candidates.map(\.candidateID)
+            )
+            #expect(confirmedFinding.sources == [
+                "god-object",
+                "llm-code-analysis",
+                "llm-provider:mock-pipeline",
+                "llm-model:mock-model"
+            ])
+            #expect(report.counts.totalCandidates == 2)
+            #expect(report.counts.confirmed == 2)
+            #expect(
+                report.categorizationExecutionMetadata.providerID
+                    == "mock-pipeline"
+            )
+        }
+    }
+
+    @Test("configured changed review runs the complete pipeline")
+    func runsConfiguredChangedPipeline() async throws {
+        try await withTemporaryDirectory { directory in
+            try initializeGitRepository(at: directory)
+            let file = directory.appendingPathComponent("Changed.swift")
+            try "struct Changed {\n    let value = 1\n}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+            try writeLLMConfiguration(to: directory)
+            let provider = CLIPipelineLLMProvider(filePath: "Changed.swift")
+
+            let result = await ArcanCommand.execute(
+                arguments: [
+                    "review", "--changed",
+                    "--review", "god-object",
+                    "--format", "json"
+                ],
+                currentDirectory: directory.path,
+                swiftLintAvailability: .unavailable(.executableNotFound),
+                llmProvider: provider
+            )
+            let report = try JSONDecoder().decode(
+                ReviewReport.self,
+                from: Data(result.output.utf8)
+            )
+            let prompts = await provider.prompts
+
+            #expect(result.exitStatus == .findingsDetected)
+            #expect(result.reviewRequest?.selectedFiles == [
+                file.standardizedFileURL.resolvingSymlinksInPath().path
+            ])
+            #expect(prompts.count == 2)
+            #expect(prompts[0].contains(#""addedLineRanges""#))
+            #expect(report.confirmedFindings.count == 1)
+        }
+    }
+
+    @Test("configured provider failure returns a structured failed report")
+    func reportsConfiguredProviderFailure() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("Large.swift")
+            try "class Large {\n    var value = 1\n    func run() {}\n}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+            try writeLLMConfiguration(
+                to: directory,
+                godObjectThresholds: true
+            )
+
+            let result = await ArcanCommand.execute(
+                arguments: [
+                    "review", "--file", file.path,
+                    "--review", "god-object",
+                    "--format", "json"
+                ],
+                currentDirectory: directory.path,
+                swiftLintAvailability: .unavailable(.executableNotFound),
+                llmProvider: CLIFailingLLMProvider()
+            )
+            let report = try JSONDecoder().decode(
+                ReviewReport.self,
+                from: Data(result.output.utf8)
+            )
+
+            #expect(result.exitStatus == .executionFailure)
+            #expect(report.candidates.count == 1)
+            #expect(report.confirmedFindings.isEmpty)
+            #expect(report.diagnostics.map(\.code).contains(
+                "ARCAN-LLM-ANALYSIS-PROVIDER-FAILED"
+            ))
+            #expect(report.diagnostics.map(\.code).contains(
+                "ARCAN-LLM-CATEGORIZATION-PROVIDER-FAILED"
+            ))
+        }
+    }
+
+    @Test("a rejected categorization keeps candidates but exits cleanly")
+    func rejectedCategorizationIsNotAReportedFinding() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "struct App {\n    let value = 1\n}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+            try writeLLMConfiguration(to: directory)
+            let provider = CLIPipelineLLMProvider(
+                filePath: "App.swift",
+                assessment: .rejected
+            )
+
+            let result = await ArcanCommand.execute(
+                arguments: [
+                    "review", "--file", file.path,
+                    "--review", "god-object",
+                    "--format", "json"
+                ],
+                currentDirectory: directory.path,
+                swiftLintAvailability: .unavailable(.executableNotFound),
+                llmProvider: provider
+            )
+            let report = try JSONDecoder().decode(
+                ReviewReport.self,
+                from: Data(result.output.utf8)
+            )
+
+            #expect(result.exitStatus == .success)
+            #expect(report.candidates.count == 1)
+            #expect(report.categorizationDecisions.first?.assessment == .rejected)
+            #expect(report.confirmedFindings.isEmpty)
+            #expect(report.uncertainFindings.isEmpty)
+            #expect(report.counts.rejected == 1)
+        }
+    }
+
     @Test("review help matches the command snapshot")
     func reviewHelpSnapshot() async {
         let expected = """
@@ -96,11 +277,14 @@ struct ArcanCommandTests {
                 encoding: .utf8
             )
 
-            let result = await ArcanCommand.run(arguments: [
-                "review",
-                "--file", file.path,
-                "--format", "json"
-            ])
+            let result = await ArcanCommand.run(
+                arguments: [
+                    "review",
+                    "--file", file.path,
+                    "--format", "json"
+                ],
+                currentDirectory: directory.path
+            )
             let report = try JSONDecoder().decode(
                 ReviewAnalysisResult.self,
                 from: Data(result.output.utf8)
@@ -158,6 +342,7 @@ struct ArcanCommandTests {
                     "--review", "style",
                     "--format", "json"
                 ],
+                currentDirectory: directory.path,
                 swiftLintAvailability: .available(executable)
             )
             let report = try JSONDecoder().decode(
@@ -254,11 +439,14 @@ struct ArcanCommandTests {
                 encoding: .utf8
             )
 
-            let result = await ArcanCommand.run(arguments: [
-                "review",
-                "--review", "god-object",
-                "--file", file.path
-            ])
+            let result = await ArcanCommand.run(
+                arguments: [
+                    "review",
+                    "--review", "god-object",
+                    "--file", file.path
+                ],
+                currentDirectory: directory.path
+            )
 
             #expect(result.exitCode == 0)
             #expect(
@@ -277,11 +465,14 @@ struct ArcanCommandTests {
                 encoding: .utf8
             )
 
-            let result = await ArcanCommand.run(arguments: [
-                "review",
-                "--file", file.path,
-                "--review", "all"
-            ])
+            let result = await ArcanCommand.run(
+                arguments: [
+                    "review",
+                    "--file", file.path,
+                    "--review", "all"
+                ],
+                currentDirectory: directory.path
+            )
 
             #expect(result.exitCode == 0)
             #expect(
@@ -301,12 +492,15 @@ struct ArcanCommandTests {
                 encoding: .utf8
             )
 
-            let result = await ArcanCommand.run(arguments: [
-                "review",
-                "--file", file.path,
-                "--review", "god-object",
-                "--review", "god-object"
-            ])
+            let result = await ArcanCommand.run(
+                arguments: [
+                    "review",
+                    "--file", file.path,
+                    "--review", "god-object",
+                    "--review", "god-object"
+                ],
+                currentDirectory: directory.path
+            )
 
             #expect(result.exitCode == 0)
             #expect(
@@ -325,12 +519,15 @@ struct ArcanCommandTests {
                 encoding: .utf8
             )
 
-            let result = await ArcanCommand.run(arguments: [
-                "review",
-                "--file", file.path,
-                "--review", "god-object",
-                "--review", "all"
-            ])
+            let result = await ArcanCommand.run(
+                arguments: [
+                    "review",
+                    "--file", file.path,
+                    "--review", "god-object",
+                    "--review", "all"
+                ],
+                currentDirectory: directory.path
+            )
 
             #expect(result.exitCode == 0)
             #expect(
@@ -400,11 +597,14 @@ struct ArcanCommandTests {
                 encoding: .utf8
             )
 
-            let result = await ArcanCommand.run(arguments: [
-                "review",
-                "--file", file.path,
-                "--review", "style"
-            ])
+            let result = await ArcanCommand.run(
+                arguments: [
+                    "review",
+                    "--file", file.path,
+                    "--review", "style"
+                ],
+                currentDirectory: directory.path
+            )
 
             #expect(result.exitCode == 0)
             #expect(
@@ -428,12 +628,15 @@ struct ArcanCommandTests {
                 encoding: .utf8
             )
 
-            let result = await ArcanCommand.run(arguments: [
-                "review",
-                "--file", file.path,
-                "--review", "style",
-                "--format", "json"
-            ])
+            let result = await ArcanCommand.run(
+                arguments: [
+                    "review",
+                    "--file", file.path,
+                    "--review", "style",
+                    "--format", "json"
+                ],
+                currentDirectory: directory.path
+            )
             let report = try JSONDecoder().decode(
                 ReviewAnalysisResult.self,
                 from: Data(result.output.utf8)
@@ -713,6 +916,39 @@ struct ArcanCommandTests {
         #expect(process.terminationStatus == 0)
     }
 
+    private func writeLLMConfiguration(
+        to directory: URL,
+        godObjectThresholds: Bool = false
+    ) throws {
+        let godObject = godObjectThresholds
+            ? """
+              ,"godObject": {
+                "maximumLines": 1,
+                "maximumMethods": 0,
+                "maximumStoredProperties": 0,
+                "minimumTriggeredSignals": 3
+              }
+            """
+            : ""
+        try """
+        {
+          "schemaVersion": 1\(godObject),
+          "llm": {
+            "providerID": "mock-pipeline",
+            "baseURL": "http://127.0.0.1:11434",
+            "modelID": "mock-model",
+            "timeoutSeconds": 30,
+            "temperature": 0,
+            "seed": 7
+          }
+        }
+        """.write(
+            to: directory.appendingPathComponent(".arcan.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+    }
+
     private func withTemporaryDirectory<Result>(
         _ body: (URL) async throws -> Result
     ) async throws -> Result {
@@ -724,6 +960,66 @@ struct ArcanCommandTests {
         )
         defer { try? FileManager.default.removeItem(at: directory) }
         return try await body(directory)
+    }
+}
+
+private actor CLIPipelineLLMProvider: LLMProvider {
+    nonisolated let id = "mock-pipeline"
+    private let filePath: String
+    private let assessment: FindingAssessment
+    private(set) var prompts: [String] = []
+
+    init(
+        filePath: String,
+        assessment: FindingAssessment = .confirmed
+    ) {
+        self.filePath = filePath
+        self.assessment = assessment
+    }
+
+    func submit(_ request: LLMRequest) async throws -> LLMResponse {
+        prompts.append(request.prompt)
+        if request.prompt.contains("arcan.code-analysis/v1") {
+            return response(text: """
+            {"findings":[{"ruleID":"ARCAN-GOD-001","filePath":"\(filePath)","explanation":"The type owns unrelated responsibilities.","severity":"warning","startLine":1,"endLine":3,"evidence":[{"description":"The type owns state directly.","startLine":2,"endLine":2,"excerpt":"    let value = 1"}]}]}
+            """)
+        }
+
+        let ids = candidateIDs(in: request.prompt)
+        let encodedIDs = ids.map { "\"\($0)\"" }.joined(separator: ",")
+        return response(text: """
+        {"summary":"The candidates were assessed.","decisions":[{"candidateIDs":[\(encodedIDs)],"assessment":"\(assessment.rawValue)","category":"antiPattern","severity":"warning","canonicalRuleID":"ARCAN-GOD-001","title":"God Object","rationale":"The supplied evidence was evaluated."}]}
+        """)
+    }
+
+    private func candidateIDs(in prompt: String) -> [String] {
+        let expression = try! NSRegularExpression(
+            pattern: #""candidateID"\s*:\s*"([0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12})""#
+        )
+        let range = NSRange(prompt.startIndex..<prompt.endIndex, in: prompt)
+        var encountered: Set<String> = []
+        return expression.matches(in: prompt, range: range).compactMap {
+            guard let matchRange = Range(
+                $0.range(at: 1),
+                in: prompt
+            ) else {
+                return nil
+            }
+            let value = String(prompt[matchRange])
+            return encountered.insert(value).inserted ? value : nil
+        }
+    }
+
+    private func response(text: String) -> LLMResponse {
+        LLMResponse(
+            text: text,
+            usage: LLMUsageMetadata(
+                inputTokens: 20,
+                outputTokens: 10,
+                totalTokens: 30
+            ),
+            durationMilliseconds: 4
+        )
     }
 }
 

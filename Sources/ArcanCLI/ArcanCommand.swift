@@ -246,13 +246,28 @@ public enum ArcanCommand {
             let sources = try paths.map { path in
                 try SourceFileLoader().load(path: path)
             }
+            let llmConfiguration = environment.configuration.llm
+            let resolvedLLMProvider: (any LLMProvider)?
+            let knowledgeProvider: RuleKnowledgeRegistry?
+            if let llmConfiguration {
+                resolvedLLMProvider = try llmProvider
+                    ?? LLMProviderFactory().make(
+                        configuration: llmConfiguration
+                    )
+                knowledgeProvider = try RuleKnowledgeRegistry.bundled()
+            } else {
+                resolvedLLMProvider = nil
+                knowledgeProvider = nil
+            }
             let structureProvider = SwiftSyntaxStructureProvider()
             let registry = AnalyzerRegistryFactory(
                 swiftLintAvailability: swiftLintAvailability
             ).make(
                 configuration: environment.configuration,
                 structureProvider: structureProvider,
-                workingDirectoryURL: environment.workingDirectoryURL
+                workingDirectoryURL: environment.workingDirectoryURL,
+                llmProvider: resolvedLLMProvider,
+                knowledgeProvider: knowledgeProvider
             )
             let selectedReviewTypes = try resolveReviewTypes(
                 reviewSelection,
@@ -301,11 +316,49 @@ public enum ArcanCommand {
                 context: context
             )
             let reporter = reporter(for: outputFormat)
+
+            guard let llmConfiguration,
+                  let resolvedLLMProvider,
+                  let knowledgeProvider else {
+                return CommandResult(
+                    output: try reporter.render(analysis: analysis),
+                    exitStatus: analysis.candidates.isEmpty
+                        ? .success
+                        : .findingsDetected,
+                    reviewRequest: request
+                )
+            }
+
+            guard !analysis.candidates.isEmpty else {
+                return CommandResult(
+                    output: try reporter.render(analysis: analysis),
+                    exitStatus: containsProviderFailure(
+                        analysis.diagnostics
+                    ) ? .executionFailure : .success,
+                    reviewRequest: request
+                )
+            }
+
+            let selectedRules = ReviewRuleSelector().rules(
+                for: selectedReviewTypes,
+                from: knowledgeProvider
+            )
+            let categorization = await LLMFindingCategorizer(
+                provider: resolvedLLMProvider,
+                modelID: llmConfiguration.modelID,
+                timeout: .seconds(llmConfiguration.timeoutSeconds),
+                seed: llmConfiguration.seed,
+                temperature: llmConfiguration.temperature
+            ).categorize(
+                analysis: analysis,
+                ruleKnowledge: selectedRules
+            )
+            let report = CategorizedReviewReportBuilder().build(
+                from: categorization
+            )
             return CommandResult(
-                output: try reporter.render(analysis: analysis),
-                exitStatus: analysis.candidates.isEmpty
-                    ? .success
-                    : .findingsDetected,
+                output: try reporter.render(report: report),
+                exitStatus: exitStatus(for: report),
                 reviewRequest: request
             )
         } catch let error as ReviewCommandParsingError {
@@ -333,6 +386,30 @@ public enum ArcanCommand {
                 output: "Error: Review failed for \(failureDescription)",
                 exitStatus: .executionFailure
             )
+        }
+    }
+
+    private static func exitStatus(
+        for report: ReviewReport
+    ) -> ArcanExitStatus {
+        if containsProviderFailure(report.diagnostics)
+            || (report.counts.totalCandidates > 0
+                && report.categorizationSummary == nil) {
+            return .executionFailure
+        }
+        return report.confirmedFindings.isEmpty
+            && report.uncertainFindings.isEmpty
+            ? .success
+            : .findingsDetected
+    }
+
+    private static func containsProviderFailure(
+        _ diagnostics: [AnalyzerDiagnostic]
+    ) -> Bool {
+        diagnostics.contains {
+            $0.code == "ARCAN-LLM-ANALYSIS-PROVIDER-FAILED"
+                || $0.code
+                    == "ARCAN-LLM-CATEGORIZATION-PROVIDER-FAILED"
         }
     }
 

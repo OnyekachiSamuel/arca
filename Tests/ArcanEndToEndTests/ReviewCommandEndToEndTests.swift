@@ -209,10 +209,28 @@ struct ReviewCommandEndToEndTests {
         environment: [String: String] = [:],
         currentDirectoryURL: URL? = nil
     ) throws -> SubprocessResult {
+        let isolatedDirectory: URL?
+        if currentDirectoryURL == nil {
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true
+            )
+            isolatedDirectory = directory
+        } else {
+            isolatedDirectory = nil
+        }
+        defer {
+            if let isolatedDirectory {
+                try? FileManager.default.removeItem(at: isolatedDirectory)
+            }
+        }
+
         let process = Process()
         process.executableURL = try arcanExecutableURL()
         process.arguments = arguments
-        process.currentDirectoryURL = currentDirectoryURL
+        process.currentDirectoryURL = currentDirectoryURL ?? isolatedDirectory
         process.environment = ProcessInfo.processInfo.environment.merging(
             environment,
             uniquingKeysWith: { _, override in override }
@@ -236,17 +254,7 @@ struct ReviewCommandEndToEndTests {
     }
 
     private func repositoryRelativePath(for file: URL) -> String {
-        let repository = URL(
-            fileURLWithPath: FileManager.default.currentDirectoryPath,
-            isDirectory: true
-        ).standardizedFileURL.resolvingSymlinksInPath()
-        let normalizedFile = file.standardizedFileURL.resolvingSymlinksInPath()
-        let repositoryComponents = repository.pathComponents
-        let fileComponents = normalizedFile.pathComponents
-        #expect(fileComponents.starts(with: repositoryComponents))
-        return fileComponents
-            .dropFirst(repositoryComponents.count)
-            .joined(separator: "/")
+        file.standardizedFileURL.resolvingSymlinksInPath().path
     }
 
     private func withTemporaryDirectory<Result>(
