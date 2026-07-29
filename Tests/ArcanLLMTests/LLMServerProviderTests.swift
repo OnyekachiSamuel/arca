@@ -41,7 +41,7 @@ struct LLMServerProviderTests {
         )
         let request = LLMRequest(
             modelID: "qwen2.5-coder",
-            prompt: "Build one structured suggestion.",
+            prompt: "Build one structured analysis response.",
             timeout: .seconds(12),
             seed: 42,
             temperature: 0.2
@@ -74,7 +74,7 @@ struct LLMServerProviderTests {
         #expect(messages.first?["role"] as? String == "user")
         #expect(
             messages.first?["content"] as? String
-                == "Build one structured suggestion."
+                == "Build one structured analysis response."
         )
         #expect(
             response.text

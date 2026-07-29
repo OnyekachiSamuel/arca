@@ -8,7 +8,7 @@ struct GodObjectCandidateMapper: Sendable {
     func map(
         metrics: TypeStructuralMetrics,
         sourceFile: SourceFile,
-        evidence: [Evidence]
+        evidence: [FindingEvidence]
     ) throws -> FindingCandidate {
         try FindingCandidate(
             candidateID: UUID(),
@@ -19,13 +19,7 @@ struct GodObjectCandidateMapper: Sendable {
             range: metrics.range,
             proposedSeverity: ruleMetadata.severity,
             proposedCategory: ruleMetadata.category,
-            evidence: evidence.map {
-                .metric(MetricEvidence(
-                    metricName: $0.metric,
-                    observedValue: $0.observedValue,
-                    thresholdValue: $0.thresholdValue
-                ))
-            },
+            evidence: evidence,
             sourceIdentifiers: [analyzerID],
             analyzerMetadata: [
                 "typeName": .string(metrics.name),

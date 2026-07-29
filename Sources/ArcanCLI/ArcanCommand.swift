@@ -330,8 +330,24 @@ public enum ArcanCommand {
             }
 
             guard !analysis.candidates.isEmpty else {
+                let report = CategorizedReviewReportBuilder().build(
+                    from: ReviewCategorizationResult(
+                        analysis: analysis,
+                        categorization: FindingCategorization(
+                            summary: "No candidate findings were detected.",
+                            decisions: []
+                        ),
+                        categorizationDiagnostics: [],
+                        llmExecutionMetadata: LLMExecutionMetadata(
+                            providerID: llmConfiguration.providerID,
+                            modelID: llmConfiguration.modelID,
+                            requestCount: 0,
+                            providerDurationMilliseconds: 0
+                        )
+                    )
+                )
                 return CommandResult(
-                    output: try reporter.render(analysis: analysis),
+                    output: try reporter.render(report: report),
                     exitStatus: containsProviderFailure(
                         analysis.diagnostics
                     ) ? .executionFailure : .success,

@@ -6,6 +6,48 @@ import Testing
 
 @Suite("Arcan command")
 struct ArcanCommandTests {
+    @Test("configured clean review returns a categorized report")
+    func configuredCleanReviewReturnsStableReport() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("Small.swift")
+            try "struct Small {}\n".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+            try writeLLMConfiguration(to: directory)
+            let provider = CLINoFindingLLMProvider()
+
+            let result = await ArcanCommand.execute(
+                arguments: [
+                    "review", "--file", file.path,
+                    "--review", "god-object",
+                    "--format", "json"
+                ],
+                currentDirectory: directory.path,
+                swiftLintAvailability: .unavailable(.executableNotFound),
+                llmProvider: provider
+            )
+            let report = try JSONDecoder().decode(
+                ReviewReport.self,
+                from: Data(result.output.utf8)
+            )
+
+            #expect(result.exitStatus == .success)
+            #expect(await provider.requestCount == 1)
+            #expect(report.candidates.isEmpty)
+            #expect(report.counts.totalCandidates == 0)
+            #expect(report.categorizationDecisions.isEmpty)
+            #expect(
+                report.categorizationSummary
+                    == "No candidate findings were detected."
+            )
+            #expect(
+                report.categorizationExecutionMetadata.requestCount == 0
+            )
+        }
+    }
+
     @Test("configured file review runs detection, categorization, and reporting")
     func runsConfiguredFilePipeline() async throws {
         try await withTemporaryDirectory { directory in
@@ -960,6 +1002,24 @@ struct ArcanCommandTests {
         )
         defer { try? FileManager.default.removeItem(at: directory) }
         return try await body(directory)
+    }
+}
+
+private actor CLINoFindingLLMProvider: LLMProvider {
+    nonisolated let id = "mock-pipeline"
+    private(set) var requestCount = 0
+
+    func submit(_ request: LLMRequest) async throws -> LLMResponse {
+        requestCount += 1
+        return LLMResponse(
+            text: #"{"findings":[]}"#,
+            usage: LLMUsageMetadata(
+                inputTokens: 10,
+                outputTokens: 2,
+                totalTokens: 12
+            ),
+            durationMilliseconds: 2
+        )
     }
 }
 

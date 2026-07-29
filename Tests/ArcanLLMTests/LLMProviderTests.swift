@@ -7,7 +7,7 @@ struct LLMProviderTests {
     func submitsRequest() async throws {
         let request = LLMRequest(
             modelID: "mock-model",
-            prompt: "Return a structured refactoring suggestion.",
+            prompt: "Return a structured analysis response.",
             timeout: .seconds(10),
             seed: 42,
             temperature: 0.2

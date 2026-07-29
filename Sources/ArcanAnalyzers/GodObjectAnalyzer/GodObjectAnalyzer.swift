@@ -46,29 +46,29 @@ public struct GodObjectAnalyzer: Analyzer {
 
     private func triggeredEvidence(
         for metrics: TypeStructuralMetrics
-    ) -> [Evidence] {
-        var evidence: [Evidence] = []
+    ) -> [FindingEvidence] {
+        var evidence: [FindingEvidence] = []
 
         if metrics.lineCount > thresholds.maximumLines {
-            evidence.append(Evidence(
-                metric: "lines",
+            evidence.append(.metric(MetricEvidence(
+                metricName: "lines",
                 observedValue: metrics.lineCount,
                 thresholdValue: thresholds.maximumLines
-            ))
+            )))
         }
         if metrics.methodCount > thresholds.maximumMethods {
-            evidence.append(Evidence(
-                metric: "methods",
+            evidence.append(.metric(MetricEvidence(
+                metricName: "methods",
                 observedValue: metrics.methodCount,
                 thresholdValue: thresholds.maximumMethods
-            ))
+            )))
         }
         if metrics.propertyCount > thresholds.maximumStoredProperties {
-            evidence.append(Evidence(
-                metric: "storedProperties",
+            evidence.append(.metric(MetricEvidence(
+                metricName: "storedProperties",
                 observedValue: metrics.propertyCount,
                 thresholdValue: thresholds.maximumStoredProperties
-            ))
+            )))
         }
 
         return evidence

@@ -15,8 +15,8 @@ struct ConfigurationLoaderTests {
         }
     }
 
-    @Test("LLM suggestion configuration is loaded")
-    func llmSuggestionConfigurationIsLoaded() throws {
+    @Test("LLM configuration is loaded")
+    func llmConfigurationIsLoaded() throws {
         try withTemporaryDirectory { directory in
             try writeConfiguration(
                 """
@@ -73,8 +73,8 @@ struct ConfigurationLoaderTests {
         }
     }
 
-    @Test("unknown LLM fields produce a diagnostic")
-    func unknownLLMFieldIsRejected() throws {
+    @Test("obsolete suggestion configuration is rejected")
+    func obsoleteSuggestionConfigurationIsRejected() throws {
         try withTemporaryDirectory { directory in
             try writeConfiguration(
                 """
