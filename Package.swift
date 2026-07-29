@@ -100,7 +100,13 @@ let package = Package(
         ),
         .testTarget(
             name: "ArcanEndToEndTests",
-            dependencies: ["ArcanDomain", "ArcanExecutable"],
+            dependencies: [
+                "ArcanAnalyzers",
+                "ArcanCLI",
+                "ArcanDomain",
+                "ArcanExecutable",
+                "ArcanLLM"
+            ],
             resources: [.copy("Fixtures")]
         ),
         .testTarget(name: "ArcanDomainTests", dependencies: ["ArcanDomain"]),

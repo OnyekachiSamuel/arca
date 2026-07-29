@@ -1,9 +1,93 @@
+import ArcanAnalyzers
+@testable import ArcanCLI
 import ArcanDomain
+import ArcanLLM
 import Foundation
 import Testing
 
 @Suite("arcan review end to end")
 struct ReviewCommandEndToEndTests {
+    @Test("complete combined-analysis flow produces a categorized JSON report")
+    func reviewsFixtureThroughCompleteCombinedPipeline() async throws {
+        let fixture = try #require(
+            Bundle.module.url(
+                forResource: "LargeCoordinator",
+                withExtension: "swift",
+                subdirectory: "Fixtures"
+            )
+        )
+
+        try await withTemporaryDirectoryAsync { directory in
+            try writeLLMConfiguration(to: directory)
+            let provider = VerticalSliceLLMProvider(
+                filePath: fixture.lastPathComponent
+            )
+
+            let result = await ArcanCommand.execute(
+                arguments: [
+                    "review",
+                    "--file", fixture.path,
+                    "--review", "god-object",
+                    "--format", "json"
+                ],
+                currentDirectory: directory.path,
+                swiftLintAvailability: .unavailable(.executableNotFound),
+                llmProvider: provider
+            )
+            let report = try JSONDecoder().decode(
+                ReviewReport.self,
+                from: Data(result.output.utf8)
+            )
+            let prompts = await provider.prompts
+
+            #expect(
+                result.exitStatus == .findingsDetected,
+                Comment(rawValue: result.output)
+            )
+            #expect(prompts.count == 2)
+            #expect(prompts[0].contains("arcan.code-analysis/v1"))
+            #expect(prompts[1].contains("arcan.issue-categorization/v1"))
+            #expect(
+                report.candidates.count == 2,
+                Comment(rawValue: result.output)
+            )
+            let staticCandidate = try #require(
+                report.candidates.first {
+                    $0.sourceIdentifiers == ["god-object"]
+                },
+                Comment(rawValue: result.output)
+            )
+            let llmCandidate = try #require(
+                report.candidates.first {
+                    $0.sourceIdentifiers.first == "llm-code-analysis"
+                },
+                Comment(rawValue: result.output)
+            )
+            #expect(staticCandidate.ruleID == "ARCAN-GOD-001")
+            #expect(llmCandidate.ruleID == "ARCAN-GOD-001")
+            #expect(llmCandidate.sourceIdentifiers == [
+                "llm-code-analysis",
+                "llm-provider:vertical-slice-mock",
+                "llm-model:vertical-slice-model"
+            ])
+            let finding = try #require(report.confirmedFindings.first)
+            #expect(finding.ruleID == "ARCAN-GOD-001")
+            #expect(finding.candidateIDs == report.candidates.map(\.candidateID))
+            #expect(finding.sources == [
+                "god-object",
+                "llm-code-analysis",
+                "llm-provider:vertical-slice-mock",
+                "llm-model:vertical-slice-model"
+            ])
+            #expect(
+                report.categorizationSummary
+                    == "Static and LLM analysis agree on a God Object issue."
+            )
+            #expect(report.counts.totalCandidates == 2)
+            #expect(report.counts.confirmed == 2)
+        }
+    }
+
     @Test("compiled CLI reports the God Object rule and file location")
     func reviewsKnownGodObjectFixture() throws {
         let fixture = try #require(
@@ -270,6 +354,39 @@ struct ReviewCommandEndToEndTests {
         return try body(directory)
     }
 
+    private func withTemporaryDirectoryAsync<Result>(
+        _ body: (URL) async throws -> Result
+    ) async throws -> Result {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        return try await body(directory)
+    }
+
+    private func writeLLMConfiguration(to directory: URL) throws {
+        try """
+        {
+          "schemaVersion": 1,
+          "llm": {
+            "providerID": "vertical-slice-mock",
+            "baseURL": "http://127.0.0.1:11434",
+            "modelID": "vertical-slice-model",
+            "timeoutSeconds": 30,
+            "temperature": 0,
+            "seed": 44
+          }
+        }
+        """.write(
+            to: directory.appendingPathComponent(".arcan.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+    }
+
     private func arcanExecutableURL() throws -> URL {
         var packageRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -296,6 +413,61 @@ struct ReviewCommandEndToEndTests {
         }
 
         throw EndToEndTestError.executableNotFound
+    }
+}
+
+private actor VerticalSliceLLMProvider: LLMProvider {
+    nonisolated let id = "vertical-slice-mock"
+    private let filePath: String
+    private(set) var prompts: [String] = []
+
+    init(filePath: String) {
+        self.filePath = filePath
+    }
+
+    func submit(_ request: LLMRequest) async throws -> LLMResponse {
+        prompts.append(request.prompt)
+
+        let text: String
+        if request.prompt.contains("arcan.code-analysis/v1") {
+            text = """
+            {"findings":[{"ruleID":"ARCAN-GOD-001","filePath":"\(filePath)","explanation":"The coordinator owns too many responsibilities.","severity":"warning","startLine":1,"endLine":1,"evidence":[{"description":"The type combines extensive state and behavior.","startLine":1,"endLine":1,"excerpt":"final class LargeCoordinator {"}]}]}
+            """
+        } else {
+            let candidateIDs = candidateIDs(in: request.prompt)
+            let encodedIDs = candidateIDs.map { "\"\($0)\"" }
+                .joined(separator: ",")
+            text = """
+            {"summary":"Static and LLM analysis agree on a God Object issue.","decisions":[{"candidateIDs":[\(encodedIDs)],"assessment":"confirmed","category":"antiPattern","severity":"warning","canonicalRuleID":"ARCAN-GOD-001","title":"God Object candidate","rationale":"Both analyzers identify excessive responsibilities in the same type."}]}
+            """
+        }
+
+        return LLMResponse(
+            text: text,
+            usage: LLMUsageMetadata(
+                inputTokens: 40,
+                outputTokens: 20,
+                totalTokens: 60
+            ),
+            durationMilliseconds: 5
+        )
+    }
+
+    private func candidateIDs(in prompt: String) -> [String] {
+        let expression = try! NSRegularExpression(
+            pattern: #""candidateID"\s*:\s*"([0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12})""#
+        )
+        let range = NSRange(prompt.startIndex..<prompt.endIndex, in: prompt)
+        var encountered: Set<String> = []
+        return expression.matches(in: prompt, range: range).compactMap {
+            guard let matchRange = Range($0.range(at: 1), in: prompt) else {
+                return nil
+            }
+            let candidateID = String(prompt[matchRange])
+            return encountered.insert(candidateID).inserted
+                ? candidateID
+                : nil
+        }
     }
 }
 
