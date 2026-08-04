@@ -58,7 +58,8 @@ public struct ConfigurationLoader {
             schemaVersion: document.schemaVersion,
             godObjectThresholds: thresholds,
             swiftLint: SwiftLintConfiguration(
-                availability: document.swiftLint?.availability ?? .optional
+                availability: document.swiftLint?.availability ?? .optional,
+                configurationPath: document.swiftLint?.configurationPath
             ),
             llm: try document.llm?.resolvedConfiguration()
         )

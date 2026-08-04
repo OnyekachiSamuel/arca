@@ -1,0 +1,7 @@
+# ARCAN's shared SwiftLint configuration.
+#
+# Add deterministic team-convention rules under `custom_rules` and prefix
+# their identifiers with `arcan_team_`. ARCAN preserves the original rule ID
+# and categorizes matching violations as team conventions.
+
+custom_rules: {}

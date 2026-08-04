@@ -14,7 +14,8 @@ struct RuleKnowledgeRegistryTests {
                 "ARCAN-GOD-001",
                 "ARCAN-FEATURE-ENVY-001",
                 "ARCAN-LONG-METHOD-001",
-                "ARCAN-STYLE-001"
+                "ARCAN-STYLE-001",
+                "ARCAN-TEAM-001"
             ]
         )
 
@@ -75,10 +76,11 @@ struct RuleKnowledgeRegistryTests {
             try RuleKnowledgeRegistry.bundled()
 
         #expect(provider.knowledge(for: "ARCAN-GOD-001") != nil)
-        #expect(provider.allKnowledge.count == 4)
+        #expect(provider.allKnowledge.count == 5)
         #expect(
             provider.knowledge(in: .codeSmellsAndAntiPatterns).count == 3
         )
+        #expect(provider.knowledge(in: .teamConventions).count == 1)
     }
 
     @Test("returns rules by group in resource order")

@@ -3,6 +3,7 @@ import Foundation
 
 struct SwiftLintConfigurationDocument: Decodable {
     let availability: AnalyzerAvailabilityPolicy?
+    let configurationPath: String?
 
     init(from decoder: any Decoder) throws {
         let container: KeyedDecodingContainer<ConfigurationCodingKey>
@@ -19,23 +20,44 @@ struct SwiftLintConfigurationDocument: Decodable {
 
         try ConfigurationDecodingSupport.rejectUnknownFields(
             in: container,
-            allowing: ["availability"],
+            allowing: ["availability", "configurationPath"],
             pathPrefix: "swiftLint"
         )
 
-        let key = ConfigurationCodingKey("availability")
-        guard container.contains(key) else {
+        let availabilityKey = ConfigurationCodingKey("availability")
+        if container.contains(availabilityKey) {
+            guard try !container.decodeNil(forKey: availabilityKey),
+                  let value = try? container.decode(
+                      String.self,
+                      forKey: availabilityKey
+                  ),
+                  let policy = AnalyzerAvailabilityPolicy(rawValue: value)
+            else {
+                throw ConfigurationDecodingIssue.invalidValue(
+                    field: "swiftLint.availability",
+                    reason: "expected one of: optional, required."
+                )
+            }
+            availability = policy
+        } else {
             availability = nil
-            return
         }
-        guard try !container.decodeNil(forKey: key),
-              let value = try? container.decode(String.self, forKey: key),
-              let policy = AnalyzerAvailabilityPolicy(rawValue: value) else {
+
+        let configurationPathKey = ConfigurationCodingKey(
+            "configurationPath"
+        )
+        configurationPath = try container.decodeIfPresent(
+            String.self,
+            forKey: configurationPathKey
+        )
+        if let configurationPath,
+           configurationPath.trimmingCharacters(
+               in: .whitespacesAndNewlines
+           ).isEmpty {
             throw ConfigurationDecodingIssue.invalidValue(
-                field: "swiftLint.availability",
-                reason: "expected one of: optional, required."
+                field: "swiftLint.configurationPath",
+                reason: "must not be empty."
             )
         }
-        availability = policy
     }
 }

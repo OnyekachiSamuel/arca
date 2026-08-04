@@ -1,9 +1,12 @@
 {
   "schemaVersion": 1,
+  "swiftLint": {
+    "configurationPath": ".swiftlint.yml"
+  },
   "llm": {
-    "providerID": "local-qwen",
-    "baseURL": "http://127.0.0.1:8080",
-    "modelID": "qwen2.5-coder",
+    "providerID": "lm-studio",
+    "baseURL": "http://127.0.0.1:1234",
+    "modelID": "qwen2.5-coder-7b-instruct",
     "timeoutSeconds": 120
   }
 }

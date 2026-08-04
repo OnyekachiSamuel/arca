@@ -27,7 +27,8 @@ struct AnalyzerRegistryFactoryTests {
         )
 
         #expect(
-            registry.supportedReviewTypes == [.godObject, .style]
+            registry.supportedReviewTypes
+                == [.godObject, .style, .teamConvention]
         )
         #expect(
             registry.analyzers(matching: [.style]).map(\.id)
@@ -50,7 +51,10 @@ struct AnalyzerRegistryFactoryTests {
             )
         )
 
-        #expect(registry.supportedReviewTypes == [.godObject, .style])
+        #expect(
+            registry.supportedReviewTypes
+                == [.godObject, .style, .teamConvention]
+        )
         #expect(
             registry.analyzers(matching: [.style]).map(\.id)
                 == ["swiftlint"]

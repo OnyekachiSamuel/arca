@@ -40,6 +40,7 @@ struct SwiftLintAnalyzerTests {
             executableURL: executable,
             workingDirectoryURL: project,
             timeout: .seconds(10),
+            configurationPath: ".swiftlint.yml",
             processRunner: runner
         )
         let context = analysisContext(paths: [
@@ -112,12 +113,51 @@ struct SwiftLintAnalyzerTests {
                     "--reporter", "json",
                     "--quiet",
                     "--force-exclude",
+                    "--config", ".swiftlint.yml",
                     "/project/Sources/Alpha.swift",
                     "/project/Sources/Zeta.swift"
                 ],
                 workingDirectoryURL: project,
                 timeout: .seconds(10)
             )
+        ])
+    }
+
+    @Test("maps prefixed custom rules to team conventions")
+    func mapsCustomTeamConvention() async throws {
+        let runner = StubProcessRunner(results: [
+            processResult(output: "0.63.2"),
+            processResult(output: """
+            [{
+              "character": 1,
+              "file": "/project/App.swift",
+              "line": 2,
+              "reason": "Services must use the Service suffix.",
+              "rule_id": "arcan_team_service_suffix",
+              "severity": "Warning",
+              "type": "Service Naming"
+            }]
+            """)
+        ])
+        let analyzer = makeAnalyzer(processRunner: runner)
+
+        let result = try await analyzer.analyze(
+            context: analysisContext(
+                paths: ["/project/App.swift"],
+                reviewTypes: [.teamConvention]
+            )
+        )
+        let candidate = try #require(result.candidates.first)
+
+        #expect(candidate.ruleID == "ARCAN-TEAM-001")
+        #expect(candidate.proposedCategory == .teamConvention)
+        #expect(candidate.sourceIdentifiers == ["swiftlint"])
+        #expect(candidate.evidence == [
+            .analyzer(AnalyzerEvidence(
+                description: "Services must use the Service suffix.",
+                externalRuleID: "arcan_team_service_suffix",
+                range: candidate.range
+            ))
         ])
     }
 
@@ -400,7 +440,10 @@ struct SwiftLintAnalyzerTests {
         )
     }
 
-    private func analysisContext(paths: [String]) -> AnalysisContext {
+    private func analysisContext(
+        paths: [String],
+        reviewTypes: Set<ReviewType> = [.style]
+    ) -> AnalysisContext {
         let sourceFiles = paths.map {
             SourceFile(path: $0, content: "", lineCount: 0)
         }
@@ -408,7 +451,7 @@ struct SwiftLintAnalyzerTests {
             request: ReviewRequest(
                 id: UUID(),
                 selectedFiles: paths,
-                selectedReviewTypes: [.style]
+                selectedReviewTypes: reviewTypes
             ),
             sourceFiles: sourceFiles
         )

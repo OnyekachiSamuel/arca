@@ -46,6 +46,7 @@ struct AnalyzerRegistryFactory: Sendable {
                 executableURL: swiftLintExecutableURL,
                 workingDirectoryURL: workingDirectoryURL,
                 availabilityPolicy: configuration.swiftLint.availability,
+                configurationPath: configuration.swiftLint.configurationPath,
                 processRunner: runner
             ))
         case .unavailable(let reason):

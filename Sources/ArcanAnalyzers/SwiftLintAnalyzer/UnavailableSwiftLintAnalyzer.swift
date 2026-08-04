@@ -3,7 +3,10 @@ import ArcanDomain
 
 public struct UnavailableSwiftLintAnalyzer: Analyzer {
     public let id = "swiftlint"
-    public let supportedReviewTypes: Set<ReviewType> = [.style]
+    public let supportedReviewTypes: Set<ReviewType> = [
+        .style,
+        .teamConvention
+    ]
 
     private let reason: SwiftLintUnavailableReason
     private let policy: AnalyzerAvailabilityPolicy
@@ -30,7 +33,7 @@ public struct UnavailableSwiftLintAnalyzer: Analyzer {
                     AnalyzerDiagnostic(
                         code: "ARCAN-SWIFTLINT-UNAVAILABLE",
                         severity: .warning,
-                        message: "\(reason.description) Style analysis was "
+                        message: "\(reason.description) SwiftLint analysis was "
                             + "skipped. Install SwiftLint or set "
                             + "ARCAN_SWIFTLINT_EXECUTABLE."
                     )

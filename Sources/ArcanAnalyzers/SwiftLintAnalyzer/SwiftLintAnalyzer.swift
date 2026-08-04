@@ -5,12 +5,16 @@ import Foundation
 
 public struct SwiftLintAnalyzer: Analyzer {
     public let id = "swiftlint"
-    public let supportedReviewTypes: Set<ReviewType> = [.style]
+    public let supportedReviewTypes: Set<ReviewType> = [
+        .style,
+        .teamConvention
+    ]
 
     private let executableURL: URL
     private let workingDirectoryURL: URL
     private let timeout: Duration
     private let availabilityPolicy: AnalyzerAvailabilityPolicy
+    private let configurationPath: String?
     private let processRunner: any ProcessRunning
 
     public init(
@@ -18,12 +22,14 @@ public struct SwiftLintAnalyzer: Analyzer {
         workingDirectoryURL: URL,
         timeout: Duration = .seconds(30),
         availabilityPolicy: AnalyzerAvailabilityPolicy = .required,
+        configurationPath: String? = nil,
         processRunner: any ProcessRunning
     ) {
         self.executableURL = executableURL
         self.workingDirectoryURL = workingDirectoryURL
         self.timeout = timeout
         self.availabilityPolicy = availabilityPolicy
+        self.configurationPath = configurationPath
         self.processRunner = processRunner
     }
 
@@ -65,6 +71,13 @@ public struct SwiftLintAnalyzer: Analyzer {
         )
         let candidates = try violations
             .map(candidateMapper.map)
+            .filter {
+                context.request.selectedReviewTypes.contains(
+                    $0.proposedCategory == .teamConvention
+                        ? .teamConvention
+                        : .style
+                )
+            }
             .sorted(by: candidatesAreInStableOrder)
 
         return AnalyzerResult(
@@ -92,12 +105,16 @@ public struct SwiftLintAnalyzer: Analyzer {
     }
 
     private func lintArguments(paths: [String]) -> [String] {
-        [
+        var arguments = [
             "lint",
             "--reporter", "json",
             "--quiet",
             "--force-exclude"
-        ] + paths
+        ]
+        if let configurationPath {
+            arguments += ["--config", configurationPath]
+        }
+        return arguments + paths
     }
 
     private func decodeViolations(

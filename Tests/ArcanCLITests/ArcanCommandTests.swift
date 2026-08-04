@@ -239,7 +239,7 @@ struct ArcanCommandTests {
         OPTIONS:
           --file <path>           Review an explicit Swift file.
           --changed               Review changed Swift files in the Git repository.
-          --review <type>         Select a review; repeatable. Values: god-object, style, all.
+          --review <type>         Select a review; repeatable. Values: god-object, style, team-convention, all.
           --format <format>       Select output format. Values: terminal, json.
           --debug                 Print loaded source and metadata.
           -h, --help              Show help information.
@@ -303,7 +303,7 @@ struct ArcanCommandTests {
             #expect(result.output.hasPrefix("ARCAN Review Analysis"))
             #expect(
                 result.reviewRequest?.selectedReviewTypes
-                    == [.godObject, .style]
+                    == [.godObject, .style, .teamConvention]
             )
             #expect(result.output.contains("1 analyzer skipped"))
         }
@@ -519,7 +519,7 @@ struct ArcanCommandTests {
             #expect(result.exitCode == 0)
             #expect(
                 result.reviewRequest?.selectedReviewTypes
-                    == [.godObject, .style]
+                    == [.godObject, .style, .teamConvention]
             )
         }
     }
@@ -574,7 +574,7 @@ struct ArcanCommandTests {
             #expect(result.exitCode == 0)
             #expect(
                 result.reviewRequest?.selectedReviewTypes
-                    == [.godObject, .style]
+                    == [.godObject, .style, .teamConvention]
             )
         }
     }

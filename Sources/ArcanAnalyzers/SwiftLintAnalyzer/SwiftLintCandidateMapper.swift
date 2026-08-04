@@ -7,15 +7,18 @@ struct SwiftLintCandidateMapper: Sendable {
 
     func map(_ violation: SwiftLintViolation) throws -> FindingCandidate {
         let range = sourceRange(for: violation)
+        let isTeamConvention = violation.ruleID.hasPrefix("arcan_team_")
         return try FindingCandidate(
             candidateID: UUID(),
-            ruleID: "swiftlint.\(violation.ruleID)",
+            ruleID: isTeamConvention
+                ? "ARCAN-TEAM-001"
+                : "swiftlint.\(violation.ruleID)",
             title: violation.type,
             explanation: violation.reason,
             filePath: normalizedPath(violation.file),
             range: range,
             proposedSeverity: try severity(from: violation.severity),
-            proposedCategory: .style,
+            proposedCategory: isTeamConvention ? .teamConvention : .style,
             evidence: [
                 .analyzer(AnalyzerEvidence(
                     description: violation.reason,

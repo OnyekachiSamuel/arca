@@ -109,6 +109,32 @@
         "Prefer the smallest change that makes intent clearer.",
         "Do not replace clear code solely to demonstrate a different syntax."
       ]
+    },
+    {
+      "ruleID": "ARCAN-TEAM-001",
+      "title": "Team convention violation",
+      "group": "teamConventions",
+      "category": "teamConvention",
+      "defaultSeverity": "warning",
+      "definition": "A deterministic project-specific convention represented by an ARCAN-prefixed custom SwiftLint rule.",
+      "evidenceCriteria": [
+        "SwiftLint reports a configured custom rule whose identifier starts with arcan_team_.",
+        "The violation includes the original custom rule identifier, message and source location."
+      ],
+      "classificationGuidance": [
+        "Confirm the issue when the supplied SwiftLint evidence directly matches the configured team convention.",
+        "Do not reinterpret ordinary SwiftLint style rules as team conventions.",
+        "Preserve the original custom SwiftLint rule identifier in the assessment sources and rationale."
+      ],
+      "severityGuidance": [
+        "Use the severity supplied by the configured SwiftLint custom rule.",
+        "Do not increase severity without additional evidence of maintenance or correctness risk."
+      ],
+      "refactoringGuardrails": [
+        "Apply the smallest change that satisfies the documented convention.",
+        "Preserve observable behaviour.",
+        "Do not infer conventions that are not represented by supplied rule knowledge or analyzer evidence."
+      ]
     }
   ]
 }

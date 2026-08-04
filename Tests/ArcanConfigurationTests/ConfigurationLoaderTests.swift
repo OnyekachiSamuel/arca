@@ -129,6 +129,32 @@ struct ConfigurationLoaderTests {
         }
     }
 
+    @Test("SwiftLint configuration path is loaded")
+    func swiftLintConfigurationPathIsLoaded() throws {
+        try withTemporaryDirectory { directory in
+            try writeConfiguration(
+                """
+                {
+                  "schemaVersion": 1,
+                  "swiftLint": {
+                    "configurationPath": ".swiftlint.yml"
+                  }
+                }
+                """,
+                to: directory
+            )
+
+            let configuration = try ConfigurationLoader().load(
+                from: directory
+            )
+
+            #expect(
+                configuration.swiftLint.configurationPath
+                    == ".swiftlint.yml"
+            )
+        }
+    }
+
     @Test("SwiftLint can be required")
     func swiftLintCanBeRequired() throws {
         try withTemporaryDirectory { directory in

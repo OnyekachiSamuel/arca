@@ -43,7 +43,7 @@ public enum ArcanCommand {
     OPTIONS:
       --file <path>           Review an explicit Swift file.
       --changed               Review changed Swift files in the Git repository.
-      --review <type>         Select a review; repeatable. Values: god-object, style, all.
+      --review <type>         Select a review; repeatable. Values: god-object, style, team-convention, all.
       --format <format>       Select output format. Values: terminal, json.
       --debug                 Print loaded source and metadata.
       -h, --help              Show help information.
