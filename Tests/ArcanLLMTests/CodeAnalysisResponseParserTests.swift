@@ -234,7 +234,7 @@ struct CodeAnalysisResponseParserTests {
             )
         expectDiagnostic(
             parser.parse(evidenceOutsideFinding, context: context),
-            code: "ARCAN-LLM-ANALYSIS-INVALID-EVIDENCE"
+            code: "ARCAN-LLM-ANALYSIS-EVIDENCE-OUTSIDE-FINDING"
         )
     }
 
@@ -248,8 +248,42 @@ struct CodeAnalysisResponseParserTests {
 
         expectDiagnostic(
             result,
-            code: "ARCAN-LLM-ANALYSIS-INVALID-EVIDENCE"
+            code: "ARCAN-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
         )
+    }
+
+    @Test("evidence validation reports the precise invalid field")
+    func diagnosesSpecificEvidenceFailures() {
+        let cases = [
+            (
+                validResponse.replacingOccurrences(
+                    of: #""description": "The type owns persistence behavior.""#,
+                    with: #""description": """#
+                ),
+                "ARCAN-LLM-ANALYSIS-EVIDENCE-EMPTY-DESCRIPTION"
+            ),
+            (
+                validResponse.replacingOccurrences(
+                    of: #""excerpt": "    func submit() {\n        repository.save()\n    }""#,
+                    with: #""excerpt": "   ""#
+                ),
+                "ARCAN-LLM-ANALYSIS-EVIDENCE-EMPTY-EXCERPT"
+            ),
+            (
+                validResponse.replacingOccurrences(
+                    of: #""startLine": 3,"#,
+                    with: #""startLine": 0,"#
+                ),
+                "ARCAN-LLM-ANALYSIS-EVIDENCE-INVALID-RANGE"
+            )
+        ]
+
+        for (response, expectedCode) in cases {
+            expectDiagnostic(
+                parser.parse(response, context: context),
+                code: expectedCode
+            )
+        }
     }
 
     @Test("responses exceeding their configured byte limit are rejected")

@@ -20,6 +20,8 @@ enum CodeAnalysisPromptTemplateV1 {
             "- Deleted ranges refer to the previous file version. Do not invent deleted source that is not present in the current source.",
             "- Report only rule IDs supplied in INPUT_DATA.",
             "- Repeat the supplied file path exactly in every finding.",
+            "- Do not invent numeric thresholds. If a threshold value is not supplied in INPUT_DATA, do not claim that a specific threshold was exceeded.",
+            "- For God Object findings, require visible evidence of multiple unrelated responsibilities; size, method count, or property count alone is insufficient.",
             "- Do not provide refactoring suggestions, refactoring steps, or replacement code.",
             "",
             "INPUT_DATA",
@@ -32,7 +34,8 @@ enum CodeAnalysisPromptTemplateV1 {
             "- Return only one JSON object. Do not wrap it in Markdown.",
             "- Return an empty findings array when the visible evidence is insufficient.",
             "- Use exact one-based, inclusive line ranges from the supplied numbered source.",
-            "- Every evidence excerpt must be copied from the supplied source and must agree with its line range.",
+            "- Every evidence excerpt must be a short, exact, contiguous copy from the supplied source, preserving whitespace and line breaks and excluding Markdown fences.",
+            "- Every evidence excerpt must occur within its declared evidence line range, and that evidence range must be inside the finding range.",
             "- severity must be one of: info, warning, error, critical.",
             "- Do not add properties that are not defined by the response schema."
         ].joined(separator: "\n")

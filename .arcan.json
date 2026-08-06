@@ -7,6 +7,8 @@
     "providerID": "lm-studio",
     "baseURL": "http://127.0.0.1:1234",
     "modelID": "qwen2.5-coder-7b-instruct",
-    "timeoutSeconds": 120
+    "timeoutSeconds": 120,
+    "temperature": 0,
+    "seed": 42
   }
 }

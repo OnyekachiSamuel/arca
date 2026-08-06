@@ -80,6 +80,14 @@ struct CodeAnalysisPromptBuilderTests {
         #expect(prompt.text.contains("Return only one JSON object"))
         #expect(prompt.text.contains("only evidence visible"))
         #expect(prompt.text.contains("one-based, inclusive line ranges"))
+        #expect(prompt.text.contains("Do not invent numeric thresholds"))
+        #expect(prompt.text.contains("multiple unrelated responsibilities"))
+        #expect(
+            prompt.text.contains(
+                "size, method count, or property count alone is insufficient"
+            )
+        )
+        #expect(prompt.text.contains("short, exact, contiguous copy"))
         #expect(prompt.text.contains("Do not provide refactoring"))
     }
 

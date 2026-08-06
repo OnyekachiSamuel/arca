@@ -171,18 +171,23 @@ public struct CodeAnalysisResponseParser: Sendable {
 
         var evidence: [FindingEvidence] = []
 
-        for item in response.evidence {
-            guard let validatedEvidence = validatedEvidence(
+        for (evidenceIndex, item) in response.evidence.enumerated() {
+            switch validateEvidence(
                 item,
                 finding: response,
                 sourceLines: sourceLines
-            ) else {
+            ) {
+            case .accepted(let validatedEvidence):
+                evidence.append(.sourceCode(validatedEvidence))
+            case .rejected(let failure):
                 return .rejected(diagnostic(
-                    code: "ARCAN-LLM-ANALYSIS-INVALID-EVIDENCE",
-                    message: "Finding \(findingIndex) contains invalid or unsupported source evidence."
+                    code: failure.code,
+                    message: failure.message(
+                        findingIndex: findingIndex,
+                        evidenceIndex: evidenceIndex
+                    )
                 ))
             }
-            evidence.append(.sourceCode(validatedEvidence))
         }
 
         do {
@@ -216,26 +221,44 @@ public struct CodeAnalysisResponseParser: Sendable {
         return values.filter { encountered.insert($0).inserted }
     }
 
-    private func validatedEvidence(
+    private func validateEvidence(
         _ response: CodeAnalysisEvidenceResponse,
         finding: CodeAnalysisFindingResponse,
         sourceLines: [String]
-    ) -> SourceCodeEvidence? {
+    ) -> EvidenceValidationResult {
         let description = response.description.trimmed
-        guard !description.isEmpty,
-              description.utf8.count
-                <= limits.maximumEvidenceDescriptionUTF8Bytes,
-              !response.excerpt.trimmed.isEmpty,
-              response.excerpt.utf8.count
-                <= limits.maximumEvidenceExcerptUTF8Bytes,
-              isValid(
+        guard !description.isEmpty else {
+            return .rejected(.emptyDescription)
+        }
+        guard description.utf8.count
+                <= limits.maximumEvidenceDescriptionUTF8Bytes else {
+            return .rejected(.descriptionTooLarge)
+        }
+        guard !response.excerpt.trimmed.isEmpty else {
+            return .rejected(.emptyExcerpt)
+        }
+        guard response.excerpt.utf8.count
+                <= limits.maximumEvidenceExcerptUTF8Bytes else {
+            return .rejected(.excerptTooLarge)
+        }
+        guard isValid(
+            startLine: response.startLine,
+            endLine: response.endLine,
+            lineCount: sourceLines.count
+        ) else {
+            return .rejected(.invalidRange(
                 startLine: response.startLine,
-                endLine: response.endLine,
-                lineCount: sourceLines.count
-              ),
-              response.startLine >= finding.startLine,
+                endLine: response.endLine
+            ))
+        }
+        guard response.startLine >= finding.startLine,
               response.endLine <= finding.endLine else {
-            return nil
+            return .rejected(.outsideFinding(
+                evidenceStartLine: response.startLine,
+                evidenceEndLine: response.endLine,
+                findingStartLine: finding.startLine,
+                findingEndLine: finding.endLine
+            ))
         }
 
         let selectedSource = sourceLines[
@@ -245,10 +268,13 @@ public struct CodeAnalysisResponseParser: Sendable {
         .joined(separator: "\n")
 
         guard selectedSource.contains(response.excerpt) else {
-            return nil
+            return .rejected(.excerptMismatch(
+                startLine: response.startLine,
+                endLine: response.endLine
+            ))
         }
 
-        return SourceCodeEvidence(
+        return .accepted(SourceCodeEvidence(
             description: description,
             range: sourceRange(
                 startLine: response.startLine,
@@ -256,7 +282,7 @@ public struct CodeAnalysisResponseParser: Sendable {
                 sourceLines: sourceLines
             ),
             excerpt: response.excerpt
-        )
+        ))
     }
 
     private func sourceRange(
@@ -332,6 +358,70 @@ public struct CodeAnalysisResponseParser: Sendable {
 private enum CandidateValidationResult {
     case accepted(FindingCandidate)
     case rejected(AnalyzerDiagnostic)
+}
+
+private enum EvidenceValidationResult {
+    case accepted(SourceCodeEvidence)
+    case rejected(EvidenceValidationFailure)
+}
+
+private enum EvidenceValidationFailure {
+    case emptyDescription
+    case descriptionTooLarge
+    case emptyExcerpt
+    case excerptTooLarge
+    case invalidRange(startLine: Int, endLine: Int)
+    case outsideFinding(
+        evidenceStartLine: Int,
+        evidenceEndLine: Int,
+        findingStartLine: Int,
+        findingEndLine: Int
+    )
+    case excerptMismatch(startLine: Int, endLine: Int)
+
+    var code: String {
+        switch self {
+        case .emptyDescription:
+            "ARCAN-LLM-ANALYSIS-EVIDENCE-EMPTY-DESCRIPTION"
+        case .descriptionTooLarge:
+            "ARCAN-LLM-ANALYSIS-EVIDENCE-DESCRIPTION-TOO-LARGE"
+        case .emptyExcerpt:
+            "ARCAN-LLM-ANALYSIS-EVIDENCE-EMPTY-EXCERPT"
+        case .excerptTooLarge:
+            "ARCAN-LLM-ANALYSIS-EVIDENCE-EXCERPT-TOO-LARGE"
+        case .invalidRange:
+            "ARCAN-LLM-ANALYSIS-EVIDENCE-INVALID-RANGE"
+        case .outsideFinding:
+            "ARCAN-LLM-ANALYSIS-EVIDENCE-OUTSIDE-FINDING"
+        case .excerptMismatch:
+            "ARCAN-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
+        }
+    }
+
+    func message(findingIndex: Int, evidenceIndex: Int) -> String {
+        let prefix = "Finding \(findingIndex), evidence \(evidenceIndex)"
+        switch self {
+        case .emptyDescription:
+            return "\(prefix) has an empty description."
+        case .descriptionTooLarge:
+            return "\(prefix) description exceeds the configured size limit."
+        case .emptyExcerpt:
+            return "\(prefix) has an empty source excerpt."
+        case .excerptTooLarge:
+            return "\(prefix) source excerpt exceeds the configured size limit."
+        case let .invalidRange(startLine, endLine):
+            return "\(prefix) has invalid source lines \(startLine)–\(endLine)."
+        case let .outsideFinding(
+            evidenceStartLine,
+            evidenceEndLine,
+            findingStartLine,
+            findingEndLine
+        ):
+            return "\(prefix) lines \(evidenceStartLine)–\(evidenceEndLine) are outside finding lines \(findingStartLine)–\(findingEndLine)."
+        case let .excerptMismatch(startLine, endLine):
+            return "\(prefix) excerpt does not exactly match source lines \(startLine)–\(endLine)."
+        }
+    }
 }
 
 private struct CodeAnalysisResponse: Decodable {
