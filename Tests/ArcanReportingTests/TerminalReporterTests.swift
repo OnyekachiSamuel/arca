@@ -7,19 +7,30 @@ import Testing
 struct TerminalReporterTests {
     @Test("renders a normalized categorized report")
     func rendersCategorizedReport() throws {
-        let candidate = try categorizedCandidate()
-        let finding = categorizedFinding(candidate: candidate)
+        let staticCandidate = try categorizedStaticCandidate()
+        let llmCandidate = try categorizedLLMCandidate()
+        let candidates = [staticCandidate, llmCandidate]
+        let finding = categorizedFinding(candidates: candidates)
         let report = CategorizedReviewReport(
             schemaVersion: 1,
             requestID: UUID(),
             categorizationSummary: "The candidate is confirmed.",
             confirmedFindings: [finding],
             uncertainFindings: [],
-            candidates: [candidate],
-            categorizationDecisions: [],
+            candidates: candidates,
+            categorizationDecisions: [FindingCategorizationDecision(
+                candidateIDs: candidates.map(\.candidateID),
+                sourceIdentifiers: finding.sources,
+                assessment: .confirmed,
+                category: .antiPattern,
+                severity: .warning,
+                canonicalRuleID: "ARCAN-GOD-001",
+                title: "God Object",
+                rationale: "Static and LLM evidence agree."
+            )],
             counts: ReviewReportCounts(
-                totalCandidates: 1,
-                confirmed: 1,
+                totalCandidates: 2,
+                confirmed: 2,
                 rejected: 0,
                 uncertain: 0,
                 findingsPerCategory: [
@@ -44,29 +55,62 @@ struct TerminalReporterTests {
             .render(report: report)
 
         #expect(output == """
-        ARCAN Categorized Review
-        Summary: The candidate is confirmed.
+        ARCAN Code Review
+        Overall result: 1 confirmed issue
 
-        Counts:
-          Candidates: 1
+        Summary
+        -------
+        The candidate is confirmed.
+
+        Issue 1 — God Object
+        --------------------
+        Status: CONFIRMED
+        Severity: [WARNING]
+        Rule: ARCAN-GOD-001
+        Category: Anti-pattern
+        Location: Sources/App.swift
+        Lines: 1–20
+
+        Detection evidence
+        ------------------
+        [STATIC ANALYZER] God Object candidate
+          Analyzer: god-object
+          Explanation: The type exceeds multiple structural thresholds.
+          Evidence:
+            - methods: 30 (threshold: 25)
+
+        [LLM ANALYZER] God Object candidate
+          Analyzer: llm-code-analysis
+          Provider: lm-studio
+          Model: qwen
+          Explanation: The type owns unrelated responsibilities.
+          Evidence:
+            - The type handles users and invoices.
+
+        Categorization
+        --------------
+        Assessment: Confirmed
+        Grouped candidates: 2
+        Analyzer agreement: Static analyzer + LLM analyzer
+        Provider: ollama
+        Model: qwen
+
+        Review statistics
+        -----------------
+        Detected candidates: 2
+          From static analyzers: 1
+          From LLM analysis: 1
+        Final issues: 1
           Confirmed: 1
-          Rejected: 0
-          Uncertain: 0
-
         Findings by category:
-          antiPattern: 1
-
-        Confirmed findings:
-
-        [WARNING] ARCAN-GOD-001: God Object
-        Assessment: confirmed
-        Sources: god-object, llm-code-analysis
-        Candidates:
-          - 11111111-1111-1111-1111-111111111111 Sources/App.swift:1:1-20:2
-        Rationale: Static and LLM evidence agree.
+          Anti-pattern: 1
 
         [INFO] ARCAN-NOTE: Review completed.
         """)
+        #expect(!output.contains("Candidate assessments"))
+        #expect(!output.contains("Requires manual review"))
+        #expect(!output.contains("Why it was categorized this way"))
+        #expect(!output.contains("Static and LLM evidence agree."))
     }
 
     @Test("renders candidate analysis without final-finding language")
@@ -98,6 +142,59 @@ struct TerminalReporterTests {
         Evidence:
           - methods: 30 (threshold: 25)
         """)
+    }
+
+    @Test("shows uncertain issues as requiring manual review")
+    func rendersManualReviewCount() throws {
+        let candidate = try categorizedStaticCandidate()
+        let finding = Finding(
+            id: candidate.candidateID,
+            candidateIDs: [candidate.candidateID],
+            assessment: .uncertain,
+            ruleID: "ARCAN-GOD-001",
+            title: "God Object",
+            category: .antiPattern,
+            severity: .warning,
+            classificationRationale: "The evidence is inconclusive.",
+            sources: ["god-object"],
+            candidates: [candidate]
+        )
+        let report = CategorizedReviewReport(
+            schemaVersion: 1,
+            requestID: UUID(),
+            categorizationSummary: "One issue needs review.",
+            confirmedFindings: [],
+            uncertainFindings: [finding],
+            candidates: [candidate],
+            categorizationDecisions: [],
+            counts: ReviewReportCounts(
+                totalCandidates: 1,
+                confirmed: 0,
+                rejected: 0,
+                uncertain: 1,
+                findingsPerCategory: [
+                    CategoryFindingCount(category: .antiPattern, count: 1)
+                ]
+            ),
+            diagnostics: [],
+            analyzerResults: [],
+            categorizationExecutionMetadata: LLMExecutionMetadata(
+                providerID: "ollama",
+                modelID: "qwen",
+                requestCount: 1,
+                providerDurationMilliseconds: 12
+            )
+        )
+
+        let output = try TerminalReporter(outputIsTTY: { false })
+            .render(report: report)
+
+        #expect(output.contains(
+            "Overall result: 1 issue requiring manual review"
+        ))
+        #expect(output.contains("Final issues: 1"))
+        #expect(output.contains("  Confirmed: 0"))
+        #expect(output.contains("  Requires manual review: 1"))
     }
 
     @Test("renders skipped analyzer diagnostics")
@@ -147,14 +244,14 @@ struct TerminalReporterTests {
     }
 }
 
-private func categorizedCandidate() throws -> FindingCandidate {
+private func categorizedStaticCandidate() throws -> FindingCandidate {
     try FindingCandidate(
         candidateID: UUID(
             uuidString: "11111111-1111-1111-1111-111111111111"
         )!,
         ruleID: "ARCAN-GOD-001",
         title: "God Object candidate",
-        explanation: "The type owns unrelated responsibilities.",
+        explanation: "The type exceeds multiple structural thresholds.",
         filePath: "Sources/App.swift",
         range: SourceRange(
             startLine: 1,
@@ -173,10 +270,47 @@ private func categorizedCandidate() throws -> FindingCandidate {
     )
 }
 
-private func categorizedFinding(candidate: FindingCandidate) -> Finding {
+private func categorizedLLMCandidate() throws -> FindingCandidate {
+    try FindingCandidate(
+        candidateID: UUID(
+            uuidString: "22222222-2222-2222-2222-222222222222"
+        )!,
+        ruleID: "ARCAN-GOD-001",
+        title: "God Object candidate",
+        explanation: "The type owns unrelated responsibilities.",
+        filePath: "Sources/App.swift",
+        range: SourceRange(
+            startLine: 1,
+            startColumn: 1,
+            endLine: 20,
+            endColumn: 2
+        ),
+        proposedSeverity: .warning,
+        proposedCategory: .antiPattern,
+        evidence: [.sourceCode(SourceCodeEvidence(
+            description: "The type handles users and invoices.",
+            range: SourceRange(
+                startLine: 2,
+                startColumn: 1,
+                endLine: 10,
+                endColumn: 2
+            ),
+            excerpt: "final class App"
+        ))],
+        sourceIdentifiers: [
+            "llm-code-analysis",
+            "llm-provider:lm-studio",
+            "llm-model:qwen"
+        ]
+    )
+}
+
+private func categorizedFinding(
+    candidates: [FindingCandidate]
+) -> Finding {
     Finding(
-        id: candidate.candidateID,
-        candidateIDs: [candidate.candidateID],
+        id: candidates[0].candidateID,
+        candidateIDs: candidates.map(\.candidateID),
         assessment: .confirmed,
         ruleID: "ARCAN-GOD-001",
         title: "God Object",
@@ -184,7 +318,7 @@ private func categorizedFinding(candidate: FindingCandidate) -> Finding {
         severity: .warning,
         classificationRationale: "Static and LLM evidence agree.",
         sources: ["god-object", "llm-code-analysis"],
-        candidates: [candidate]
+        candidates: candidates
     )
 }
 

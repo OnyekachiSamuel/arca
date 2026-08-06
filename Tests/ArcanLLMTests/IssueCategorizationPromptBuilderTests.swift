@@ -47,6 +47,9 @@ struct IssueCategorizationPromptBuilderTests {
         #expect(prompt.text.contains(#""summary""#))
         #expect(prompt.text.contains(#""decisions""#))
         #expect(prompt.text.contains(#""candidateIDs""#))
+        #expect(prompt.text.contains(
+            "summary must not contain candidate IDs"
+        ))
         #expect(prompt.text.contains(#""rationale""#))
     }
 
