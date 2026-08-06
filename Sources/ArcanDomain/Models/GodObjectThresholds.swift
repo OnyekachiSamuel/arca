@@ -3,16 +3,19 @@ public struct GodObjectThresholds: Codable, Equatable, Sendable {
     public let maximumMethods: Int
     public let maximumStoredProperties: Int
     public let minimumTriggeredSignals: Int
+    public let minimumTightClassCohesion: Double
 
     public init(
         maximumLines: Int = 500,
         maximumMethods: Int = 25,
         maximumStoredProperties: Int = 20,
-        minimumTriggeredSignals: Int = 2
+        minimumTriggeredSignals: Int = 2,
+        minimumTightClassCohesion: Double = 0.33
     ) {
         self.maximumLines = maximumLines
         self.maximumMethods = maximumMethods
         self.maximumStoredProperties = maximumStoredProperties
         self.minimumTriggeredSignals = minimumTriggeredSignals
+        self.minimumTightClassCohesion = minimumTightClassCohesion
     }
 }

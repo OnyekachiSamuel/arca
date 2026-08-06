@@ -30,19 +30,20 @@ struct RuleKnowledgeRegistryTests {
         #expect(knowledge.defaultSeverity == .warning)
         #expect(
             knowledge.definition
-                == "A God Object candidate is a type that centralizes multiple unrelated responsibilities and exceeds multiple configured structural thresholds."
+                == "A God Object candidate is a type that combines excessive structural size with low cohesion between its methods and stored state."
         )
         #expect(
             knowledge.evidenceCriteria == [
                 "The type exceeds at least the configured minimum number of structural signals.",
                 "Its declaration line count exceeds the configured line threshold.",
                 "Its method count exceeds the configured method threshold.",
-                "Its stored-property count exceeds the configured property threshold."
+                "Its stored-property count exceeds the configured property threshold.",
+                "Its tight class cohesion is below the configured cohesion threshold."
             ]
         )
         #expect(
             knowledge.classificationGuidance == [
-                "Require evidence of multiple responsibilities or multiple structural signals.",
+                "Require both multiple structural signals and low tight class cohesion.",
                 "Do not classify a type as a God Object based on line count alone.",
                 "Distinguish a deliberately thin coordinator or facade from a type that owns unrelated business responsibilities."
             ]

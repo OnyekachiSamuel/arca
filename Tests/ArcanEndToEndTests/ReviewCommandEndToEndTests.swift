@@ -35,7 +35,7 @@ struct ReviewCommandEndToEndTests {
                 llmProvider: provider
             )
             let report = try JSONDecoder().decode(
-                ReviewReport.self,
+                CategorizedReviewReport.self,
                 from: Data(result.output.utf8)
             )
             let prompts = await provider.prompts

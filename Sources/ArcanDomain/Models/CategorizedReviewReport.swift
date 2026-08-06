@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ReviewReport: Codable, Equatable, Sendable {
+public struct CategorizedReviewReport: Codable, Equatable, Sendable {
     public static let currentSchemaVersion = 1
 
     public let schemaVersion: Int

@@ -29,7 +29,7 @@ struct ArcanCommandTests {
                 llmProvider: provider
             )
             let report = try JSONDecoder().decode(
-                ReviewReport.self,
+                CategorizedReviewReport.self,
                 from: Data(result.output.utf8)
             )
 
@@ -52,7 +52,7 @@ struct ArcanCommandTests {
     func runsConfiguredFilePipeline() async throws {
         try await withTemporaryDirectory { directory in
             let file = directory.appendingPathComponent("App.swift")
-            try "struct App {\n    let value = 1\n    func run() {}\n}".write(
+            try "struct App {\n    let value = 1; let other = 2\n    func run() {}; func stop() {}\n}".write(
                 to: file,
                 atomically: true,
                 encoding: .utf8
@@ -74,7 +74,7 @@ struct ArcanCommandTests {
                 llmProvider: provider
             )
             let report = try JSONDecoder().decode(
-                ReviewReport.self,
+                CategorizedReviewReport.self,
                 from: Data(result.output.utf8)
             )
             let prompts = await provider.prompts
@@ -134,7 +134,7 @@ struct ArcanCommandTests {
                 llmProvider: provider
             )
             let report = try JSONDecoder().decode(
-                ReviewReport.self,
+                CategorizedReviewReport.self,
                 from: Data(result.output.utf8)
             )
             let prompts = await provider.prompts
@@ -153,7 +153,7 @@ struct ArcanCommandTests {
     func reportsConfiguredProviderFailure() async throws {
         try await withTemporaryDirectory { directory in
             let file = directory.appendingPathComponent("Large.swift")
-            try "class Large {\n    var value = 1\n    func run() {}\n}".write(
+            try "class Large {\n    var left = 1\n    var right = 2\n    func runLeft() { print(left) }\n    func runRight() { print(right) }\n}".write(
                 to: file,
                 atomically: true,
                 encoding: .utf8
@@ -174,7 +174,7 @@ struct ArcanCommandTests {
                 llmProvider: CLIFailingLLMProvider()
             )
             let report = try JSONDecoder().decode(
-                ReviewReport.self,
+                CategorizedReviewReport.self,
                 from: Data(result.output.utf8)
             )
 
@@ -216,7 +216,7 @@ struct ArcanCommandTests {
                 llmProvider: provider
             )
             let report = try JSONDecoder().decode(
-                ReviewReport.self,
+                CategorizedReviewReport.self,
                 from: Data(result.output.utf8)
             )
 
@@ -856,8 +856,10 @@ struct ArcanCommandTests {
             let file = sources.appendingPathComponent("LargeType.swift")
             try """
             class LargeType {
-                func first() {}
-                func second() {}
+                var left = 1
+                var right = 2
+                func first() { print(left) }
+                func second() { print(right) }
             }
             """.write(to: file, atomically: true, encoding: .utf8)
             try """
@@ -865,7 +867,8 @@ struct ArcanCommandTests {
               "schemaVersion": 1,
               "godObject": {
                 "maximumLines": 3,
-                "maximumMethods": 1
+                "maximumMethods": 1,
+                "maximumStoredProperties": 1
               }
             }
             """.write(

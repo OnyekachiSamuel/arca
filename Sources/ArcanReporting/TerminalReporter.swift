@@ -49,7 +49,7 @@ public struct TerminalReporter: Reporter {
         return lines.joined(separator: "\n")
     }
 
-    public func render(report: ReviewReport) throws -> String {
+    public func render(report: CategorizedReviewReport) throws -> String {
         let usesColor = outputIsTTY()
         let counts = report.counts
         var lines = [
@@ -167,6 +167,11 @@ public struct TerminalReporter: Reporter {
                 lines.append(
                     "  - \(metric.metricName): \(metric.observedValue) "
                         + "(threshold: \(metric.thresholdValue))"
+                )
+            case .ratio(let ratio):
+                lines.append(
+                    "  - \(ratio.metricName): \(ratio.observedValue) "
+                        + "(threshold: \(ratio.thresholdValue))"
                 )
             case .analyzer(let analyzer):
                 lines.append("  - \(analyzer.description)")

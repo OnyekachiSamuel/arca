@@ -89,8 +89,8 @@ struct DomainModelCodableTests {
             tool: ToolMetadata(name: "SwiftLint", version: "0.63.2"),
             durationMilliseconds: 17
         )
-        let report = ReviewReport(
-            schemaVersion: ReviewReport.currentSchemaVersion,
+        let report = CategorizedReviewReport(
+            schemaVersion: CategorizedReviewReport.currentSchemaVersion,
             requestID: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!,
             categorizationSummary: "One issue was confirmed.",
             confirmedFindings: [finding],
@@ -118,7 +118,10 @@ struct DomainModelCodableTests {
 
         let data = try encodeToJSON(report)
         
-        let decoded = try decodeFromJSON(ReviewReport.self, from: data)
+        let decoded = try decodeFromJSON(
+            CategorizedReviewReport.self,
+            from: data
+        )
 
         #expect(decoded == report)
         #expect(decoded.schemaVersion == 1)

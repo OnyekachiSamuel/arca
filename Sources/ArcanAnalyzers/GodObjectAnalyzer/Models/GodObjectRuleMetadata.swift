@@ -26,6 +26,6 @@ public struct GodObjectRuleMetadata: Equatable, Sendable {
         title: "God Object candidate",
         category: .antiPattern,
         severity: .warning,
-        explanation: "exceeds multiple configured structural thresholds, suggesting it may have too many responsibilities."
+        explanation: "exceeds multiple configured structural thresholds and has low cohesion, suggesting it may have too many responsibilities."
     )
 }

@@ -8,8 +8,8 @@ struct JSONReporterTests {
     @Test("categorized output is versioned and decodes to the report")
     func rendersDecodableReport() throws {
         let candidate = try makeCandidate()
-        let report = ReviewReport(
-            schemaVersion: ReviewReport.currentSchemaVersion,
+        let report = CategorizedReviewReport(
+            schemaVersion: CategorizedReviewReport.currentSchemaVersion,
             requestID: UUID(),
             categorizationSummary: "One confirmed issue.",
             confirmedFindings: [Finding(
@@ -48,7 +48,7 @@ struct JSONReporterTests {
 
         let output = try JSONReporter().render(report: report)
         let decoded = try JSONDecoder().decode(
-            ReviewReport.self,
+            CategorizedReviewReport.self,
             from: Data(output.utf8)
         )
 
@@ -70,7 +70,10 @@ struct JSONReporterTests {
         )
 
         #expect(throws: DecodingError.self) {
-            _ = try JSONDecoder().decode(ReviewReport.self, from: data)
+            _ = try JSONDecoder().decode(
+                CategorizedReviewReport.self,
+                from: data
+            )
         }
     }
 

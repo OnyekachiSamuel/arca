@@ -7,7 +7,6 @@ struct GodObjectCandidateMapper: Sendable {
 
     func map(
         metrics: TypeStructuralMetrics,
-        sourceFile: SourceFile,
         evidence: [FindingEvidence]
     ) throws -> FindingCandidate {
         try FindingCandidate(
@@ -15,7 +14,7 @@ struct GodObjectCandidateMapper: Sendable {
             ruleID: ruleMetadata.ruleID,
             title: ruleMetadata.title,
             explanation: "Type '\(metrics.name)' \(ruleMetadata.explanation)",
-            filePath: sourceFile.path,
+            filePath: metrics.sourcePath,
             range: metrics.range,
             proposedSeverity: ruleMetadata.severity,
             proposedCategory: ruleMetadata.category,
@@ -27,7 +26,19 @@ struct GodObjectCandidateMapper: Sendable {
                 "lineCount": .integer(metrics.lineCount),
                 "methodCount": .integer(metrics.methodCount),
                 "propertyCount": .integer(metrics.propertyCount),
-                "sourcePath": .string(sourceFile.path)
+                "tightClassCohesion": metrics.tightClassCohesion.map {
+                    .decimal($0)
+                } ?? .string("unavailable"),
+                "cohesionEligibleMethodCount": .integer(
+                    metrics.cohesionEligibleMethodCount
+                ),
+                "cohesionConnectedPairCount": .integer(
+                    metrics.cohesionConnectedPairCount
+                ),
+                "cohesionPossiblePairCount": .integer(
+                    metrics.cohesionPossiblePairCount
+                ),
+                "sourcePath": .string(metrics.sourcePath)
             ]
         )
     }

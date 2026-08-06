@@ -83,6 +83,13 @@ struct FindingCandidateCodableTests {
                     thresholdValue: 300
                 )
             ),
+            .ratio(
+                RatioEvidence(
+                    metricName: "tightClassCohesion",
+                    observedValue: 0.2,
+                    thresholdValue: 0.33
+                )
+            ),
             .analyzer(
                 AnalyzerEvidence(
                     description: "SwiftLint reported a force cast.",
@@ -116,6 +123,7 @@ struct FindingCandidateCodableTests {
 
         #expect(objects.map { $0["kind"] as? String } == [
             "metric",
+            "ratio",
             "analyzer",
             "sourceCode"
         ])

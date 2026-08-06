@@ -9,7 +9,7 @@ struct TerminalReporterTests {
     func rendersCategorizedReport() throws {
         let candidate = try categorizedCandidate()
         let finding = categorizedFinding(candidate: candidate)
-        let report = ReviewReport(
+        let report = CategorizedReviewReport(
             schemaVersion: 1,
             requestID: UUID(),
             categorizationSummary: "The candidate is confirmed.",

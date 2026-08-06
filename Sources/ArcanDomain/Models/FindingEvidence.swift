@@ -1,10 +1,12 @@
 public enum FindingEvidence: Codable, Equatable, Sendable {
     case metric(MetricEvidence)
+    case ratio(RatioEvidence)
     case analyzer(AnalyzerEvidence)
     case sourceCode(SourceCodeEvidence)
 
     private enum Kind: String, Codable {
         case metric
+        case ratio
         case analyzer
         case sourceCode
     }
@@ -41,6 +43,21 @@ public enum FindingEvidence: Codable, Equatable, Sendable {
                     )
                 )
             )
+        case .ratio:
+            self = .ratio(RatioEvidence(
+                metricName: try container.decode(
+                    String.self,
+                    forKey: .metricName
+                ),
+                observedValue: try container.decode(
+                    Double.self,
+                    forKey: .observedValue
+                ),
+                thresholdValue: try container.decode(
+                    Double.self,
+                    forKey: .thresholdValue
+                )
+            ))
         case .analyzer:
             self = .analyzer(
                 AnalyzerEvidence(
@@ -88,6 +105,17 @@ public enum FindingEvidence: Codable, Equatable, Sendable {
                 evidence.metricName,
                 forKey: .metricName
             )
+            try container.encode(
+                evidence.observedValue,
+                forKey: .observedValue
+            )
+            try container.encode(
+                evidence.thresholdValue,
+                forKey: .thresholdValue
+            )
+        case .ratio(let evidence):
+            try container.encode(Kind.ratio, forKey: .kind)
+            try container.encode(evidence.metricName, forKey: .metricName)
             try container.encode(
                 evidence.observedValue,
                 forKey: .observedValue

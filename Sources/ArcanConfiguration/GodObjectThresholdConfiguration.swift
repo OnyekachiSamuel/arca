@@ -6,6 +6,7 @@ struct GodObjectThresholdConfiguration: Decodable {
     let maximumMethods: Int?
     let maximumStoredProperties: Int?
     let minimumTriggeredSignals: Int?
+    let minimumTightClassCohesion: Double?
 
     init(from decoder: any Decoder) throws {
         let container: KeyedDecodingContainer<ConfigurationCodingKey>
@@ -26,7 +27,8 @@ struct GodObjectThresholdConfiguration: Decodable {
                 "maximumLines",
                 "maximumMethods",
                 "maximumStoredProperties",
-                "minimumTriggeredSignals"
+                "minimumTriggeredSignals",
+                "minimumTightClassCohesion"
             ],
             pathPrefix: "godObject"
         )
@@ -53,6 +55,10 @@ struct GodObjectThresholdConfiguration: Decodable {
                 key: "minimumTriggeredSignals",
                 pathPrefix: "godObject"
             )
+        minimumTightClassCohesion = try Self.decodeOptionalDouble(
+            from: container,
+            key: "minimumTightClassCohesion"
+        )
     }
 
     func resolvedThresholds() throws -> GodObjectThresholds {
@@ -63,7 +69,10 @@ struct GodObjectThresholdConfiguration: Decodable {
             maximumStoredProperties:
                 maximumStoredProperties ?? defaults.maximumStoredProperties,
             minimumTriggeredSignals:
-                minimumTriggeredSignals ?? defaults.minimumTriggeredSignals
+                minimumTriggeredSignals ?? defaults.minimumTriggeredSignals,
+            minimumTightClassCohesion:
+                minimumTightClassCohesion
+                    ?? defaults.minimumTightClassCohesion
         )
 
         guard resolved.maximumLines >= 1 else {
@@ -90,7 +99,36 @@ struct GodObjectThresholdConfiguration: Decodable {
                 reason: "must be between 1 and 3."
             )
         }
+        guard resolved.minimumTightClassCohesion.isFinite,
+              (0...1).contains(resolved.minimumTightClassCohesion) else {
+            throw ConfigurationLoadingError.invalidValue(
+                field: "godObject.minimumTightClassCohesion",
+                reason: "must be between 0 and 1."
+            )
+        }
 
         return resolved
+    }
+
+    private static func decodeOptionalDouble(
+        from container: KeyedDecodingContainer<ConfigurationCodingKey>,
+        key: String
+    ) throws -> Double? {
+        let codingKey = ConfigurationCodingKey(key)
+        guard container.contains(codingKey) else { return nil }
+        guard try !container.decodeNil(forKey: codingKey) else {
+            throw ConfigurationDecodingIssue.invalidValue(
+                field: "godObject.\(key)",
+                reason: "expected a number."
+            )
+        }
+        do {
+            return try container.decode(Double.self, forKey: codingKey)
+        } catch {
+            throw ConfigurationDecodingIssue.invalidValue(
+                field: "godObject.\(key)",
+                reason: "expected a number."
+            )
+        }
     }
 }

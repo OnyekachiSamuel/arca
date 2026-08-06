@@ -406,7 +406,7 @@ public enum ArcanCommand {
     }
 
     private static func exitStatus(
-        for report: ReviewReport
+        for report: CategorizedReviewReport
     ) -> ArcanExitStatus {
         if containsProviderFailure(report.diagnostics)
             || (report.counts.totalCandidates > 0

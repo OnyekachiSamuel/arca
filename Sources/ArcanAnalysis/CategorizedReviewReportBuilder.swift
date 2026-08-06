@@ -5,7 +5,7 @@ public struct CategorizedReviewReportBuilder: Sendable {
 
     public func build(
         from result: ReviewCategorizationResult
-    ) -> ReviewReport {
+    ) -> CategorizedReviewReport {
         let decisions = result.categorization?.decisions ?? []
         let candidatesByID = Dictionary(
             uniqueKeysWithValues: result.analysis.candidates.map {
@@ -53,8 +53,8 @@ public struct CategorizedReviewReportBuilder: Sendable {
             }
         }
 
-        return ReviewReport(
-            schemaVersion: ReviewReport.currentSchemaVersion,
+        return CategorizedReviewReport(
+            schemaVersion: CategorizedReviewReport.currentSchemaVersion,
             requestID: result.analysis.requestID,
             categorizationSummary: result.categorization?.summary,
             confirmedFindings: confirmedFindings,

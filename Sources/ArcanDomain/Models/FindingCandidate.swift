@@ -152,7 +152,7 @@ public struct FindingCandidate:
         _ evidence: FindingEvidence
     ) -> Bool {
         switch evidence {
-        case .metric:
+        case .metric, .ratio:
             true
         case .analyzer(let analyzerEvidence):
             analyzerEvidence.range.map(isValid) ?? true

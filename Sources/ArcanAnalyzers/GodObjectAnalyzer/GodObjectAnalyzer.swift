@@ -23,28 +23,34 @@ public struct GodObjectAnalyzer: Analyzer {
     public func analyze(context: AnalysisContext) async throws -> AnalyzerResult {
         var candidates: [FindingCandidate] = []
 
-        for sourceFile in context.sourceFiles {
-            let extractedMetrics = try structureProvider.extractMetrics(from: sourceFile)
-            for metrics in extractedMetrics {
-                let evidence = triggeredEvidence(for: metrics)
-                guard evidence.count >= thresholds.minimumTriggeredSignals else {
-                    continue
-                }
-                candidates.append(try GodObjectCandidateMapper(
-                    ruleMetadata: ruleMetadata,
-                    analyzerID: id
-                ).map(
-                    metrics: metrics,
-                    sourceFile: sourceFile,
-                    evidence: evidence
-                ))
+        let extractedMetrics = try structureProvider.extractMetrics(
+            from: context.sourceFiles
+        )
+        for metrics in extractedMetrics {
+            let structuralEvidence = triggeredStructuralEvidence(for: metrics)
+            guard structuralEvidence.count
+                    >= thresholds.minimumTriggeredSignals,
+                  let cohesion = metrics.tightClassCohesion,
+                  cohesion < thresholds.minimumTightClassCohesion else {
+                continue
             }
+            let evidence = structuralEvidence + [
+                .ratio(RatioEvidence(
+                    metricName: "tightClassCohesion",
+                    observedValue: cohesion,
+                    thresholdValue: thresholds.minimumTightClassCohesion
+                ))
+            ]
+            candidates.append(try GodObjectCandidateMapper(
+                ruleMetadata: ruleMetadata,
+                analyzerID: id
+            ).map(metrics: metrics, evidence: evidence))
         }
 
         return AnalyzerResult(analyzerID: id, candidates: candidates)
     }
 
-    private func triggeredEvidence(
+    private func triggeredStructuralEvidence(
         for metrics: TypeStructuralMetrics
     ) -> [FindingEvidence] {
         var evidence: [FindingEvidence] = []

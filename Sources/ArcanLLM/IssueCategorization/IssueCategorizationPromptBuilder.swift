@@ -108,7 +108,7 @@ public struct IssueCategorizationPromptBuilder: Sendable {
         _ evidence: FindingEvidence
     ) -> FindingEvidence {
         switch evidence {
-        case .metric:
+        case .metric, .ratio:
             evidence
         case .analyzer(let value):
             .analyzer(AnalyzerEvidence(

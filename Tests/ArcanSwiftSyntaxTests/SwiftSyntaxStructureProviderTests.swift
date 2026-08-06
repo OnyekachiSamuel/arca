@@ -61,18 +61,81 @@ struct SwiftSyntaxStructureProviderTests {
         #expect(actor.propertyCount == 1)
     }
 
-    @Test("extracts extension metrics and excludes computed properties")
+    @Test("extracts extensions separately and excludes computed properties")
     func extractsExtensionMetrics() throws {
         let metrics = try extractMetrics()
-        let extensionMetrics = try #require(
+        let feature = try #require(
             metrics.first { $0.name == "Feature" && $0.kind == .extension }
         )
 
-        #expect(extensionMetrics.range.startLine == 29)
-        #expect(extensionMetrics.range.endLine == 33)
-        #expect(extensionMetrics.lineCount == 5)
-        #expect(extensionMetrics.methodCount == 1)
-        #expect(extensionMetrics.propertyCount == 0)
+        #expect(feature.range.startLine == 29)
+        #expect(feature.range.endLine == 33)
+        #expect(feature.lineCount == 5)
+        #expect(feature.methodCount == 1)
+        #expect(feature.propertyCount == 0)
+    }
+
+    @Test("calculates method cohesion and respects shadowing")
+    func calculatesCohesion() throws {
+        let source = SourceFile(
+            path: "/project/Cohesion.swift",
+            content: """
+            final class Cohesion {
+                var session = 0
+                var invoices = 0
+
+                func login() { self.session += 1 }
+                func logout() { session = 0 }
+                func export(invoices: Int) { print(invoices) }
+            }
+            """,
+            lineCount: 8
+        )
+
+        let metrics = try #require(
+            SwiftSyntaxStructureProvider().extractMetrics(from: [source]).first
+        )
+
+        #expect(metrics.cohesionEligibleMethodCount == 3)
+        #expect(metrics.cohesionConnectedPairCount == 1)
+        #expect(metrics.cohesionPossiblePairCount == 3)
+        #expect(
+            abs((metrics.tightClassCohesion ?? 0) - (1.0 / 3.0))
+                < 0.000_001
+        )
+    }
+
+    @Test("aggregates cohesion across selected source files")
+    func aggregatesAcrossFiles() throws {
+        let declaration = SourceFile(
+            path: "/project/Account.swift",
+            content: """
+            final class Account {
+                var session = 0
+                var invoices = 0
+                func login() { session += 1 }
+            }
+            """,
+            lineCount: 5
+        )
+        let extensionFile = SourceFile(
+            path: "/project/Account+Invoices.swift",
+            content: """
+            extension Account {
+                func export() { print(invoices) }
+            }
+            """,
+            lineCount: 3
+        )
+
+        let provider: any SwiftStructureProvider = SwiftSyntaxStructureProvider()
+        let metrics = try #require(
+            provider.extractMetrics(from: [declaration, extensionFile]).first
+        )
+
+        #expect(metrics.methodCount == 2)
+        #expect(metrics.propertyCount == 2)
+        #expect(metrics.tightClassCohesion == 0)
     }
 
     private func extractMetrics() throws -> [TypeStructuralMetrics] {

@@ -46,11 +46,16 @@ struct GodObjectAnalyzerTests {
                 metricName: "storedProperties",
                 observedValue: 3,
                 thresholdValue: 2
+            )),
+            .ratio(RatioEvidence(
+                metricName: "tightClassCohesion",
+                observedValue: 0,
+                thresholdValue: 0.33
             ))
         ])
         #expect(
             candidate.explanation
-                == "Type 'LargeCoordinator' exceeds multiple configured structural thresholds, suggesting it may have too many responsibilities."
+                == "Type 'LargeCoordinator' exceeds multiple configured structural thresholds and has low cohesion, suggesting it may have too many responsibilities."
         )
         #expect(candidate.sourceIdentifiers == ["god-object"])
         #expect(candidate.analyzerMetadata == [
@@ -59,6 +64,10 @@ struct GodObjectAnalyzerTests {
             "lineCount": .integer(9),
             "methodCount": .integer(3),
             "propertyCount": .integer(3),
+            "tightClassCohesion": .decimal(0),
+            "cohesionEligibleMethodCount": .integer(3),
+            "cohesionConnectedPairCount": .integer(0),
+            "cohesionPossiblePairCount": .integer(3),
             "sourcePath": .string(source.path)
         ])
     }
@@ -152,6 +161,64 @@ struct GodObjectAnalyzerTests {
         #expect(result.candidates.count == 1)
     }
 
+    @Test("large cohesive types are not reported")
+    func ignoresStructurallyLargeCohesiveType() async throws {
+        let result = try await analyze(
+            metrics: [metrics(
+                lineCount: 20,
+                methodCount: 5,
+                propertyCount: 4,
+                tightClassCohesion: 0.8
+            )],
+            thresholds: GodObjectThresholds(
+                maximumLines: 10,
+                maximumMethods: 3,
+                maximumStoredProperties: 2
+            )
+        )
+
+        #expect(result.candidates.isEmpty)
+    }
+
+    @Test("low cohesion must be strictly below its threshold")
+    func cohesionThresholdBoundaryDoesNotTrigger() async throws {
+        let result = try await analyze(
+            metrics: [metrics(
+                lineCount: 20,
+                methodCount: 5,
+                propertyCount: 4,
+                tightClassCohesion: 0.33
+            )],
+            thresholds: GodObjectThresholds(
+                maximumLines: 10,
+                maximumMethods: 3,
+                maximumStoredProperties: 2,
+                minimumTightClassCohesion: 0.33
+            )
+        )
+
+        #expect(result.candidates.isEmpty)
+    }
+
+    @Test("types without enough structure for cohesion are not reported")
+    func unavailableCohesionDoesNotTrigger() async throws {
+        let result = try await analyze(
+            metrics: [metrics(
+                lineCount: 20,
+                methodCount: 5,
+                propertyCount: 4,
+                tightClassCohesion: nil
+            )],
+            thresholds: GodObjectThresholds(
+                maximumLines: 10,
+                maximumMethods: 3,
+                maximumStoredProperties: 2
+            )
+        )
+
+        #expect(result.candidates.isEmpty)
+    }
+
     private func analyze(
         metrics: [TypeStructuralMetrics],
         thresholds: GodObjectThresholds
@@ -171,11 +238,13 @@ struct GodObjectAnalyzerTests {
     private func metrics(
         lineCount: Int,
         methodCount: Int,
-        propertyCount: Int
+        propertyCount: Int,
+        tightClassCohesion: Double? = 0
     ) -> TypeStructuralMetrics {
         TypeStructuralMetrics(
             name: "Example",
             kind: .class,
+            sourcePath: "/tmp/Example.swift",
             range: SourceRange(
                 startLine: 1,
                 startColumn: 1,
@@ -184,7 +253,11 @@ struct GodObjectAnalyzerTests {
             ),
             lineCount: lineCount,
             methodCount: methodCount,
-            propertyCount: propertyCount
+            propertyCount: propertyCount,
+            tightClassCohesion: tightClassCohesion,
+            cohesionEligibleMethodCount: methodCount,
+            cohesionConnectedPairCount: 0,
+            cohesionPossiblePairCount: methodCount * (methodCount - 1) / 2
         )
     }
 

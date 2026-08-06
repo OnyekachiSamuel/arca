@@ -8,7 +8,7 @@ public struct JSONReporter: Reporter {
         try encode(analysis)
     }
 
-    public func render(report: ReviewReport) throws -> String {
+    public func render(report: CategorizedReviewReport) throws -> String {
         try encode(report)
     }
 

@@ -263,7 +263,8 @@ struct ConfigurationLoaderTests {
                     "maximumLines": 300,
                     "maximumMethods": 15,
                     "maximumStoredProperties": 12,
-                    "minimumTriggeredSignals": 1
+                    "minimumTriggeredSignals": 1,
+                    "minimumTightClassCohesion": 0.25
                   }
                 }
                 """,
@@ -276,8 +277,30 @@ struct ConfigurationLoaderTests {
                 maximumLines: 300,
                 maximumMethods: 15,
                 maximumStoredProperties: 12,
-                minimumTriggeredSignals: 1
+                minimumTriggeredSignals: 1,
+                minimumTightClassCohesion: 0.25
             ))
+        }
+    }
+
+    @Test("God Object cohesion threshold must be a ratio")
+    func invalidCohesionThresholdIsRejected() throws {
+        try withTemporaryDirectory { directory in
+            try writeConfiguration(
+                """
+                {
+                  "schemaVersion": 1,
+                  "godObject": {
+                    "minimumTightClassCohesion": 1.1
+                  }
+                }
+                """,
+                to: directory
+            )
+
+            #expect(throws: ConfigurationLoadingError.self) {
+                try ConfigurationLoader().load(from: directory)
+            }
         }
     }
 
