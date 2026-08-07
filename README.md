@@ -1,4 +1,4 @@
-# arcan
+# Arca
 
 Code review tool for anti-patterns and team convention rule violation detection with fix suggestions.
 
@@ -6,7 +6,7 @@ Code review tool for anti-patterns and team convention rule violation detection 
 
 ```sh
 swift build
-.build/debug/arcan review --help
+.build/debug/arca review --help
 ```
 
 ## Exit statuses
@@ -40,7 +40,7 @@ analyzer that detected it while keeping deterministic JSON order.
 LLM source analysis is prepared one selected Swift file at a time. An explicit
 file contributes only that file, while changed-file review contributes one
 independent context for each selected current file together with its added,
-modified and deleted line ranges. ARCAN does not scan or include the whole
+modified and deleted line ranges. ARCA does not scan or include the whole
 repository automatically.
 
 Source content is preserved without truncation or rewriting. The default
@@ -51,11 +51,11 @@ prompt limit are separate controls.
 
 ## LLM provider boundary
 
-`ArcanLLM` defines a provider-independent asynchronous interface with model,
+`ArcaLLM` defines a provider-independent asynchronous interface with model,
 prompt, timeout and optional generation settings. `LLMServerProvider` connects
 to a local or remote HTTP server that accepts chat-completion requests.
 
-LLM suggestions are disabled when `.arcan.json` has no `llm` block. Adding
+LLM suggestions are disabled when `.arca.json` has no `llm` block. Adding
 the block enables hybrid enrichment:
 
 ```json
@@ -76,7 +76,7 @@ the block enables hybrid enrichment:
 Start the configured model server, then review a known God Object:
 
 ```sh
-swift run arcan review \
+swift run arca review \
   --file Sources/Example/LargeCoordinator.swift \
   --review god-object
 ```
@@ -87,4 +87,4 @@ optional illustrative Swift code example. If the provider or response fails,
 the deterministic suggestion remains and the report contains a warning.
 
 For an authenticated remote server, provide the secret through
-`ARCAN_LLM_API_KEY`; do not store it in `.arcan.json`.
+`ARCA_LLM_API_KEY`; do not store it in `.arca.json`.

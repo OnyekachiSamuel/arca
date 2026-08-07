@@ -1,0 +1,516 @@
+import ArcaAnalysis
+import ArcaAnalyzers
+import ArcaDomain
+import ArcaProcess
+import Foundation
+import Testing
+
+@Suite("SwiftLint analyzer")
+struct SwiftLintAnalyzerTests {
+    @Test("normalizes JSON violations and records tool metadata")
+    func normalizesViolations() async throws {
+        let executable = URL(fileURLWithPath: "/tools/swiftlint")
+        let project = URL(fileURLWithPath: "/project", isDirectory: true)
+        let runner = StubProcessRunner(results: [
+            processResult(output: "0.63.2\n"),
+            processResult(output: """
+            [
+              {
+                "character": 12,
+                "file": "/project/Sources/Zeta.swift",
+                "line": 8,
+                "reason": "Lines should not have trailing semicolons.",
+                "rule_id": "trailing_semicolon",
+                "severity": "Warning",
+                "type": "Trailing Semicolon"
+              },
+              {
+                "character": 5,
+                "file": "/project/Sources/Alpha.swift",
+                "line": 3,
+                "reason": "Force casts should be avoided.",
+                "rule_id": "force_cast",
+                "severity": "Error",
+                "type": "Force Cast"
+              }
+            ]
+            """)
+        ])
+        let analyzer = SwiftLintAnalyzer(
+            executableURL: executable,
+            workingDirectoryURL: project,
+            timeout: .seconds(10),
+            configurationPath: ".swiftlint.yml",
+            processRunner: runner
+        )
+        let context = analysisContext(paths: [
+            "/project/Sources/Zeta.swift",
+            "/project/Sources/Alpha.swift"
+        ])
+
+        let result = try await analyzer.analyze(context: context)
+
+        #expect(result.analyzerID == "swiftlint")
+        #expect(result.tool == ToolMetadata(
+            name: "SwiftLint",
+            version: "0.63.2"
+        ))
+        #expect(result.candidates.count == 2)
+        let first = try #require(result.candidates.first)
+        #expect(first.ruleID == "swiftlint.force_cast")
+        #expect(first.title == "Force Cast")
+        #expect(first.proposedCategory == .style)
+        #expect(first.proposedSeverity == .error)
+        #expect(first.filePath == "/project/Sources/Alpha.swift")
+        #expect(first.range == SourceRange(
+            startLine: 3,
+            startColumn: 5,
+            endLine: 3,
+            endColumn: 5
+        ))
+        #expect(first.explanation == "Force casts should be avoided.")
+        #expect(first.evidence == [
+            .analyzer(AnalyzerEvidence(
+                description: "Force casts should be avoided.",
+                externalRuleID: "force_cast",
+                range: first.range
+            ))
+        ])
+        #expect(first.sourceIdentifiers == ["swiftlint"])
+        #expect(first.analyzerMetadata == [
+            "rule_id": .string("force_cast"),
+            "reason": .string("Force casts should be avoided."),
+            "line": .integer(3),
+            "character": .integer(5),
+            "severity": .string("Error"),
+            "type": .string("Force Cast"),
+            "file": .string("/project/Sources/Alpha.swift")
+        ])
+        let second = try #require(result.candidates.last)
+        #expect(
+            second.analyzerMetadata["rule_id"]
+                == .string("trailing_semicolon")
+        )
+        #expect(second.proposedCategory == .style)
+        #expect(second.proposedSeverity == .warning)
+        #expect(second.filePath == "/project/Sources/Zeta.swift")
+        #expect(
+            second.analyzerMetadata["severity"] == .string("Warning")
+        )
+
+        let requests = await runner.recordedRequests
+        #expect(requests == [
+            ProcessRequest(
+                executableURL: executable,
+                arguments: ["version"],
+                workingDirectoryURL: project,
+                timeout: .seconds(10)
+            ),
+            ProcessRequest(
+                executableURL: executable,
+                arguments: [
+                    "lint",
+                    "--reporter", "json",
+                    "--quiet",
+                    "--force-exclude",
+                    "--config", ".swiftlint.yml",
+                    "/project/Sources/Alpha.swift",
+                    "/project/Sources/Zeta.swift"
+                ],
+                workingDirectoryURL: project,
+                timeout: .seconds(10)
+            )
+        ])
+    }
+
+    @Test("maps prefixed custom rules to team conventions")
+    func mapsCustomTeamConvention() async throws {
+        let runner = StubProcessRunner(results: [
+            processResult(output: "0.63.2"),
+            processResult(output: """
+            [{
+              "character": 1,
+              "file": "/project/App.swift",
+              "line": 2,
+              "reason": "Services must use the Service suffix.",
+              "rule_id": "arca_team_service_suffix",
+              "severity": "Warning",
+              "type": "Service Naming"
+            }]
+            """)
+        ])
+        let analyzer = makeAnalyzer(processRunner: runner)
+
+        let result = try await analyzer.analyze(
+            context: analysisContext(
+                paths: ["/project/App.swift"],
+                reviewTypes: [.teamConvention]
+            )
+        )
+        let candidate = try #require(result.candidates.first)
+
+        #expect(candidate.ruleID == "ARCA-TEAM-001")
+        #expect(candidate.proposedCategory == .teamConvention)
+        #expect(candidate.sourceIdentifiers == ["swiftlint"])
+        #expect(candidate.evidence == [
+            .analyzer(AnalyzerEvidence(
+                description: "Services must use the Service suffix.",
+                externalRuleID: "arca_team_service_suffix",
+                range: candidate.range
+            ))
+        ])
+    }
+
+    @Test("keeps valid findings returned with a non-zero status")
+    func acceptsValidJSONForNonZeroStatus() async throws {
+        let runner = StubProcessRunner(results: [
+            processResult(output: "0.63.2"),
+            processResult(
+                output: """
+                [{
+                  "character": 1,
+                  "file": "/project/App.swift",
+                  "line": 1,
+                  "reason": "Example violation.",
+                  "rule_id": "example_rule",
+                  "severity": "Error",
+                  "type": "Example Rule"
+                }]
+                """,
+                status: .exited(code: 2)
+            )
+        ])
+        let analyzer = makeAnalyzer(processRunner: runner)
+
+        let result = try await analyzer.analyze(
+            context: analysisContext(paths: ["/project/App.swift"])
+        )
+
+        #expect(result.candidates.map(\.ruleID) == ["swiftlint.example_rule"])
+    }
+
+    @Test("continues when the tool version is unavailable")
+    func toleratesUnavailableVersion() async throws {
+        let runner = StubProcessRunner(results: [
+            processResult(
+                error: "version unavailable",
+                status: .exited(code: 1)
+            ),
+            processResult(output: "[]")
+        ])
+        let analyzer = makeAnalyzer(processRunner: runner)
+
+        let result = try await analyzer.analyze(
+            context: analysisContext(paths: ["/project/App.swift"])
+        )
+
+        #expect(result.tool == ToolMetadata(
+            name: "SwiftLint",
+            version: nil
+        ))
+        #expect(result.candidates.isEmpty)
+    }
+
+    @Test("reports malformed SwiftLint JSON")
+    func rejectsMalformedJSON() async {
+        let runner = StubProcessRunner(results: [
+            processResult(output: "0.63.2"),
+            processResult(output: "not json")
+        ])
+        let analyzer = makeAnalyzer(processRunner: runner)
+
+        await expectError(.invalidJSON) {
+            _ = try await analyzer.analyze(
+                context: analysisContext(paths: ["/project/App.swift"])
+            )
+        }
+    }
+
+    @Test("reports a SwiftLint timeout")
+    func reportsTimeout() async {
+        let runner = StubProcessRunner(results: [
+            processResult(output: "0.63.2"),
+            processResult(status: .timedOut)
+        ])
+        let analyzer = makeAnalyzer(processRunner: runner)
+
+        await expectError(.timedOut) {
+            _ = try await analyzer.analyze(
+                context: analysisContext(paths: ["/project/App.swift"])
+            )
+        }
+    }
+
+    @Test("optional policy skips SwiftLint when it disappears before execution")
+    func optionalRuntimeUnavailabilityIsSkipped() async throws {
+        let path = "/tools/swiftlint"
+        let analyzer = SwiftLintAnalyzer(
+            executableURL: URL(fileURLWithPath: path),
+            workingDirectoryURL: URL(
+                fileURLWithPath: "/project",
+                isDirectory: true
+            ),
+            availabilityPolicy: .optional,
+            processRunner: FailingProcessRunner(
+                error: .executableNotFound(path: path)
+            )
+        )
+
+        let result = try await analyzer.analyze(
+            context: analysisContext(paths: ["/project/App.swift"])
+        )
+
+        #expect(result.executionStatus == .skipped)
+        #expect(
+            result.diagnostics.map(\.code)
+                == ["ARCA-SWIFTLINT-UNAVAILABLE"]
+        )
+    }
+
+    @Test("real SwiftLint reports the fixture violation when configured")
+    func runsRealSwiftLintWhenConfigured() async throws {
+        guard let executablePath = ProcessInfo.processInfo.environment[
+            "ARCA_SWIFTLINT_EXECUTABLE"
+        ] else {
+            return
+        }
+        let executable = URL(fileURLWithPath: executablePath)
+        let fixture = try #require(
+            Bundle.module.url(
+                forResource: "StyleViolation",
+                withExtension: "swift",
+                subdirectory: "Fixtures"
+            )
+        )
+        let analyzer = SwiftLintAnalyzer(
+            executableURL: executable,
+            workingDirectoryURL: fixture.deletingLastPathComponent(),
+            timeout: .seconds(30),
+            processRunner: ProcessRunner(
+                approvedExecutableURLs: [executable]
+            )
+        )
+
+        let result = try await analyzer.analyze(
+            context: analysisContext(paths: [fixture.path])
+        )
+
+        #expect(
+            result.candidates.contains {
+                $0.analyzerMetadata["rule_id"]
+                    == .string("trailing_semicolon")
+            }
+        )
+        #expect(result.tool?.version?.isEmpty == false)
+    }
+
+    @Test("locates an explicitly configured SwiftLint executable")
+    func locatesConfiguredExecutable() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let executable = directory.appendingPathComponent("swiftlint")
+        try Data().write(to: executable)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: executable.path
+        )
+        let locator = SwiftLintExecutableLocator(environment: [
+            "ARCA_SWIFTLINT_EXECUTABLE": executable.path,
+            "PATH": ""
+        ])
+
+        let result = locator.locate()
+
+        #expect(result == .available(executable.standardizedFileURL))
+    }
+
+    @Test("locates SwiftLint on PATH")
+    func locatesExecutableOnPath() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let executable = directory.appendingPathComponent("swiftlint")
+        try Data().write(to: executable)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: executable.path
+        )
+        let locator = SwiftLintExecutableLocator(environment: [
+            "PATH": directory.path
+        ])
+
+        let result = locator.locate()
+
+        #expect(result == .available(executable.standardizedFileURL))
+    }
+
+    @Test("an invalid configured path is reported without PATH fallback")
+    func configuredPathIsAuthoritative() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let pathExecutable = directory.appendingPathComponent("swiftlint")
+        try Data().write(to: pathExecutable)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: pathExecutable.path
+        )
+        let configuredPath = directory
+            .appendingPathComponent("missing-swiftlint").path
+        let locator = SwiftLintExecutableLocator(environment: [
+            "ARCA_SWIFTLINT_EXECUTABLE": configuredPath,
+            "PATH": directory.path
+        ])
+
+        let result = locator.locate()
+
+        #expect(
+            result == .unavailable(
+                .configuredExecutableNotFound(configuredPath)
+            )
+        )
+    }
+
+    @Test("optional unavailable SwiftLint returns a skipped result")
+    func optionalUnavailableSwiftLintIsSkipped() async throws {
+        let analyzer = UnavailableSwiftLintAnalyzer(
+            reason: .executableNotFound,
+            policy: .optional
+        )
+
+        let result = try await analyzer.analyze(
+            context: analysisContext(paths: ["/project/App.swift"])
+        )
+
+        #expect(result.analyzerID == "swiftlint")
+        #expect(result.executionStatus == .skipped)
+        #expect(result.candidates.isEmpty)
+        #expect(result.tool == ToolMetadata(name: "SwiftLint"))
+        #expect(
+            result.diagnostics.map(\.code)
+                == ["ARCA-SWIFTLINT-UNAVAILABLE"]
+        )
+        #expect(result.diagnostics.first?.severity == .warning)
+    }
+
+    @Test("required unavailable SwiftLint fails")
+    func requiredUnavailableSwiftLintFails() async {
+        let analyzer = UnavailableSwiftLintAnalyzer(
+            reason: .executableNotFound,
+            policy: .required
+        )
+
+        do {
+            _ = try await analyzer.analyze(
+                context: analysisContext(paths: ["/project/App.swift"])
+            )
+            Issue.record("Expected required SwiftLint to fail.")
+        } catch let error as SwiftLintAvailabilityError {
+            #expect(error == .requiredToolUnavailable(.executableNotFound))
+            #expect(error.errorDescription?.contains("required") == true)
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+    }
+
+    private func makeAnalyzer(
+        processRunner: any ProcessRunning
+    ) -> SwiftLintAnalyzer {
+        SwiftLintAnalyzer(
+            executableURL: URL(fileURLWithPath: "/tools/swiftlint"),
+            workingDirectoryURL: URL(
+                fileURLWithPath: "/project",
+                isDirectory: true
+            ),
+            timeout: .seconds(10),
+            processRunner: processRunner
+        )
+    }
+
+    private func analysisContext(
+        paths: [String],
+        reviewTypes: Set<ReviewType> = [.style]
+    ) -> AnalysisContext {
+        let sourceFiles = paths.map {
+            SourceFile(path: $0, content: "", lineCount: 0)
+        }
+        return AnalysisContext(
+            request: ReviewRequest(
+                id: UUID(),
+                selectedFiles: paths,
+                selectedReviewTypes: reviewTypes
+            ),
+            sourceFiles: sourceFiles
+        )
+    }
+
+    private func processResult(
+        output: String = "",
+        error: String = "",
+        status: ProcessStatus = .exited(code: 0)
+    ) -> ProcessResult {
+        ProcessResult(
+            standardOutput: Data(output.utf8),
+            standardError: Data(error.utf8),
+            status: status,
+            durationMilliseconds: 1
+        )
+    }
+
+    private func expectError(
+        _ expected: SwiftLintAnalyzerError,
+        operation: () async throws -> Void
+    ) async {
+        do {
+            try await operation()
+            Issue.record("Expected SwiftLint analysis to fail.")
+        } catch let error as SwiftLintAnalyzerError {
+            #expect(error == expected)
+            #expect(error.errorDescription?.isEmpty == false)
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+    }
+}
+
+private actor StubProcessRunner: ProcessRunning {
+    private var results: [ProcessResult]
+    private(set) var recordedRequests: [ProcessRequest] = []
+
+    init(results: [ProcessResult]) {
+        self.results = results
+    }
+
+    func run(_ request: ProcessRequest) async throws -> ProcessResult {
+        recordedRequests.append(request)
+        guard !results.isEmpty else {
+            throw StubProcessRunnerError.missingResult
+        }
+        return results.removeFirst()
+    }
+}
+
+private enum StubProcessRunnerError: Error {
+    case missingResult
+}
+
+private struct FailingProcessRunner: ProcessRunning {
+    let error: ProcessExecutionError
+
+    func run(_ request: ProcessRequest) async throws -> ProcessResult {
+        throw error
+    }
+}

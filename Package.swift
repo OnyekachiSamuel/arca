@@ -3,23 +3,23 @@
 import PackageDescription
 
 let package = Package(
-    name: "arcan",
+    name: "arca",
     platforms: [
         .macOS(.v13)
     ],
     products: [
-        .executable(name: "arcan", targets: ["ArcanExecutable"]),
-        .library(name: "ArcanConfiguration", targets: ["ArcanConfiguration"]),
-        .library(name: "ArcanDomain", targets: ["ArcanDomain"]),
-        .library(name: "ArcanGit", targets: ["ArcanGit"]),
-        .library(name: "ArcanKnowledge", targets: ["ArcanKnowledge"]),
-        .library(name: "ArcanLLM", targets: ["ArcanLLM"]),
-        .library(name: "ArcanProcess", targets: ["ArcanProcess"]),
-        .library(name: "ArcanAnalysis", targets: ["ArcanAnalysis"]),
-        .library(name: "ArcanAnalyzers", targets: ["ArcanAnalyzers"]),
-        .library(name: "ArcanReporting", targets: ["ArcanReporting"]),
-        .library(name: "ArcanSource", targets: ["ArcanSource"]),
-        .library(name: "ArcanSwiftSyntax", targets: ["ArcanSwiftSyntax"])
+        .executable(name: "arca", targets: ["ArcaExecutable"]),
+        .library(name: "ArcaConfiguration", targets: ["ArcaConfiguration"]),
+        .library(name: "ArcaDomain", targets: ["ArcaDomain"]),
+        .library(name: "ArcaGit", targets: ["ArcaGit"]),
+        .library(name: "ArcaKnowledge", targets: ["ArcaKnowledge"]),
+        .library(name: "ArcaLLM", targets: ["ArcaLLM"]),
+        .library(name: "ArcaProcess", targets: ["ArcaProcess"]),
+        .library(name: "ArcaAnalysis", targets: ["ArcaAnalysis"]),
+        .library(name: "ArcaAnalyzers", targets: ["ArcaAnalyzers"]),
+        .library(name: "ArcaReporting", targets: ["ArcaReporting"]),
+        .library(name: "ArcaSource", targets: ["ArcaSource"]),
+        .library(name: "ArcaSwiftSyntax", targets: ["ArcaSwiftSyntax"])
     ],
     dependencies: [
         .package(
@@ -28,138 +28,138 @@ let package = Package(
         )
     ],
     targets: [
-        .target(name: "ArcanDomain"),
-        .target(name: "ArcanConfiguration", dependencies: ["ArcanDomain"]),
-        .target(name: "ArcanGit", dependencies: ["ArcanDomain"]),
+        .target(name: "ArcaDomain"),
+        .target(name: "ArcaConfiguration", dependencies: ["ArcaDomain"]),
+        .target(name: "ArcaGit", dependencies: ["ArcaDomain"]),
         .target(
-            name: "ArcanKnowledge",
-            dependencies: ["ArcanDomain"],
+            name: "ArcaKnowledge",
+            dependencies: ["ArcaDomain"],
             resources: [.process("Resources")]
         ),
         .target(
-            name: "ArcanLLM",
-            dependencies: ["ArcanDomain", "ArcanKnowledge"]
+            name: "ArcaLLM",
+            dependencies: ["ArcaDomain", "ArcaKnowledge"]
         ),
-        .target(name: "ArcanProcess"),
-        .target(name: "ArcanAnalysis", dependencies: ["ArcanDomain"]),
+        .target(name: "ArcaProcess"),
+        .target(name: "ArcaAnalysis", dependencies: ["ArcaDomain"]),
         .target(
-            name: "ArcanAnalyzers",
+            name: "ArcaAnalyzers",
             dependencies: [
-                "ArcanAnalysis",
-                "ArcanDomain",
-                "ArcanKnowledge",
-                "ArcanLLM",
-                "ArcanProcess"
+                "ArcaAnalysis",
+                "ArcaDomain",
+                "ArcaKnowledge",
+                "ArcaLLM",
+                "ArcaProcess"
             ]
         ),
-        .target(name: "ArcanReporting", dependencies: ["ArcanDomain"]),
-        .target(name: "ArcanSource", dependencies: ["ArcanDomain"]),
+        .target(name: "ArcaReporting", dependencies: ["ArcaDomain"]),
+        .target(name: "ArcaSource", dependencies: ["ArcaDomain"]),
         .target(
-            name: "ArcanSwiftSyntax",
+            name: "ArcaSwiftSyntax",
             dependencies: [
-                "ArcanAnalysis",
-                "ArcanDomain",
+                "ArcaAnalysis",
+                "ArcaDomain",
                 .product(name: "SwiftParser", package: "swift-syntax"),
                 .product(name: "SwiftSyntax", package: "swift-syntax")
             ]
         ),
         .target(
-            name: "ArcanCLI",
+            name: "ArcaCLI",
             dependencies: [
-                "ArcanAnalysis",
-                "ArcanAnalyzers",
-                "ArcanConfiguration",
-                "ArcanDomain",
-                "ArcanGit",
-                "ArcanKnowledge",
-                "ArcanLLM",
-                "ArcanProcess",
-                "ArcanReporting",
-                "ArcanSource",
-                "ArcanSwiftSyntax"
+                "ArcaAnalysis",
+                "ArcaAnalyzers",
+                "ArcaConfiguration",
+                "ArcaDomain",
+                "ArcaGit",
+                "ArcaKnowledge",
+                "ArcaLLM",
+                "ArcaProcess",
+                "ArcaReporting",
+                "ArcaSource",
+                "ArcaSwiftSyntax"
             ]
         ),
         .executableTarget(
-            name: "ArcanExecutable",
-            dependencies: ["ArcanAnalyzers", "ArcanCLI"]
+            name: "ArcaExecutable",
+            dependencies: ["ArcaAnalyzers", "ArcaCLI"]
         ),
         .testTarget(
-            name: "ArcanCLITests",
+            name: "ArcaCLITests",
             dependencies: [
-                "ArcanAnalysis",
-                "ArcanCLI",
-                "ArcanDomain",
-                "ArcanKnowledge",
-                "ArcanLLM",
-                "ArcanProcess"
+                "ArcaAnalysis",
+                "ArcaCLI",
+                "ArcaDomain",
+                "ArcaKnowledge",
+                "ArcaLLM",
+                "ArcaProcess"
             ]
         ),
         .testTarget(
-            name: "ArcanConfigurationTests",
-            dependencies: ["ArcanConfiguration", "ArcanDomain"]
+            name: "ArcaConfigurationTests",
+            dependencies: ["ArcaConfiguration", "ArcaDomain"]
         ),
         .testTarget(
-            name: "ArcanEndToEndTests",
+            name: "ArcaEndToEndTests",
             dependencies: [
-                "ArcanAnalyzers",
-                "ArcanCLI",
-                "ArcanDomain",
-                "ArcanExecutable",
-                "ArcanLLM"
+                "ArcaAnalyzers",
+                "ArcaCLI",
+                "ArcaDomain",
+                "ArcaExecutable",
+                "ArcaLLM"
             ],
             resources: [.copy("Fixtures")]
         ),
-        .testTarget(name: "ArcanDomainTests", dependencies: ["ArcanDomain"]),
+        .testTarget(name: "ArcaDomainTests", dependencies: ["ArcaDomain"]),
         .testTarget(
-            name: "ArcanGitTests",
-            dependencies: ["ArcanDomain", "ArcanGit"]
+            name: "ArcaGitTests",
+            dependencies: ["ArcaDomain", "ArcaGit"]
         ),
         .testTarget(
-            name: "ArcanKnowledgeTests",
-            dependencies: ["ArcanDomain", "ArcanKnowledge"]
+            name: "ArcaKnowledgeTests",
+            dependencies: ["ArcaDomain", "ArcaKnowledge"]
         ),
         .testTarget(
-            name: "ArcanLLMTests",
-            dependencies: ["ArcanDomain", "ArcanKnowledge", "ArcanLLM"],
+            name: "ArcaLLMTests",
+            dependencies: ["ArcaDomain", "ArcaKnowledge", "ArcaLLM"],
             resources: [.copy("Fixtures")]
         ),
         .testTarget(
-            name: "ArcanProcessTests",
-            dependencies: ["ArcanProcess"]
+            name: "ArcaProcessTests",
+            dependencies: ["ArcaProcess"]
         ),
         .testTarget(
-            name: "ArcanAnalysisTests",
-            dependencies: ["ArcanAnalysis", "ArcanDomain"]
+            name: "ArcaAnalysisTests",
+            dependencies: ["ArcaAnalysis", "ArcaDomain"]
         ),
         .testTarget(
-            name: "ArcanAnalyzersTests",
+            name: "ArcaAnalyzersTests",
             dependencies: [
-                "ArcanAnalysis",
-                "ArcanAnalyzers",
-                "ArcanDomain",
-                "ArcanKnowledge",
-                "ArcanLLM",
-                "ArcanProcess",
-                "ArcanSource",
-                "ArcanSwiftSyntax"
+                "ArcaAnalysis",
+                "ArcaAnalyzers",
+                "ArcaDomain",
+                "ArcaKnowledge",
+                "ArcaLLM",
+                "ArcaProcess",
+                "ArcaSource",
+                "ArcaSwiftSyntax"
             ],
             resources: [.copy("Fixtures")]
         ),
         .testTarget(
-            name: "ArcanReportingTests",
-            dependencies: ["ArcanDomain", "ArcanReporting"]
+            name: "ArcaReportingTests",
+            dependencies: ["ArcaDomain", "ArcaReporting"]
         ),
         .testTarget(
-            name: "ArcanSourceTests",
-            dependencies: ["ArcanSource", "ArcanDomain"]
+            name: "ArcaSourceTests",
+            dependencies: ["ArcaSource", "ArcaDomain"]
         ),
         .testTarget(
-            name: "ArcanSwiftSyntaxTests",
+            name: "ArcaSwiftSyntaxTests",
             dependencies: [
-                "ArcanAnalysis",
-                "ArcanDomain",
-                "ArcanSource",
-                "ArcanSwiftSyntax"
+                "ArcaAnalysis",
+                "ArcaDomain",
+                "ArcaSource",
+                "ArcaSwiftSyntax"
             ],
             resources: [.copy("Fixtures")]
         )
