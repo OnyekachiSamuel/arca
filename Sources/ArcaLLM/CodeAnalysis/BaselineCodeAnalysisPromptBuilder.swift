@@ -1,5 +1,4 @@
 import ArcaDomain
-import ArcaKnowledge
 import Foundation
 
 public struct BaselineCodeAnalysisPromptBuilder: Sendable {
@@ -10,17 +9,11 @@ public struct BaselineCodeAnalysisPromptBuilder: Sendable {
     }
 
     public func build(
-        context: SourceFileAnalysisContext,
-        rules: [RuleKnowledge]
+        context: SourceFileAnalysisContext
     ) throws -> CodeAnalysisPrompt {
         guard limits.maximumPromptUTF8Bytes > 0 else {
             throw CodeAnalysisPromptBuildingError.invalidLimits
         }
-        guard !rules.isEmpty else {
-            throw CodeAnalysisPromptBuildingError.noApplicableRules
-        }
-
-        let sortedRules = try validatedRules(rules)
         let sourceLines = SourceTextLineExtractor.lines(
             in: context.sourceContent
         )
@@ -47,12 +40,8 @@ public struct BaselineCodeAnalysisPromptBuilder: Sendable {
             change: context.change
         )
         let inputJSON = try encode(payload)
-        let selectedTasks = sortedRules.map {
-            "- \($0.ruleID): \($0.title)"
-        }.joined(separator: "\n")
         let promptText = BaselineCodeAnalysisPromptTemplateV1.render(
-            inputJSON: inputJSON,
-            selectedTasks: selectedTasks
+            inputJSON: inputJSON
         )
         let promptByteCount = promptText.utf8.count
         guard promptByteCount <= limits.maximumPromptUTF8Bytes else {
@@ -67,20 +56,6 @@ public struct BaselineCodeAnalysisPromptBuilder: Sendable {
             templateVersion: BaselineCodeAnalysisPromptTemplateV1.version,
             text: promptText
         )
-    }
-
-    private func validatedRules(
-        _ rules: [RuleKnowledge]
-    ) throws -> [RuleKnowledge] {
-        var encounteredRuleIDs: Set<String> = []
-        for rule in rules {
-            guard encounteredRuleIDs.insert(rule.ruleID).inserted else {
-                throw CodeAnalysisPromptBuildingError.duplicateRuleID(
-                    rule.ruleID
-                )
-            }
-        }
-        return rules.sorted { $0.ruleID < $1.ruleID }
     }
 
     private func encode(

@@ -9,7 +9,7 @@ struct LLMCodeAnalysisRunnerTests {
     @Test("one prompt run records findings, provenance, usage, and settings")
     func recordsSuccessfulRun() async throws {
         let provider = ExperimentProvider(result: .success(LLMResponse(
-            text: validResponse,
+            text: validBaselineResponse,
             usage: LLMUsageMetadata(
                 inputTokens: 40,
                 outputTokens: 20,
@@ -32,6 +32,9 @@ struct LLMCodeAnalysisRunnerTests {
         )
         #expect(result.promptVariant == .baseline)
         #expect(result.findings.count == 1)
+        #expect(result.findings[0].canonicalRuleID == nil)
+        #expect(result.findings[0].title == "Large Class")
+        #expect(result.findings[0].issueType == .codeSmell)
         #expect(result.diagnostics.isEmpty)
         #expect(result.seed == 17)
         #expect(result.temperature == 0)
@@ -54,6 +57,10 @@ struct LLMCodeAnalysisRunnerTests {
         let requests = await provider.requests
         #expect(requests.count == 1)
         #expect(requests[0].prompt.contains("Variant: baseline"))
+        #expect(requests[0].prompt.contains("code smells and anti-patterns"))
+        #expect(!requests[0].prompt.contains("ARCA-GOD-001"))
+        #expect(!requests[0].prompt.contains("God Object"))
+        #expect(!requests[0].prompt.contains(#""ruleID""#))
         #expect(!requests[0].prompt.contains(knowledge.definition))
     }
 
@@ -82,7 +89,7 @@ struct LLMCodeAnalysisRunnerTests {
 
     @Test("experiment retains a finding with mismatched evidence")
     func retainsFindingForHumanEvaluation() async throws {
-        let response = validResponse.replacingOccurrences(
+        let response = validBaselineResponse.replacingOccurrences(
             of: "    let value = 1",
             with: "    let value = 2"
         )
@@ -153,9 +160,9 @@ struct LLMCodeAnalysisRunnerTests {
         )
     }
 
-    private var validResponse: String {
+    private var validBaselineResponse: String {
         """
-        {"findings":[{"ruleID":"ARCA-GOD-001","filePath":"Example.swift","explanation":"The type may own too many responsibilities.","severity":"warning","startLine":1,"endLine":3,"evidence":[{"description":"The type owns state directly.","startLine":2,"endLine":2,"excerpt":"    let value = 1"}]}]}
+        {"findings":[{"title":"Large Class","issueType":"codeSmell","filePath":"Example.swift","explanation":"The type may own too many responsibilities.","severity":"warning","startLine":1,"endLine":3,"evidence":[{"description":"The type owns state directly.","startLine":2,"endLine":2,"excerpt":"    let value = 1"}]}]}
         """
     }
 

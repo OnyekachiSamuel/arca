@@ -10,7 +10,7 @@ public struct LLMCodeAnalysisRunResult: Codable, Equatable, Sendable {
     public let promptVariant: CodeAnalysisPromptVariant
     public let promptTemplateID: String
     public let promptTemplateVersion: Int
-    public let findings: [FindingCandidate]
+    public let findings: [LLMCodeAnalysisFinding]
     public let diagnostics: [AnalyzerDiagnostic]
     public let executionMetadata: LLMExecutionMetadata
     public let seed: Int?
@@ -24,7 +24,7 @@ public struct LLMCodeAnalysisRunResult: Codable, Equatable, Sendable {
         promptVariant: CodeAnalysisPromptVariant,
         promptTemplateID: String,
         promptTemplateVersion: Int,
-        findings: [FindingCandidate],
+        findings: [LLMCodeAnalysisFinding],
         diagnostics: [AnalyzerDiagnostic],
         executionMetadata: LLMExecutionMetadata,
         seed: Int?,

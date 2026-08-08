@@ -66,7 +66,7 @@ struct TerminalReporterTests {
             promptVariant: .guided,
             promptTemplateID: "arca.code-analysis.guided",
             promptTemplateVersion: 1,
-            findings: [try categorizedLLMCandidate()],
+            findings: [experimentalLLMFinding()],
             diagnostics: [AnalyzerDiagnostic(
                 code: "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH",
                 severity: .warning,
@@ -90,6 +90,8 @@ struct TerminalReporterTests {
             "Prompt: Guided — rules and knowledge included"
         ))
         #expect(output.contains("Candidate 1 — God Object candidate"))
+        #expect(output.contains("Issue type: Anti-pattern"))
+        #expect(output.contains("Canonical rule: ARCA-GOD-001"))
         #expect(output.contains("Location: Sources/App.swift"))
         #expect(output.contains("Lines: 1–20"))
         #expect(output.contains("LLM detection\n-------------"))
@@ -101,6 +103,62 @@ struct TerminalReporterTests {
             "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
         ))
         #expect(!output.contains("Sources/App.swift:1:1-20:2"))
+    }
+
+    @Test("renders a baseline finding without implying a canonical rule")
+    func rendersRuleFreeBaselineFinding() throws {
+        let finding = LLMCodeAnalysisFinding(
+            canonicalRuleID: nil,
+            title: "Large Class",
+            issueType: .codeSmell,
+            explanation: "The type contains substantial state and behavior.",
+            filePath: "Sources/App.swift",
+            range: SourceRange(
+                startLine: 1,
+                startColumn: 1,
+                endLine: 20,
+                endColumn: 2
+            ),
+            severity: .warning,
+            evidence: [.sourceCode(SourceCodeEvidence(
+                description: "The type contains many members.",
+                range: SourceRange(
+                    startLine: 1,
+                    startColumn: 1,
+                    endLine: 20,
+                    endColumn: 2
+                ),
+                excerpt: "final class App"
+            ))],
+            sourceIdentifiers: ["llm-code-analysis"]
+        )
+        let run = LLMCodeAnalysisRunResult(
+            schemaVersion: LLMCodeAnalysisRunResult.currentSchemaVersion,
+            runID: UUID(),
+            filePath: "Sources/App.swift",
+            reviewType: .godObject,
+            promptVariant: .baseline,
+            promptTemplateID: "arca.code-analysis.baseline",
+            promptTemplateVersion: 1,
+            findings: [finding],
+            diagnostics: [],
+            executionMetadata: LLMExecutionMetadata(
+                providerID: "lm-studio",
+                modelID: "qwen",
+                requestCount: 1,
+                providerDurationMilliseconds: 25
+            ),
+            seed: nil,
+            temperature: nil
+        )
+
+        let output = try TerminalReporter(outputIsTTY: { false })
+            .render(llmRun: run)
+
+        #expect(output.contains("Candidate 1 — Large Class"))
+        #expect(output.contains("Issue type: Code smell"))
+        #expect(!output.contains("Canonical rule:"))
+        #expect(!output.contains("ARCA-GOD-001"))
     }
 
     @Test("renders a normalized categorized report")
@@ -399,6 +457,41 @@ private func categorizedLLMCandidate() throws -> FindingCandidate {
         ),
         proposedSeverity: .warning,
         proposedCategory: .antiPattern,
+        evidence: [.sourceCode(SourceCodeEvidence(
+            description: "The type handles users and invoices.",
+            range: SourceRange(
+                startLine: 2,
+                startColumn: 1,
+                endLine: 10,
+                endColumn: 2
+            ),
+            excerpt: "final class App"
+        ))],
+        sourceIdentifiers: [
+            "llm-code-analysis",
+            "llm-provider:lm-studio",
+            "llm-model:qwen"
+        ]
+    )
+}
+
+private func experimentalLLMFinding() -> LLMCodeAnalysisFinding {
+    LLMCodeAnalysisFinding(
+        id: UUID(
+            uuidString: "22222222-2222-2222-2222-222222222222"
+        )!,
+        canonicalRuleID: "ARCA-GOD-001",
+        title: "God Object candidate",
+        issueType: .antiPattern,
+        explanation: "The type owns unrelated responsibilities.",
+        filePath: "Sources/App.swift",
+        range: SourceRange(
+            startLine: 1,
+            startColumn: 1,
+            endLine: 20,
+            endColumn: 2
+        ),
+        severity: .warning,
         evidence: [.sourceCode(SourceCodeEvidence(
             description: "The type handles users and invoices.",
             range: SourceRange(

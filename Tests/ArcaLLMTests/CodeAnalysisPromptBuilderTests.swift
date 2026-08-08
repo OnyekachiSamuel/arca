@@ -5,17 +5,20 @@ import Testing
 
 @Suite("Separate code-analysis prompt builders")
 struct CodeAnalysisPromptBuilderTests {
-    @Test("baseline prompt names the task without including rule knowledge")
+    @Test("baseline prompt requests broad detection without task or rule knowledge")
     func buildsBaselinePromptWithoutKnowledge() throws {
         let prompt = try BaselineCodeAnalysisPromptBuilder().build(
-            context: validContext,
-            rules: [godObjectKnowledge]
+            context: validContext
         )
 
         #expect(prompt.templateID == "arca.code-analysis.baseline")
-        #expect(prompt.text.contains("ARCA-GOD-001"))
-        #expect(prompt.text.contains("God Object candidate"))
-        #expect(prompt.text.contains("selected analysis task"))
+        #expect(prompt.text.contains("code smells and anti-patterns"))
+        #expect(!prompt.text.contains("ARCA-GOD-001"))
+        #expect(!prompt.text.contains("God Object"))
+        #expect(!prompt.text.contains("selected analysis task"))
+        #expect(!prompt.text.contains(#""ruleID""#))
+        #expect(prompt.text.contains(#""title""#))
+        #expect(prompt.text.contains(#""issueType""#))
         #expect(!prompt.text.contains(godObjectKnowledge.definition))
         for value in godObjectKnowledge.evidenceCriteria
             + godObjectKnowledge.classificationGuidance

@@ -47,7 +47,7 @@ public struct LLMCodeAnalysisRunner: Sendable {
             for: [reviewType],
             from: knowledgeProvider
         )
-        guard !rules.isEmpty else {
+        if promptVariant == .guided && rules.isEmpty {
             return result(
                 runID: runID,
                 context: context,
@@ -69,8 +69,7 @@ public struct LLMCodeAnalysisRunner: Sendable {
             switch promptVariant {
             case .baseline:
                 prompt = try baselinePromptBuilder.build(
-                    context: context,
-                    rules: rules
+                    context: context
                 )
             case .guided:
                 prompt = try guidedPromptBuilder.build(
@@ -121,33 +120,56 @@ public struct LLMCodeAnalysisRunner: Sendable {
             )
         }
 
-        let parsingResult = CodeAnalysisResponseParser(
-            knowledgeProvider: knowledgeProvider,
-            sourceIdentifiers: [
-                "llm-code-analysis",
-                "llm-provider:\(provider.id)",
-                "llm-model:\(modelID)"
-            ],
-            retainsEvidenceExcerptMismatches: true
-        ).parse(
-            response.text,
-            context: context,
-            analyzerMetadata: [
-                "providerID": .string(provider.id),
-                "modelID": .string(modelID),
-                "promptVariant": .string(promptVariant.rawValue),
-                "promptTemplateID": .string(prompt.templateID),
-                "promptTemplateVersion": .integer(prompt.templateVersion)
-            ]
-        )
+        let sourceIdentifiers = [
+            "llm-code-analysis",
+            "llm-provider:\(provider.id)",
+            "llm-model:\(modelID)"
+        ]
+        let metadata: [String: FindingMetadataValue] = [
+            "providerID": .string(provider.id),
+            "modelID": .string(modelID),
+            "promptVariant": .string(promptVariant.rawValue),
+            "promptTemplateID": .string(prompt.templateID),
+            "promptTemplateVersion": .integer(prompt.templateVersion)
+        ]
+
+        let findings: [LLMCodeAnalysisFinding]
+        let diagnostics: [AnalyzerDiagnostic]
+        switch promptVariant {
+        case .baseline:
+            let parsingResult = BaselineCodeAnalysisResponseParser(
+                sourceIdentifiers: sourceIdentifiers,
+                retainsEvidenceExcerptMismatches: true
+            ).parse(
+                response.text,
+                context: context,
+                metadata: metadata
+            )
+            findings = parsingResult.findings
+            diagnostics = parsingResult.diagnostics
+        case .guided:
+            let parsingResult = CodeAnalysisResponseParser(
+                knowledgeProvider: knowledgeProvider,
+                sourceIdentifiers: sourceIdentifiers,
+                retainsEvidenceExcerptMismatches: true
+            ).parse(
+                response.text,
+                context: context,
+                analyzerMetadata: metadata
+            )
+            findings = parsingResult.candidates.compactMap(
+                makeExperimentFinding
+            )
+            diagnostics = parsingResult.diagnostics
+        }
 
         return result(
             runID: runID,
             context: context,
             reviewType: reviewType,
             promptVariant: promptVariant,
-            findings: parsingResult.candidates,
-            diagnostics: parsingResult.diagnostics,
+            findings: findings,
+            diagnostics: diagnostics,
             requestCount: 1,
             prompt: prompt,
             response: response
@@ -159,7 +181,7 @@ public struct LLMCodeAnalysisRunner: Sendable {
         context: SourceFileAnalysisContext,
         reviewType: ReviewType,
         promptVariant: CodeAnalysisPromptVariant,
-        findings: [FindingCandidate],
+        findings: [LLMCodeAnalysisFinding],
         diagnostics: [AnalyzerDiagnostic],
         requestCount: Int,
         prompt: CodeAnalysisPrompt?,
@@ -192,6 +214,37 @@ public struct LLMCodeAnalysisRunner: Sendable {
             seed: seed,
             temperature: temperature
         )
+    }
+
+    private func makeExperimentFinding(
+        from candidate: FindingCandidate
+    ) -> LLMCodeAnalysisFinding? {
+        guard let range = candidate.range else { return nil }
+        return LLMCodeAnalysisFinding(
+            id: candidate.candidateID,
+            canonicalRuleID: candidate.ruleID,
+            title: candidate.title,
+            issueType: issueType(for: candidate.proposedCategory),
+            explanation: candidate.explanation,
+            filePath: candidate.filePath,
+            range: range,
+            severity: candidate.proposedSeverity,
+            evidence: candidate.evidence,
+            sourceIdentifiers: candidate.sourceIdentifiers,
+            metadata: candidate.analyzerMetadata
+        )
+    }
+
+    private func issueType(
+        for category: FindingCategory
+    ) -> LLMDetectedIssueType {
+        switch category {
+        case .antiPattern: .antiPattern
+        case .architecture: .architecture
+        case .style: .style
+        case .teamConvention: .teamConvention
+        case .general, .uncategorized: .general
+        }
     }
 
     private func defaultPromptTemplate(

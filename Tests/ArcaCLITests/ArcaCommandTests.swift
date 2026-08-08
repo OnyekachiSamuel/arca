@@ -39,11 +39,16 @@ struct ArcaCommandTests {
             #expect(run.promptVariant == .baseline)
             #expect(run.reviewType == .godObject)
             #expect(run.findings.count == 1)
+            #expect(run.findings[0].canonicalRuleID == nil)
+            #expect(run.findings[0].title == "Large Class")
+            #expect(run.findings[0].issueType == .codeSmell)
             #expect(run.executionMetadata.requestCount == 1)
             #expect(run.seed == 7)
             #expect(run.temperature == 0)
             #expect(prompts.count == 1)
             #expect(prompts[0].contains("Variant: baseline"))
+            #expect(!prompts[0].contains("ARCA-GOD-001"))
+            #expect(!prompts[0].contains("God Object"))
             #expect(!prompts[0].contains("arca.issue-categorization"))
             #expect(
                 !prompts[0].contains(
@@ -1229,7 +1234,7 @@ private actor CLILLMRunProvider: LLMProvider {
         prompts.append(request.prompt)
         return LLMResponse(
             text: """
-            {"findings":[{"ruleID":"ARCA-GOD-001","filePath":"\(filePath)","explanation":"The type may own too many responsibilities.","severity":"warning","startLine":1,"endLine":3,"evidence":[{"description":"The type owns state directly.","startLine":2,"endLine":2,"excerpt":"\(evidenceExcerpt)"}]}]}
+            {"findings":[{"title":"Large Class","issueType":"codeSmell","filePath":"\(filePath)","explanation":"The type may own too many responsibilities.","severity":"warning","startLine":1,"endLine":3,"evidence":[{"description":"The type owns state directly.","startLine":2,"endLine":2,"excerpt":"\(evidenceExcerpt)"}]}]}
             """,
             usage: LLMUsageMetadata(
                 inputTokens: 15,

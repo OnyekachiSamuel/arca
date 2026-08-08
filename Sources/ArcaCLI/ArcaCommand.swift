@@ -68,7 +68,7 @@ public enum ArcaCommand {
       -h, --help              Show help information.
 
     PROMPT VARIANTS:
-      baseline                Source code and task instructions only.
+      baseline                Source code and broad detection instructions only.
       guided                  Includes rules and knowledge.
 
     EXIT STATUS:

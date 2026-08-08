@@ -101,12 +101,15 @@ swift run arca llm \
   --format json
 ```
 
-`baseline` uses its own prompt template containing the source, selected task,
-general analysis instructions, and response contract without rule definitions
-or knowledge. `guided` uses a separate prompt template containing the selected
-rule knowledge. Omit `--format json` for a human-readable terminal report. JSON
-records the prompt variant, template identity and version, provider, model,
-generation settings, usage, duration, findings, and diagnostics for that run.
+`baseline` uses its own prompt template containing the source and broad
+instructions to detect code smells and anti-patterns. The selected review is
+recorded as experiment metadata, but its name, canonical rule ID, and knowledge
+are not sent to the model. Baseline findings therefore preserve the model's own
+issue title and type and do not claim an ARCA rule ID. `guided` uses a separate
+prompt template containing the selected rule knowledge and retains canonical
+rule IDs. Omit `--format json` for a human-readable terminal report. JSON records
+the prompt variant, template identity and version, provider, model, generation
+settings, usage, duration, findings, and diagnostics for that run.
 If an evidence excerpt does not exactly match its declared source lines, the
 tool retains the finding and records a warning. Isolated runs keep it for
 human evaluation, while normal reviews also pass it into aggregation and

@@ -165,19 +165,17 @@ public struct TerminalReporter: Reporter {
             lines.append("Candidate \(index + 1) — \(finding.title)")
             lines.append("----------------------------------")
             lines.append(
-                "Severity: \(severityLabel(for: finding.proposedSeverity, usesColor: usesColor))"
+                "Severity: \(severityLabel(for: finding.severity, usesColor: usesColor))"
             )
-            lines.append("Rule: \(finding.ruleID)")
-            lines.append(
-                "Category: \(displayName(for: finding.proposedCategory))"
-            )
-            lines.append("Location: \(finding.filePath)")
-            if let range = finding.range {
-                let lineRange = range.startLine == range.endLine
-                    ? "\(range.startLine)"
-                    : "\(range.startLine)–\(range.endLine)"
-                lines.append("Lines: \(lineRange)")
+            lines.append("Issue type: \(displayName(for: finding.issueType))")
+            if let ruleID = finding.canonicalRuleID {
+                lines.append("Canonical rule: \(ruleID)")
             }
+            lines.append("Location: \(finding.filePath)")
+            let lineRange = finding.range.startLine == finding.range.endLine
+                ? "\(finding.range.startLine)"
+                : "\(finding.range.startLine)–\(finding.range.endLine)"
+            lines.append("Lines: \(lineRange)")
             lines.append("")
             lines.append("LLM detection")
             lines.append("-------------")
@@ -232,6 +230,17 @@ public struct TerminalReporter: Reporter {
         case 0: "No candidates detected"
         case 1: "1 candidate detected"
         default: "\(count) candidates detected"
+        }
+    }
+
+    private func displayName(for issueType: LLMDetectedIssueType) -> String {
+        switch issueType {
+        case .codeSmell: "Code smell"
+        case .antiPattern: "Anti-pattern"
+        case .architecture: "Architecture"
+        case .style: "Style"
+        case .teamConvention: "Team convention"
+        case .general: "General"
         }
     }
 
