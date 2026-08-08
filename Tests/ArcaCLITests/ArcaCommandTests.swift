@@ -1206,7 +1206,7 @@ private actor CLINoFindingLLMProvider: LLMProvider {
         prompts.append(request.prompt)
         return LLMResponse(
             text: #"{"findings":[]}"#,
-            usage: LLMUsageMetadata(
+            usage: LLMTokenUsageMetadata(
                 inputTokens: 10,
                 outputTokens: 2,
                 totalTokens: 12
@@ -1236,7 +1236,7 @@ private actor CLILLMRunProvider: LLMProvider {
             text: """
             {"findings":[{"title":"Large Class","issueType":"codeSmell","filePath":"\(filePath)","explanation":"The type may own too many responsibilities.","severity":"warning","startLine":1,"endLine":3,"evidence":[{"description":"The type owns state directly.","startLine":2,"endLine":2,"excerpt":"\(evidenceExcerpt)"}]}]}
             """,
-            usage: LLMUsageMetadata(
+            usage: LLMTokenUsageMetadata(
                 inputTokens: 15,
                 outputTokens: 8,
                 totalTokens: 23
@@ -1299,7 +1299,7 @@ private actor CLIPipelineLLMProvider: LLMProvider {
     private func response(text: String) -> LLMResponse {
         LLMResponse(
             text: text,
-            usage: LLMUsageMetadata(
+            usage: LLMTokenUsageMetadata(
                 inputTokens: 20,
                 outputTokens: 10,
                 totalTokens: 30
@@ -1322,7 +1322,7 @@ private actor CLIRecordingLLMProvider: LLMProvider {
         requestCount += 1
         return LLMResponse(
             text: responseText,
-            usage: LLMUsageMetadata(),
+            usage: LLMTokenUsageMetadata(),
             durationMilliseconds: 1
         )
     }

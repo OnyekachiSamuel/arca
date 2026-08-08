@@ -1,3 +1,4 @@
+import ArcaDomain
 import Foundation
 
 public struct LLMServerProvider: LLMProvider, Sendable {
@@ -72,7 +73,7 @@ public struct LLMServerProvider: LLMProvider, Sendable {
 
         return LLMResponse(
             text: content,
-            usage: LLMUsageMetadata(
+            usage: LLMTokenUsageMetadata(
                 inputTokens: serverResponse.usage?.promptTokens,
                 outputTokens: serverResponse.usage?.completionTokens,
                 totalTokens: serverResponse.usage?.totalTokens

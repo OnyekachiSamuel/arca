@@ -185,7 +185,7 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "review"
+            argument = "llm"
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
@@ -202,6 +202,10 @@
          </CommandLineArgument>
          <CommandLineArgument
             argument = "god-object"
+            isEnabled = "YES">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "--prompt baseline"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>

@@ -130,7 +130,7 @@ struct LLMFindingCategorizerTests {
         let provider = RecordingCategorizationProvider(
             result: .success(LLMResponse(
                 text: "not JSON",
-                usage: LLMUsageMetadata(
+                usage: LLMTokenUsageMetadata(
                     inputTokens: 12,
                     outputTokens: 2,
                     totalTokens: 14
@@ -291,7 +291,7 @@ struct LLMFindingCategorizerTests {
             text: """
             {"summary":"One grouped issue.","decisions":[{"candidateIDs":[\(ids)],"assessment":"\(assessment.rawValue)","category":"antiPattern","severity":"warning","canonicalRuleID":"ARCA-GOD-001","title":"God Object","rationale":"\(rationale)"}]}
             """,
-            usage: LLMUsageMetadata(
+            usage: LLMTokenUsageMetadata(
                 inputTokens: 80,
                 outputTokens: 30,
                 totalTokens: 110

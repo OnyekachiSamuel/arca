@@ -18,17 +18,7 @@ struct AnalyzerRunnerTests {
             selectedFiles: ["Sources/App.swift"],
             changes: [change]
         )
-        let sourceContext = SourceContextWindow(
-            filePath: "Sources/App.swift",
-            changedLineRange: ChangedLineRange(startLine: 4, endLine: 6),
-            includedLineRange: SourceLineRange(startLine: 2, endLine: 8),
-            sourceText: "struct App {}",
-            containingType: nil
-        )
-        let context = AnalysisContext(
-            request: request,
-            sourceContexts: [sourceContext]
-        )
+        let context = AnalysisContext(request: request)
         let analyzerResult = AnalyzerResult(
             analyzerID: "mock",
             candidates: [try candidate()],
@@ -70,7 +60,6 @@ struct AnalyzerRunnerTests {
         let receivedContext = await recorder.receivedContext
         #expect(receivedContext == context)
         #expect(receivedContext?.changes == [change])
-        #expect(receivedContext?.sourceContexts == [sourceContext])
     }
 
     @Test("runner executes only analyzers selected by the registry")

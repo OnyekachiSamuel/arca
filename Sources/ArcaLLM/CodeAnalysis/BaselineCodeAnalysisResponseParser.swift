@@ -91,12 +91,16 @@ public struct BaselineCodeAnalysisResponseParser: Sendable {
                 message: "The supplied source line count does not match its content."
             )
         }
+        let sourceValidator = CodeAnalysisSourceValidator(
+            sourceLines: sourceLines,
+            limits: limits
+        )
 
         var findings: [LLMCodeAnalysisFinding] = []
         var diagnostics: [AnalyzerDiagnostic] = []
         for (findingIndex, responseFinding) in response.findings.enumerated() {
             let findingNumber = findingIndex + 1
-            guard isSafePath(responseFinding.filePath),
+            guard sourceValidator.isSafePath(responseFinding.filePath),
                   responseFinding.filePath == context.filePath else {
                 diagnostics.append(diagnostic(
                     code: "ARCA-LLM-ANALYSIS-INVALID-PATH",
@@ -104,10 +108,9 @@ public struct BaselineCodeAnalysisResponseParser: Sendable {
                 ))
                 continue
             }
-            guard isValid(
+            guard sourceValidator.isValidRange(
                 startLine: responseFinding.startLine,
-                endLine: responseFinding.endLine,
-                lineCount: context.lineCount
+                endLine: responseFinding.endLine
             ) else {
                 diagnostics.append(diagnostic(
                     code: "ARCA-LLM-ANALYSIS-INVALID-RANGE",
@@ -141,57 +144,51 @@ public struct BaselineCodeAnalysisResponseParser: Sendable {
 
             var evidence: [FindingEvidence] = []
             var findingDiagnostics: [AnalyzerDiagnostic] = []
-            var invalidEvidenceMessage: String?
+            var invalidEvidence: (
+                failure: CodeAnalysisEvidenceValidationFailure,
+                index: Int
+            )?
             for (evidenceIndex, item) in responseFinding.evidence.enumerated() {
-                let description = item.description.trimmed
-                guard !description.isEmpty,
-                      description.utf8.count
-                        <= limits.maximumEvidenceDescriptionUTF8Bytes,
-                      !item.excerpt.trimmed.isEmpty,
-                      item.excerpt.utf8.count
-                        <= limits.maximumEvidenceExcerptUTF8Bytes,
-                      isValid(
-                        startLine: item.startLine,
-                        endLine: item.endLine,
-                        lineCount: sourceLines.count
-                      ),
-                      item.startLine >= responseFinding.startLine,
-                      item.endLine <= responseFinding.endLine else {
-                    invalidEvidenceMessage = "Finding \(findingNumber), evidence \(evidenceIndex + 1) is invalid."
-                    break
+                switch sourceValidator.validateEvidence(
+                    description: item.description,
+                    excerpt: item.excerpt,
+                    startLine: item.startLine,
+                    endLine: item.endLine,
+                    findingStartLine: responseFinding.startLine,
+                    findingEndLine: responseFinding.endLine
+                ) {
+                case .accepted(let validatedEvidence):
+                    evidence.append(.sourceCode(validatedEvidence))
+                case .rejected(let failure):
+                    if retainsEvidenceExcerptMismatches,
+                       failure.isExcerptMismatch {
+                        evidence.append(.sourceCode(SourceCodeEvidence(
+                            description: item.description.trimmed,
+                            range: sourceValidator.sourceRange(
+                                startLine: item.startLine,
+                                endLine: item.endLine
+                            ),
+                            excerpt: item.excerpt
+                        )))
+                        findingDiagnostics.append(diagnostic(
+                            code: failure.code,
+                            message: failure.evidenceVerificationMessage(
+                                evidenceIndex: evidenceIndex
+                            )
+                        ))
+                    } else {
+                        invalidEvidence = (failure, evidenceIndex)
+                    }
                 }
-
-                let selectedSource = sourceLines[
-                    (item.startLine - 1)...(item.endLine - 1)
-                ]
-                .map { PromptTextRedactor.redactCommonSecrets(in: $0) }
-                .joined(separator: "\n")
-                let excerptMatches = selectedSource.contains(item.excerpt)
-                if !excerptMatches && !retainsEvidenceExcerptMismatches {
-                    invalidEvidenceMessage = "Finding \(findingNumber), evidence \(evidenceIndex + 1) excerpt does not exactly match source lines \(item.startLine)–\(item.endLine)."
-                    break
-                }
-
-                evidence.append(.sourceCode(SourceCodeEvidence(
-                    description: description,
-                    range: sourceRange(
-                        startLine: item.startLine,
-                        endLine: item.endLine,
-                        sourceLines: sourceLines
-                    ),
-                    excerpt: item.excerpt
-                )))
-                if !excerptMatches {
-                    findingDiagnostics.append(diagnostic(
-                        code: "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH",
-                        message: "Evidence \(evidenceIndex + 1) could not be matched exactly to source lines \(item.startLine)–\(item.endLine)."
-                    ))
-                }
+                if invalidEvidence != nil { break }
             }
-            if let invalidEvidenceMessage {
+            if let invalidEvidence {
                 diagnostics.append(diagnostic(
-                    code: "ARCA-LLM-ANALYSIS-INVALID-EVIDENCE",
-                    message: invalidEvidenceMessage
+                    code: invalidEvidence.failure.code,
+                    message: invalidEvidence.failure.message(
+                        findingIndex: findingIndex,
+                        evidenceIndex: invalidEvidence.index
+                    )
                 ))
                 continue
             }
@@ -202,10 +199,9 @@ public struct BaselineCodeAnalysisResponseParser: Sendable {
                 issueType: responseFinding.issueType,
                 explanation: explanation,
                 filePath: context.filePath,
-                range: sourceRange(
+                range: sourceValidator.sourceRange(
                     startLine: responseFinding.startLine,
-                    endLine: responseFinding.endLine,
-                    sourceLines: sourceLines
+                    endLine: responseFinding.endLine
                 ),
                 severity: responseFinding.severity,
                 evidence: evidence,
@@ -219,39 +215,6 @@ public struct BaselineCodeAnalysisResponseParser: Sendable {
             findings: findings,
             diagnostics: diagnostics
         )
-    }
-
-    private func sourceRange(
-        startLine: Int,
-        endLine: Int,
-        sourceLines: [String]
-    ) -> SourceRange {
-        SourceRange(
-            startLine: startLine,
-            startColumn: 1,
-            endLine: endLine,
-            endColumn: sourceLines[endLine - 1].utf8.count + 1
-        )
-    }
-
-    private func isValid(
-        startLine: Int,
-        endLine: Int,
-        lineCount: Int
-    ) -> Bool {
-        startLine >= 1 && endLine >= startLine && endLine <= lineCount
-    }
-
-    private func isSafePath(_ path: String) -> Bool {
-        guard !path.trimmed.isEmpty,
-              path == path.trimmed,
-              !path.hasPrefix("/"),
-              path.lowercased().hasSuffix(".swift"),
-              !path.contains("\0") else {
-            return false
-        }
-        return path.split(separator: "/", omittingEmptySubsequences: false)
-            .allSatisfy { !$0.isEmpty && $0 != "." && $0 != ".." }
     }
 
     private func invalidJSON() -> BaselineCodeAnalysisParsingResult {

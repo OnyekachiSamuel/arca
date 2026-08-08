@@ -131,7 +131,7 @@ private struct RegistryFactoryLLMProvider: LLMProvider {
     func submit(_ request: LLMRequest) async throws -> LLMResponse {
         LLMResponse(
             text: #"{"findings":[]}"#,
-            usage: LLMUsageMetadata(),
+            usage: LLMTokenUsageMetadata(),
             durationMilliseconds: 0
         )
     }

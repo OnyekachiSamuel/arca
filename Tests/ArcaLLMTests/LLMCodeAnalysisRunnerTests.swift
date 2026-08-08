@@ -10,7 +10,7 @@ struct LLMCodeAnalysisRunnerTests {
     func recordsSuccessfulRun() async throws {
         let provider = ExperimentProvider(result: .success(LLMResponse(
             text: validBaselineResponse,
-            usage: LLMUsageMetadata(
+            usage: LLMTokenUsageMetadata(
                 inputTokens: 40,
                 outputTokens: 20,
                 totalTokens: 60
@@ -68,7 +68,7 @@ struct LLMCodeAnalysisRunnerTests {
     func recordsParserFailure() async {
         let provider = ExperimentProvider(result: .success(LLMResponse(
             text: "not JSON",
-            usage: LLMUsageMetadata(totalTokens: 4),
+            usage: LLMTokenUsageMetadata(totalTokens: 4),
             durationMilliseconds: 6
         )))
 
@@ -95,7 +95,7 @@ struct LLMCodeAnalysisRunnerTests {
         )
         let provider = ExperimentProvider(result: .success(LLMResponse(
             text: response,
-            usage: LLMUsageMetadata(),
+            usage: LLMTokenUsageMetadata(),
             durationMilliseconds: 4
         )))
 

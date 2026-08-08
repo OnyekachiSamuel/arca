@@ -1,3 +1,4 @@
+import ArcaDomain
 @testable import ArcaLLM
 import Foundation
 import Testing
@@ -131,7 +132,7 @@ struct LLMServerProviderTests {
         #expect(body["seed"] == nil)
         #expect(body["temperature"] == nil)
         #expect(response.text == "response")
-        #expect(response.usage == LLMUsageMetadata())
+        #expect(response.usage == LLMTokenUsageMetadata())
     }
 
     @Test("reports non-successful HTTP status")

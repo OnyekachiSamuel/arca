@@ -1,6 +1,7 @@
 # Arca
 
-Code review tool for anti-patterns and team convention rule violation detection with fix suggestions.
+Code review tool for detecting and categorizing Swift anti-patterns, code
+smells, style issues, and team-convention violations.
 
 ## Build and run
 
@@ -23,17 +24,19 @@ status `1`. Errors are written to standard error.
 
 ## Normalized findings
 
-JSON reports use schema version `5`. Findings inside a discovered Git
+JSON reports use schema version `1`. Findings inside a discovered Git
 repository use repository-relative paths; explicit files outside it retain
 canonical absolute paths. Source ranges are one-based and inclusive.
 
-Each finding has a canonical category and severity. Analyzer-specific input is
-retained in the finding's typed `metadata`, such as SwiftLint's original rule,
-severity and location or the God Object analyzer's structural metrics.
+Each candidate has a proposed category and severity. Analyzer-specific input is
+retained in `analyzerMetadata`, such as SwiftLint's original rule, severity and
+location or the God Object analyzer's structural metrics. Categorized findings
+then contain the validated category, severity, assessment, and rationale.
 
-The `sources` array records stable analyzer identifiers such as `god-object`
-and `swiftlint`. An array is used so a future merged finding can retain every
-analyzer that detected it while keeping deterministic JSON order.
+Candidate `sourceIdentifiers` and categorized finding `sources` record stable
+analyzer identifiers such as `god-object`, `swiftlint`, and
+`llm-code-analysis`. Arrays preserve every analyzer involved in a grouped issue
+while keeping deterministic JSON order.
 
 ## Complete-file LLM analysis context
 
@@ -55,8 +58,8 @@ prompt limit are separate controls.
 prompt, timeout and optional generation settings. `LLMServerProvider` connects
 to a local or remote HTTP server that accepts chat-completion requests.
 
-LLM suggestions are disabled when `.arca.json` has no `llm` block. Adding
-the block enables hybrid enrichment:
+LLM detection and categorization are disabled when `.arca.json` has no `llm`
+block. Adding the block enables the combined static and LLM review pipeline:
 
 ```json
 {
@@ -115,11 +118,6 @@ tool retains the finding and records a warning. Isolated runs keep it for
 human evaluation, while normal reviews also pass it into aggregation and
 categorization. Malformed responses and structurally unusable findings remain
 validation failures.
-
-The God Object is still detected deterministically. When generation succeeds,
-its generic guidance is replaced with validated, targeted steps and an
-optional illustrative Swift code example. If the provider or response fails,
-the deterministic suggestion remains and the report contains a warning.
 
 For an authenticated remote server, provide the secret through
 `ARCA_LLM_API_KEY`; do not store it in `.arca.json`.

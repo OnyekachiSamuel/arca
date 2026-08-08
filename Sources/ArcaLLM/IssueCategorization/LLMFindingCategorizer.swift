@@ -111,11 +111,7 @@ public struct LLMFindingCategorizer: Sendable {
                 providerID: provider.id,
                 modelID: modelID,
                 requestCount: requestCount,
-                usage: LLMTokenUsageMetadata(
-                    inputTokens: response?.usage.inputTokens,
-                    outputTokens: response?.usage.outputTokens,
-                    totalTokens: response?.usage.totalTokens
-                ),
+                usage: response?.usage ?? LLMTokenUsageMetadata(),
                 providerDurationMilliseconds:
                     response?.durationMilliseconds ?? 0
             )

@@ -1,3 +1,4 @@
+import ArcaDomain
 import ArcaLLM
 import Testing
 
@@ -14,7 +15,7 @@ struct LLMProviderTests {
         )
         let expectedResponse = LLMResponse(
             text: #"{"summary":"Extract networking"}"#,
-            usage: LLMUsageMetadata(
+            usage: LLMTokenUsageMetadata(
                 inputTokens: 120,
                 outputTokens: 35,
                 totalTokens: 155
@@ -45,7 +46,7 @@ struct LLMProviderTests {
 
     @Test("usage metadata supports providers without token counts")
     func optionalUsageCounts() {
-        let usage = LLMUsageMetadata()
+        let usage = LLMTokenUsageMetadata()
         let response = LLMResponse(
             text: "Local model response",
             usage: usage,

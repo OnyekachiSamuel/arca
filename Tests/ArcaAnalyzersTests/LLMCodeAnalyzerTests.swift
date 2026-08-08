@@ -198,7 +198,7 @@ struct LLMCodeAnalyzerTests {
     private func llmResponse(text: String) -> LLMResponse {
         LLMResponse(
             text: text,
-            usage: LLMUsageMetadata(
+            usage: LLMTokenUsageMetadata(
                 inputTokens: 10,
                 outputTokens: 5,
                 totalTokens: 15

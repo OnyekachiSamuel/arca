@@ -33,8 +33,6 @@ public struct CommandResult: Equatable {
 }
 
 public enum ArcaCommand {
-    private static let sourceContextSurroundingLineCount = 3
-
     static let reviewHelp = """
     OVERVIEW: Review Swift code for anti-patterns and convention violations.
 
@@ -417,17 +415,9 @@ public enum ArcaCommand {
                 )
             }
 
-            let sourceContexts = try makeSourceContexts(
-                sourceFiles: sources,
-                changes: changes,
-                provider: SwiftSyntaxSourceContextProvider(
-                    structureProvider: structureProvider
-                )
-            )
             let context = AnalysisContext(
                 request: request,
-                sourceFiles: sources,
-                sourceContexts: sourceContexts
+                sourceFiles: sources
             )
             let analysis = try await ReviewEngine().review(
                 analyzers: selectedAnalyzers,
@@ -640,26 +630,6 @@ public enum ArcaCommand {
         return fileURL.pathComponents
             .dropFirst(repositoryRoot.pathComponents.count)
             .joined(separator: "/")
-    }
-
-    private static func makeSourceContexts(
-        sourceFiles: [SourceFile],
-        changes: [CodeChange],
-        provider: any SourceContextProvider
-    ) throws -> [SourceContextWindow] {
-        try sourceFiles.flatMap { sourceFile -> [SourceContextWindow] in
-            guard let change = changes.first(where: {
-                $0.filePath == sourceFile.path
-            }) else {
-                return []
-            }
-
-            return try provider.contexts(
-                for: change,
-                in: sourceFile,
-                surroundingLineCount: sourceContextSurroundingLineCount
-            )
-        }
     }
 
 }

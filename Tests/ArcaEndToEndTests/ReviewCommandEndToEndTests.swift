@@ -446,7 +446,7 @@ private actor VerticalSliceLLMProvider: LLMProvider {
 
         return LLMResponse(
             text: text,
-            usage: LLMUsageMetadata(
+            usage: LLMTokenUsageMetadata(
                 inputTokens: 40,
                 outputTokens: 20,
                 totalTokens: 60
