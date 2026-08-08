@@ -81,6 +81,38 @@ swift run arca review \
   --review god-object
 ```
 
+## Isolated LLM prompt experiments
+
+Use `arca llm` to run LLM detection by itself. The command does not run
+static analyzers, aggregate findings, categorize findings, or compare runs.
+Choose and record one prompt variant per invocation:
+
+```sh
+swift run arca llm \
+  --file Sources/Example/LargeCoordinator.swift \
+  --review god-object \
+  --prompt baseline \
+  --format json
+
+swift run arca llm \
+  --file Sources/Example/LargeCoordinator.swift \
+  --review god-object \
+  --prompt guided \
+  --format json
+```
+
+`baseline` uses its own prompt template containing the source, selected task,
+general analysis instructions, and response contract without rule definitions
+or knowledge. `guided` uses a separate prompt template containing the selected
+rule knowledge. Omit `--format json` for a human-readable terminal report. JSON
+records the prompt variant, template identity and version, provider, model,
+generation settings, usage, duration, findings, and diagnostics for that run.
+If an evidence excerpt does not exactly match its declared source lines, the
+tool retains the finding and records a warning. Isolated runs keep it for
+human evaluation, while normal reviews also pass it into aggregation and
+categorization. Malformed responses and structurally unusable findings remain
+validation failures.
+
 The God Object is still detected deterministically. When generation succeeds,
 its generic guidance is replaced with validated, targeted steps and an
 optional illustrative Swift code example. If the provider or response fails,

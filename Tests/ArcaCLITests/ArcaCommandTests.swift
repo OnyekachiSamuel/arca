@@ -6,6 +6,145 @@ import Testing
 
 @Suite("Arca command")
 struct ArcaCommandTests {
+    @Test("llm runs one selected prompt variant without categorization")
+    func runsIsolatedLLMAnalysis() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("Example.swift")
+            try "struct Example {\n    let value = 1\n}\n".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+            try writeLLMConfiguration(to: directory)
+            let provider = CLILLMRunProvider(filePath: file.lastPathComponent)
+
+            let result = await ArcaCommand.execute(
+                arguments: [
+                    "llm", "--file", file.path,
+                    "--review", "god-object",
+                    "--prompt", "baseline",
+                    "--format", "json"
+                ],
+                currentDirectory: directory.path,
+                swiftLintAvailability: .unavailable(.executableNotFound),
+                llmProvider: provider
+            )
+            let run = try JSONDecoder().decode(
+                LLMCodeAnalysisRunResult.self,
+                from: Data(result.output.utf8)
+            )
+            let prompts = await provider.prompts
+
+            #expect(result.exitStatus == .findingsDetected)
+            #expect(run.promptVariant == .baseline)
+            #expect(run.reviewType == .godObject)
+            #expect(run.findings.count == 1)
+            #expect(run.executionMetadata.requestCount == 1)
+            #expect(run.seed == 7)
+            #expect(run.temperature == 0)
+            #expect(prompts.count == 1)
+            #expect(prompts[0].contains("Variant: baseline"))
+            #expect(!prompts[0].contains("arca.issue-categorization"))
+            #expect(
+                !prompts[0].contains(
+                    "A God Object candidate is a type that combines"
+                )
+            )
+        }
+    }
+
+    @Test("llm guided prompt includes rule knowledge")
+    func runsGuidedLLMAnalysis() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("Example.swift")
+            try "struct Example {}\n".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+            try writeLLMConfiguration(to: directory)
+            let provider = CLINoFindingLLMProvider()
+
+            let result = await ArcaCommand.execute(
+                arguments: [
+                    "llm", "--file", file.path,
+                    "--review", "god-object",
+                    "--prompt", "guided",
+                    "--format", "json"
+                ],
+                currentDirectory: directory.path,
+                swiftLintAvailability: .unavailable(.executableNotFound),
+                llmProvider: provider
+            )
+            let run = try JSONDecoder().decode(
+                LLMCodeAnalysisRunResult.self,
+                from: Data(result.output.utf8)
+            )
+            let prompts = await provider.prompts
+
+            #expect(result.exitStatus == .success)
+            #expect(run.promptVariant == .guided)
+            #expect(run.findings.isEmpty)
+            #expect(await provider.requestCount == 1)
+            #expect(prompts.count == 1)
+            #expect(prompts[0].contains("Variant: guided"))
+            #expect(
+                prompts[0].contains(
+                    "A God Object candidate is a type that combines"
+                )
+            )
+        }
+    }
+
+    @Test("llm retains mismatched evidence for human evaluation")
+    func retainsExperimentalFindingWithWarning() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("Example.swift")
+            try "struct Example {\n    let value = 1\n}\n".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+            try writeLLMConfiguration(to: directory)
+            let provider = CLILLMRunProvider(
+                filePath: file.lastPathComponent,
+                evidenceExcerpt: "    let value = 2"
+            )
+
+            let result = await ArcaCommand.execute(
+                arguments: [
+                    "llm", "--file", file.path,
+                    "--review", "god-object",
+                    "--prompt", "baseline",
+                    "--format", "json"
+                ],
+                currentDirectory: directory.path,
+                swiftLintAvailability: .unavailable(.executableNotFound),
+                llmProvider: provider
+            )
+            let run = try JSONDecoder().decode(
+                LLMCodeAnalysisRunResult.self,
+                from: Data(result.output.utf8)
+            )
+
+            #expect(result.exitStatus == .findingsDetected)
+            #expect(run.findings.count == 1)
+            #expect(run.diagnostics.map(\.code) == [
+                "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
+            ])
+        }
+    }
+
+    @Test("llm help documents the isolated prompt variants")
+    func llmHelpDescribesVariants() async {
+        let result = await ArcaCommand.run(arguments: ["llm", "--help"])
+
+        #expect(result.exitStatus == .success)
+        #expect(result.output.contains("USAGE: arca llm [options]"))
+        #expect(result.output.contains("baseline"))
+        #expect(result.output.contains("guided"))
+    }
+
     @Test("configured clean review returns a categorized report")
     func configuredCleanReviewReturnsStableReport() async throws {
         try await withTemporaryDirectory { directory in
@@ -84,7 +223,9 @@ struct ArcaCommandTests {
                 Comment(rawValue: result.output)
             )
             #expect(prompts.count == 2)
-            #expect(prompts[0].contains("arca.code-analysis/v1"))
+            #expect(
+                prompts[0].contains("arca.code-analysis.guided/v1")
+            )
             #expect(prompts[1].contains("arca.issue-categorization/v1"))
             #expect(report.candidates.count == 2)
             let confirmedFinding = try #require(
@@ -107,6 +248,48 @@ struct ArcaCommandTests {
                 report.categorizationExecutionMetadata.providerID
                     == "mock-pipeline"
             )
+        }
+    }
+
+    @Test("review categorizes an LLM candidate with mismatched evidence")
+    func categorizesRetainedLLMCandidate() async throws {
+        try await withTemporaryDirectory { directory in
+            let file = directory.appendingPathComponent("App.swift")
+            try "struct App {\n    let value = 1; let other = 2\n    func run() {}; func stop() {}\n}".write(
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
+            try writeLLMConfiguration(
+                to: directory,
+                godObjectThresholds: true
+            )
+            let provider = CLIPipelineLLMProvider(
+                filePath: "App.swift",
+                evidenceExcerpt: "    let value = 999"
+            )
+
+            let result = await ArcaCommand.execute(
+                arguments: [
+                    "review", "--file", file.path,
+                    "--review", "god-object",
+                    "--format", "json"
+                ],
+                currentDirectory: directory.path,
+                swiftLintAvailability: .unavailable(.executableNotFound),
+                llmProvider: provider
+            )
+            let report = try JSONDecoder().decode(
+                CategorizedReviewReport.self,
+                from: Data(result.output.utf8)
+            )
+
+            #expect(result.exitStatus == .findingsDetected)
+            #expect(report.candidates.count == 2)
+            #expect(report.confirmedFindings.count == 1)
+            #expect(report.diagnostics.map(\.code).contains(
+                "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
+            ))
         }
     }
 
@@ -1011,9 +1194,11 @@ struct ArcaCommandTests {
 private actor CLINoFindingLLMProvider: LLMProvider {
     nonisolated let id = "mock-pipeline"
     private(set) var requestCount = 0
+    private(set) var prompts: [String] = []
 
     func submit(_ request: LLMRequest) async throws -> LLMResponse {
         requestCount += 1
+        prompts.append(request.prompt)
         return LLMResponse(
             text: #"{"findings":[]}"#,
             usage: LLMUsageMetadata(
@@ -1026,25 +1211,58 @@ private actor CLINoFindingLLMProvider: LLMProvider {
     }
 }
 
-private actor CLIPipelineLLMProvider: LLMProvider {
-    nonisolated let id = "mock-pipeline"
+private actor CLILLMRunProvider: LLMProvider {
+    nonisolated let id = "mock-llm-run"
     private let filePath: String
-    private let assessment: FindingAssessment
+    private let evidenceExcerpt: String
     private(set) var prompts: [String] = []
 
     init(
         filePath: String,
-        assessment: FindingAssessment = .confirmed
+        evidenceExcerpt: String = "    let value = 1"
     ) {
         self.filePath = filePath
-        self.assessment = assessment
+        self.evidenceExcerpt = evidenceExcerpt
     }
 
     func submit(_ request: LLMRequest) async throws -> LLMResponse {
         prompts.append(request.prompt)
-        if request.prompt.contains("arca.code-analysis/v1") {
+        return LLMResponse(
+            text: """
+            {"findings":[{"ruleID":"ARCA-GOD-001","filePath":"\(filePath)","explanation":"The type may own too many responsibilities.","severity":"warning","startLine":1,"endLine":3,"evidence":[{"description":"The type owns state directly.","startLine":2,"endLine":2,"excerpt":"\(evidenceExcerpt)"}]}]}
+            """,
+            usage: LLMUsageMetadata(
+                inputTokens: 15,
+                outputTokens: 8,
+                totalTokens: 23
+            ),
+            durationMilliseconds: 3
+        )
+    }
+}
+
+private actor CLIPipelineLLMProvider: LLMProvider {
+    nonisolated let id = "mock-pipeline"
+    private let filePath: String
+    private let assessment: FindingAssessment
+    private let evidenceExcerpt: String
+    private(set) var prompts: [String] = []
+
+    init(
+        filePath: String,
+        assessment: FindingAssessment = .confirmed,
+        evidenceExcerpt: String = "    let value = 1"
+    ) {
+        self.filePath = filePath
+        self.assessment = assessment
+        self.evidenceExcerpt = evidenceExcerpt
+    }
+
+    func submit(_ request: LLMRequest) async throws -> LLMResponse {
+        prompts.append(request.prompt)
+        if request.prompt.contains("arca.code-analysis.guided/v1") {
             return response(text: """
-            {"findings":[{"ruleID":"ARCA-GOD-001","filePath":"\(filePath)","explanation":"The type owns unrelated responsibilities.","severity":"warning","startLine":1,"endLine":3,"evidence":[{"description":"The type owns state directly.","startLine":2,"endLine":2,"excerpt":"    let value = 1"}]}]}
+            {"findings":[{"ruleID":"ARCA-GOD-001","filePath":"\(filePath)","explanation":"The type owns unrelated responsibilities.","severity":"warning","startLine":1,"endLine":3,"evidence":[{"description":"The type owns state directly.","startLine":2,"endLine":2,"excerpt":"\(evidenceExcerpt)"}]}]}
             """)
         }
 

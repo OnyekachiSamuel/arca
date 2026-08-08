@@ -107,7 +107,24 @@ public struct TerminalReporter: Reporter {
             })
         }
 
-        for diagnostic in report.diagnostics {
+        let evidenceVerificationDiagnostics = report.diagnostics.filter {
+            $0.code
+                == "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
+        }
+        let remainingDiagnostics = report.diagnostics.filter {
+            $0.code
+                != "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
+        }
+        if !evidenceVerificationDiagnostics.isEmpty {
+            lines.append("")
+            lines.append("Evidence verification")
+            lines.append("---------------------")
+            lines.append(contentsOf: evidenceVerificationDiagnostics.map(
+                \.message
+            ))
+        }
+
+        for diagnostic in remainingDiagnostics {
             lines.append("")
             lines.append(
                 "\(severityLabel(for: diagnostic.severity, usesColor: usesColor)) "
@@ -116,6 +133,126 @@ public struct TerminalReporter: Reporter {
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    public func render(llmRun: LLMCodeAnalysisRunResult) throws -> String {
+        let usesColor = outputIsTTY()
+        var lines = [
+            "ARCA LLM Detection Experiment",
+            "Overall result: \(llmDetectionResult(count: llmRun.findings.count))",
+            "",
+            "Run configuration",
+            "-----------------",
+            "Prompt: \(promptDescription(for: llmRun.promptVariant))",
+            "Review: \(reviewDescription(for: llmRun.reviewType))",
+            "File: \(llmRun.filePath)",
+            "Provider: \(llmRun.executionMetadata.providerID)",
+            "Model: \(llmRun.executionMetadata.modelID)",
+            "Requests: \(llmRun.executionMetadata.requestCount)",
+            "Duration: \(llmRun.executionMetadata.providerDurationMilliseconds) ms",
+            "Token usage: \(tokenSummary(for: llmRun.executionMetadata.usage))"
+        ]
+
+        if llmRun.findings.isEmpty {
+            lines.append("")
+            lines.append("Detection results")
+            lines.append("-----------------")
+            lines.append("No candidates were returned by the model.")
+        }
+
+        for (index, finding) in llmRun.findings.enumerated() {
+            lines.append("")
+            lines.append("Candidate \(index + 1) — \(finding.title)")
+            lines.append("----------------------------------")
+            lines.append(
+                "Severity: \(severityLabel(for: finding.proposedSeverity, usesColor: usesColor))"
+            )
+            lines.append("Rule: \(finding.ruleID)")
+            lines.append(
+                "Category: \(displayName(for: finding.proposedCategory))"
+            )
+            lines.append("Location: \(finding.filePath)")
+            if let range = finding.range {
+                let lineRange = range.startLine == range.endLine
+                    ? "\(range.startLine)"
+                    : "\(range.startLine)–\(range.endLine)"
+                lines.append("Lines: \(lineRange)")
+            }
+            lines.append("")
+            lines.append("LLM detection")
+            lines.append("-------------")
+            lines.append("Explanation: \(finding.explanation)")
+            appendEvidence(finding.evidence, to: &lines)
+        }
+
+        let evidenceVerificationDiagnostics = llmRun.diagnostics.filter {
+            $0.code
+                == "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
+        }
+        let remainingDiagnostics = llmRun.diagnostics.filter {
+            $0.code
+                != "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
+        }
+
+        if !evidenceVerificationDiagnostics.isEmpty {
+            lines.append("")
+            lines.append("Evidence verification")
+            lines.append("---------------------")
+            lines.append(contentsOf: evidenceVerificationDiagnostics.map(
+                \.message
+            ))
+        }
+
+        if !remainingDiagnostics.isEmpty {
+            lines.append("")
+            lines.append("Validation notes")
+            lines.append("----------------")
+        }
+        for diagnostic in remainingDiagnostics {
+            lines.append(
+                "\(severityLabel(for: diagnostic.severity, usesColor: usesColor)) "
+                    + "\(diagnostic.code): \(diagnostic.message)"
+            )
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    private func tokenSummary(
+        for usage: LLMTokenUsageMetadata
+    ) -> String {
+        let input = usage.inputTokens.map(String.init) ?? "unknown"
+        let output = usage.outputTokens.map(String.init) ?? "unknown"
+        let total = usage.totalTokens.map(String.init) ?? "unknown"
+        return "\(input) input, \(output) output, \(total) total"
+    }
+
+    private func llmDetectionResult(count: Int) -> String {
+        switch count {
+        case 0: "No candidates detected"
+        case 1: "1 candidate detected"
+        default: "\(count) candidates detected"
+        }
+    }
+
+    private func promptDescription(
+        for variant: CodeAnalysisPromptVariant
+    ) -> String {
+        switch variant {
+        case .baseline:
+            "Baseline — source and general instructions only"
+        case .guided:
+            "Guided — rules and knowledge included"
+        }
+    }
+
+    private func reviewDescription(for reviewType: ReviewType) -> String {
+        switch reviewType {
+        case .tcaArchitecture: "TCA architecture"
+        case .godObject: "God Object"
+        case .style: "Style"
+        case .teamConvention: "Team convention"
+        }
     }
 
     private func appendFindings(

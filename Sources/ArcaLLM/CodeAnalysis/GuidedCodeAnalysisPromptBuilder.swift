@@ -2,7 +2,7 @@ import ArcaDomain
 import ArcaKnowledge
 import Foundation
 
-public struct CodeAnalysisPromptBuilder: Sendable {
+public struct GuidedCodeAnalysisPromptBuilder: Sendable {
     private let limits: CodeAnalysisPromptLimits
 
     public init(limits: CodeAnalysisPromptLimits = .default) {
@@ -24,7 +24,6 @@ public struct CodeAnalysisPromptBuilder: Sendable {
         let sourceLines = SourceTextLineExtractor.lines(
             in: context.sourceContent
         )
-
         guard sourceLines.count == context.lineCount else {
             throw CodeAnalysisPromptBuildingError.sourceLineCountMismatch(
                 expected: context.lineCount,
@@ -32,12 +31,12 @@ public struct CodeAnalysisPromptBuilder: Sendable {
             )
         }
 
-        let payload = CodeAnalysisPromptInput(
-            file: CodeAnalysisFileInput(
+        let payload = GuidedCodeAnalysisPromptInput(
+            file: GuidedCodeAnalysisFileInput(
                 path: context.filePath,
                 lineCount: context.lineCount,
                 lines: sourceLines.enumerated().map { index, text in
-                    CodeAnalysisSourceLineInput(
+                    GuidedCodeAnalysisSourceLineInput(
                         lineNumber: index + 1,
                         text: PromptTextRedactor.redactCommonSecrets(
                             in: text
@@ -49,11 +48,10 @@ public struct CodeAnalysisPromptBuilder: Sendable {
             rules: sortedRules.map(makeRuleInput)
         )
         let inputJSON = try encode(payload)
-        let promptText = CodeAnalysisPromptTemplateV1.render(
+        let promptText = GuidedCodeAnalysisPromptTemplateV1.render(
             inputJSON: inputJSON
         )
         let promptByteCount = promptText.utf8.count
-
         guard promptByteCount <= limits.maximumPromptUTF8Bytes else {
             throw CodeAnalysisPromptBuildingError.promptTooLarge(
                 actualBytes: promptByteCount,
@@ -62,8 +60,8 @@ public struct CodeAnalysisPromptBuilder: Sendable {
         }
 
         return CodeAnalysisPrompt(
-            templateID: CodeAnalysisPromptTemplateV1.id,
-            templateVersion: CodeAnalysisPromptTemplateV1.version,
+            templateID: GuidedCodeAnalysisPromptTemplateV1.id,
+            templateVersion: GuidedCodeAnalysisPromptTemplateV1.version,
             text: promptText
         )
     }
@@ -72,7 +70,6 @@ public struct CodeAnalysisPromptBuilder: Sendable {
         _ rules: [RuleKnowledge]
     ) throws -> [RuleKnowledge] {
         var encounteredRuleIDs: Set<String> = []
-
         for rule in rules {
             guard encounteredRuleIDs.insert(rule.ruleID).inserted else {
                 throw CodeAnalysisPromptBuildingError.duplicateRuleID(
@@ -80,14 +77,13 @@ public struct CodeAnalysisPromptBuilder: Sendable {
                 )
             }
         }
-
         return rules.sorted { $0.ruleID < $1.ruleID }
     }
 
     private func makeRuleInput(
         from knowledge: RuleKnowledge
-    ) -> CodeAnalysisRuleInput {
-        CodeAnalysisRuleInput(
+    ) -> GuidedCodeAnalysisRuleInput {
+        GuidedCodeAnalysisRuleInput(
             ruleID: knowledge.ruleID,
             title: knowledge.title,
             group: knowledge.group,
@@ -100,14 +96,15 @@ public struct CodeAnalysisPromptBuilder: Sendable {
         )
     }
 
-    private func encode(_ input: CodeAnalysisPromptInput) throws -> String {
+    private func encode(
+        _ input: GuidedCodeAnalysisPromptInput
+    ) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [
             .prettyPrinted,
             .sortedKeys,
             .withoutEscapingSlashes
         ]
-
         do {
             let data = try encoder.encode(input)
             return String(decoding: data, as: UTF8.self)
@@ -117,24 +114,24 @@ public struct CodeAnalysisPromptBuilder: Sendable {
     }
 }
 
-private struct CodeAnalysisPromptInput: Encodable {
-    let file: CodeAnalysisFileInput
+private struct GuidedCodeAnalysisPromptInput: Encodable {
+    let file: GuidedCodeAnalysisFileInput
     let change: SourceFileChangeContext?
-    let rules: [CodeAnalysisRuleInput]
+    let rules: [GuidedCodeAnalysisRuleInput]
 }
 
-private struct CodeAnalysisFileInput: Encodable {
+private struct GuidedCodeAnalysisFileInput: Encodable {
     let path: String
     let lineCount: Int
-    let lines: [CodeAnalysisSourceLineInput]
+    let lines: [GuidedCodeAnalysisSourceLineInput]
 }
 
-private struct CodeAnalysisSourceLineInput: Encodable {
+private struct GuidedCodeAnalysisSourceLineInput: Encodable {
     let lineNumber: Int
     let text: String
 }
 
-private struct CodeAnalysisRuleInput: Encodable {
+private struct GuidedCodeAnalysisRuleInput: Encodable {
     let ruleID: String
     let title: String
     let group: RuleKnowledgeGroup

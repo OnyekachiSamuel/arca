@@ -5,6 +5,104 @@ import Testing
 
 @Suite("Terminal reporter")
 struct TerminalReporterTests {
+    @Test("renders an isolated LLM run and its provider measurements")
+    func rendersLLMRun() throws {
+        let run = LLMCodeAnalysisRunResult(
+            schemaVersion: LLMCodeAnalysisRunResult.currentSchemaVersion,
+            runID: UUID(),
+            filePath: "Sources/App.swift",
+            reviewType: .godObject,
+            promptVariant: .baseline,
+            promptTemplateID: "arca.code-analysis.baseline",
+            promptTemplateVersion: 1,
+            findings: [],
+            diagnostics: [],
+            executionMetadata: LLMExecutionMetadata(
+                providerID: "lm-studio",
+                modelID: "qwen",
+                requestCount: 1,
+                usage: LLMTokenUsageMetadata(
+                    inputTokens: 100,
+                    outputTokens: 20,
+                    totalTokens: 120
+                ),
+                providerDurationMilliseconds: 25
+            ),
+            seed: 42,
+            temperature: 0
+        )
+
+        let output = try TerminalReporter(outputIsTTY: { false })
+            .render(llmRun: run)
+
+        #expect(output == """
+        ARCA LLM Detection Experiment
+        Overall result: No candidates detected
+
+        Run configuration
+        -----------------
+        Prompt: Baseline — source and general instructions only
+        Review: God Object
+        File: Sources/App.swift
+        Provider: lm-studio
+        Model: qwen
+        Requests: 1
+        Duration: 25 ms
+        Token usage: 100 input, 20 output, 120 total
+
+        Detection results
+        -----------------
+        No candidates were returned by the model.
+        """)
+    }
+
+    @Test("renders an LLM candidate and validation notes clearly")
+    func rendersLLMCandidate() throws {
+        let run = LLMCodeAnalysisRunResult(
+            schemaVersion: LLMCodeAnalysisRunResult.currentSchemaVersion,
+            runID: UUID(),
+            filePath: "Sources/App.swift",
+            reviewType: .godObject,
+            promptVariant: .guided,
+            promptTemplateID: "arca.code-analysis.guided",
+            promptTemplateVersion: 1,
+            findings: [try categorizedLLMCandidate()],
+            diagnostics: [AnalyzerDiagnostic(
+                code: "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH",
+                severity: .warning,
+                message: "Evidence 1 could not be matched exactly to source lines 2–10."
+            )],
+            executionMetadata: LLMExecutionMetadata(
+                providerID: "lm-studio",
+                modelID: "qwen",
+                requestCount: 1,
+                providerDurationMilliseconds: 25
+            ),
+            seed: 42,
+            temperature: 0
+        )
+
+        let output = try TerminalReporter(outputIsTTY: { false })
+            .render(llmRun: run)
+
+        #expect(output.contains("Overall result: 1 candidate detected"))
+        #expect(output.contains(
+            "Prompt: Guided — rules and knowledge included"
+        ))
+        #expect(output.contains("Candidate 1 — God Object candidate"))
+        #expect(output.contains("Location: Sources/App.swift"))
+        #expect(output.contains("Lines: 1–20"))
+        #expect(output.contains("LLM detection\n-------------"))
+        #expect(output.contains("Evidence verification\n---------------------"))
+        #expect(output.contains(
+            "Evidence 1 could not be matched exactly to source lines 2–10."
+        ))
+        #expect(!output.contains(
+            "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
+        ))
+        #expect(!output.contains("Sources/App.swift:1:1-20:2"))
+    }
+
     @Test("renders a normalized categorized report")
     func rendersCategorizedReport() throws {
         let staticCandidate = try categorizedStaticCandidate()
@@ -37,11 +135,18 @@ struct TerminalReporterTests {
                     CategoryFindingCount(category: .antiPattern, count: 1)
                 ]
             ),
-            diagnostics: [AnalyzerDiagnostic(
-                code: "ARCA-NOTE",
-                severity: .info,
-                message: "Review completed."
-            )],
+            diagnostics: [
+                AnalyzerDiagnostic(
+                    code: "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH",
+                    severity: .warning,
+                    message: "Evidence 1 could not be matched exactly to source lines 2–10."
+                ),
+                AnalyzerDiagnostic(
+                    code: "ARCA-NOTE",
+                    severity: .info,
+                    message: "Review completed."
+                )
+            ],
             analyzerResults: [],
             categorizationExecutionMetadata: LLMExecutionMetadata(
                 providerID: "ollama",
@@ -105,8 +210,15 @@ struct TerminalReporterTests {
         Findings by category:
           Anti-pattern: 1
 
+        Evidence verification
+        ---------------------
+        Evidence 1 could not be matched exactly to source lines 2–10.
+
         [INFO] ARCA-NOTE: Review completed.
         """)
+        #expect(!output.contains(
+            "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
+        ))
         #expect(!output.contains("Candidate assessments"))
         #expect(!output.contains("Requires manual review"))
         #expect(!output.contains("Why it was categorized this way"))

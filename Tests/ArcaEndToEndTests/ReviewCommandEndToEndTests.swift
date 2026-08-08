@@ -45,7 +45,9 @@ struct ReviewCommandEndToEndTests {
                 Comment(rawValue: result.output)
             )
             #expect(prompts.count == 2)
-            #expect(prompts[0].contains("arca.code-analysis/v1"))
+            #expect(
+                prompts[0].contains("arca.code-analysis.guided/v1")
+            )
             #expect(prompts[1].contains("arca.issue-categorization/v1"))
             #expect(
                 report.candidates.count == 2,
@@ -429,7 +431,7 @@ private actor VerticalSliceLLMProvider: LLMProvider {
         prompts.append(request.prompt)
 
         let text: String
-        if request.prompt.contains("arca.code-analysis/v1") {
+        if request.prompt.contains("arca.code-analysis.guided/v1") {
             text = """
             {"findings":[{"ruleID":"ARCA-GOD-001","filePath":"\(filePath)","explanation":"The coordinator owns too many responsibilities.","severity":"warning","startLine":1,"endLine":1,"evidence":[{"description":"The type combines extensive state and behavior.","startLine":1,"endLine":1,"excerpt":"final class LargeCoordinator {"}]}]}
             """

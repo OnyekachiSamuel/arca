@@ -3,8 +3,46 @@ import ArcaKnowledge
 import ArcaLLM
 import Testing
 
-@Suite("Code-analysis prompt builder")
+@Suite("Separate code-analysis prompt builders")
 struct CodeAnalysisPromptBuilderTests {
+    @Test("baseline prompt names the task without including rule knowledge")
+    func buildsBaselinePromptWithoutKnowledge() throws {
+        let prompt = try BaselineCodeAnalysisPromptBuilder().build(
+            context: validContext,
+            rules: [godObjectKnowledge]
+        )
+
+        #expect(prompt.templateID == "arca.code-analysis.baseline")
+        #expect(prompt.text.contains("ARCA-GOD-001"))
+        #expect(prompt.text.contains("God Object candidate"))
+        #expect(prompt.text.contains("selected analysis task"))
+        #expect(!prompt.text.contains(godObjectKnowledge.definition))
+        for value in godObjectKnowledge.evidenceCriteria
+            + godObjectKnowledge.classificationGuidance
+            + godObjectKnowledge.severityGuidance {
+            #expect(!prompt.text.contains(value))
+        }
+        #expect(!prompt.text.contains("multiple unrelated responsibilities"))
+        #expect(!prompt.text.contains(#""rules""#))
+    }
+
+    @Test("guided prompt includes the selected rule knowledge")
+    func buildsGuidedPromptWithKnowledge() throws {
+        let prompt = try GuidedCodeAnalysisPromptBuilder().build(
+            context: validContext,
+            rules: [godObjectKnowledge]
+        )
+
+        #expect(prompt.templateID == "arca.code-analysis.guided")
+        #expect(prompt.text.contains(godObjectKnowledge.definition))
+        #expect(prompt.text.contains(#""rules""#))
+        for value in godObjectKnowledge.evidenceCriteria
+            + godObjectKnowledge.classificationGuidance
+            + godObjectKnowledge.severityGuidance {
+            #expect(prompt.text.contains(value))
+        }
+    }
+
     @Test("prompt contains the complete file, changes, every rule, and response contract")
     func buildsGroundedMultiRulePrompt() throws {
         let context = SourceFileAnalysisContext(
@@ -35,12 +73,12 @@ struct CodeAnalysisPromptBuilderTests {
             )
         )
 
-        let prompt = try CodeAnalysisPromptBuilder().build(
+        let prompt = try GuidedCodeAnalysisPromptBuilder().build(
             context: context,
             rules: [longMethodKnowledge, godObjectKnowledge]
         )
 
-        #expect(prompt.templateID == "arca.code-analysis")
+        #expect(prompt.templateID == "arca.code-analysis.guided")
         #expect(prompt.templateVersion == 1)
         #expect(prompt.text.contains("Sources/Checkout.swift"))
         #expect(prompt.text.contains("Sources/OldCheckout.swift"))
@@ -93,7 +131,7 @@ struct CodeAnalysisPromptBuilderTests {
 
     @Test("the same rule set produces stable output regardless of input order")
     func canonicalizesRuleOrder() throws {
-        let builder = CodeAnalysisPromptBuilder()
+        let builder = GuidedCodeAnalysisPromptBuilder()
         let context = SourceFileAnalysisContext(
             filePath: "Example.swift",
             sourceContent: "struct Example {}",
@@ -121,7 +159,7 @@ struct CodeAnalysisPromptBuilderTests {
 
     @Test("an explicit-file prompt does not invent Git change data")
     func omitsUnavailableChangeData() throws {
-        let prompt = try CodeAnalysisPromptBuilder().build(
+        let prompt = try GuidedCodeAnalysisPromptBuilder().build(
             context: SourceFileAnalysisContext(
                 filePath: "Example.swift",
                 sourceContent: "let value = 1",
@@ -136,7 +174,7 @@ struct CodeAnalysisPromptBuilderTests {
 
     @Test("common credential values are not included in the prompt")
     func redactsCommonCredentials() throws {
-        let prompt = try CodeAnalysisPromptBuilder().build(
+        let prompt = try GuidedCodeAnalysisPromptBuilder().build(
             context: SourceFileAnalysisContext(
                 filePath: "Secrets.swift",
                 sourceContent: #"let apiToken = "sk-live-super-secret-value""#,
@@ -152,7 +190,7 @@ struct CodeAnalysisPromptBuilderTests {
     @Test("at least one applicable rule is required")
     func rejectsEmptyRuleSelection() {
         expectBuildingError(.noApplicableRules) {
-            _ = try CodeAnalysisPromptBuilder().build(
+            _ = try GuidedCodeAnalysisPromptBuilder().build(
                 context: validContext,
                 rules: []
             )
@@ -162,7 +200,7 @@ struct CodeAnalysisPromptBuilderTests {
     @Test("duplicate rule IDs are rejected")
     func rejectsDuplicateRuleIDs() {
         expectBuildingError(.duplicateRuleID("ARCA-GOD-001")) {
-            _ = try CodeAnalysisPromptBuilder().build(
+            _ = try GuidedCodeAnalysisPromptBuilder().build(
                 context: validContext,
                 rules: [godObjectKnowledge, godObjectKnowledge]
             )
@@ -174,7 +212,7 @@ struct CodeAnalysisPromptBuilderTests {
         expectBuildingError(
             .sourceLineCountMismatch(expected: 2, actual: 1)
         ) {
-            _ = try CodeAnalysisPromptBuilder().build(
+            _ = try GuidedCodeAnalysisPromptBuilder().build(
                 context: SourceFileAnalysisContext(
                     filePath: "Example.swift",
                     sourceContent: "struct Example {}",
@@ -187,7 +225,7 @@ struct CodeAnalysisPromptBuilderTests {
 
     @Test("complete prompts exceeding their byte limit are rejected")
     func rejectsOversizedPrompt() {
-        let builder = CodeAnalysisPromptBuilder(
+        let builder = GuidedCodeAnalysisPromptBuilder(
             limits: CodeAnalysisPromptLimits(
                 maximumPromptUTF8Bytes: 100
             )

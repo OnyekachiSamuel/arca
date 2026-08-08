@@ -55,6 +55,29 @@ public enum ArcaCommand {
       3  Analyzer or internal execution failure.
     """
 
+    static let llmHelp = """
+    OVERVIEW: Analyze one Swift file using one isolated LLM prompt variant.
+
+    USAGE: arca llm [options]
+
+    OPTIONS:
+      --file <path>           Analyze an explicit Swift file.
+      --review <type>         Select one review. Values: god-object, style, team-convention.
+      --prompt <variant>      Select prompt content. Values: baseline, guided.
+      --format <format>       Select output format. Values: terminal, json. Default: terminal.
+      -h, --help              Show help information.
+
+    PROMPT VARIANTS:
+      baseline                Source code and task instructions only.
+      guided                  Includes rules and knowledge.
+
+    EXIT STATUS:
+      0  Analysis completed without findings.
+      1  Analysis completed with findings.
+      2  Invalid input or configuration.
+      3  Provider, parser, or internal execution failure.
+    """
+
     static let rootHelp = """
     OVERVIEW: A code review tool for Swift.
 
@@ -62,6 +85,7 @@ public enum ArcaCommand {
 
     COMMANDS:
       review                  Review Swift code.
+      llm                     Run one isolated LLM code analysis.
 
     OPTIONS:
       -h, --help              Show help information.
@@ -93,8 +117,18 @@ public enum ArcaCommand {
             return CommandResult(output: rootHelp, exitStatus: .success)
         case ["review", "--help"], ["review", "-h"]:
             return CommandResult(output: reviewHelp, exitStatus: .success)
+        case ["llm", "--help"], ["llm", "-h"]:
+            return CommandResult(output: llmHelp, exitStatus: .success)
         default:
             break
+        }
+
+        if arguments.first == "llm" {
+            return await executeLLM(
+                arguments: Array(arguments.dropFirst()),
+                currentDirectory: currentDirectory,
+                llmProvider: llmProvider
+            )
         }
 
         guard arguments.first == "review" else {
@@ -143,6 +177,90 @@ public enum ArcaCommand {
         } catch {
             return CommandResult(
                 output: "Error: Review command failed unexpectedly.",
+                exitStatus: .executionFailure
+            )
+        }
+    }
+
+    private static func executeLLM(
+        arguments: [String],
+        currentDirectory: String,
+        llmProvider: (any LLMProvider)?
+    ) async -> CommandResult {
+        do {
+            let options = try LLMCommandParser().parse(arguments: arguments)
+            let selectedPath = try ExplicitSwiftFileSelector().select(
+                path: options.filePath
+            )
+            let source = try SourceFileLoader().load(path: selectedPath)
+            let environment = try loadReviewEnvironment(
+                from: currentDirectory
+            )
+            guard let configuration = environment.configuration.llm else {
+                return CommandResult(
+                    output: "Error: The llm command requires an llm configuration in .arca.json.",
+                    exitStatus: .invalidInput
+                )
+            }
+            let provider = try llmProvider ?? LLMProviderFactory().make(
+                configuration: configuration
+            )
+            let result = await LLMCodeAnalysisRunner(
+                provider: provider,
+                knowledgeProvider: try RuleKnowledgeRegistry.bundled(),
+                modelID: configuration.modelID,
+                timeout: .seconds(configuration.timeoutSeconds),
+                seed: configuration.seed,
+                temperature: configuration.temperature
+            ).run(
+                context: SourceFileAnalysisContext(
+                    filePath: llmContextPath(
+                        for: source.path,
+                        repositoryRoot: environment.repositoryRootURL
+                    ),
+                    sourceContent: source.content,
+                    lineCount: source.lineCount
+                ),
+                reviewType: options.reviewType,
+                promptVariant: options.promptVariant
+            )
+            let exitStatus: ArcaExitStatus
+            if !result.findings.isEmpty {
+                exitStatus = .findingsDetected
+            } else if !result.diagnostics.isEmpty {
+                exitStatus = .executionFailure
+            } else {
+                exitStatus = .success
+            }
+            return CommandResult(
+                output: try reporter(for: options.outputFormat).render(
+                    llmRun: result
+                ),
+                exitStatus: exitStatus
+            )
+        } catch let error as LLMCommandParsingError {
+            return CommandResult(
+                output: "Error: \(error.localizedDescription)",
+                exitStatus: .invalidInput
+            )
+        } catch let error as SourceSelectionError {
+            return CommandResult(
+                output: "Error: \(error.localizedDescription)",
+                exitStatus: .invalidInput
+            )
+        } catch let error as SourceLoadingError {
+            return CommandResult(
+                output: "Error: \(error.localizedDescription)",
+                exitStatus: .invalidInput
+            )
+        } catch let error as ConfigurationLoadingError {
+            return CommandResult(
+                output: "Error: \(error.localizedDescription)",
+                exitStatus: .invalidInput
+            )
+        } catch {
+            return CommandResult(
+                output: "Error: LLM code analysis failed unexpectedly.",
                 exitStatus: .executionFailure
             )
         }
@@ -503,6 +621,25 @@ public enum ArcaCommand {
             },
             workingDirectoryURL: workingDirectoryURL
         )
+    }
+
+    private static func llmContextPath(
+        for path: String,
+        repositoryRoot: URL?
+    ) -> String {
+        let fileURL = URL(fileURLWithPath: path)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        guard let repositoryRoot,
+              fileURL.pathComponents.starts(
+                with: repositoryRoot.pathComponents
+              ) else {
+            return fileURL.lastPathComponent
+        }
+
+        return fileURL.pathComponents
+            .dropFirst(repositoryRoot.pathComponents.count)
+            .joined(separator: "/")
     }
 
     private static func makeSourceContexts(

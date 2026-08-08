@@ -11,7 +11,7 @@ public struct LLMCodeAnalyzer: Analyzer {
     private let knowledgeProvider: any RuleKnowledgeProviding
     private let ruleSelector: ReviewRuleSelector
     private let contextBuilder: SourceFileAnalysisContextBuilder
-    private let promptBuilder: CodeAnalysisPromptBuilder
+    private let promptBuilder: GuidedCodeAnalysisPromptBuilder
     private let modelID: String
     private let timeout: Duration
     private let seed: Int?
@@ -23,7 +23,8 @@ public struct LLMCodeAnalyzer: Analyzer {
         ruleSelector: ReviewRuleSelector = ReviewRuleSelector(),
         contextBuilder: SourceFileAnalysisContextBuilder =
             SourceFileAnalysisContextBuilder(),
-        promptBuilder: CodeAnalysisPromptBuilder = CodeAnalysisPromptBuilder(),
+        promptBuilder: GuidedCodeAnalysisPromptBuilder =
+            GuidedCodeAnalysisPromptBuilder(),
         modelID: String,
         timeout: Duration,
         seed: Int? = nil,
@@ -69,7 +70,8 @@ public struct LLMCodeAnalyzer: Analyzer {
                 id,
                 "llm-provider:\(provider.id)",
                 "llm-model:\(modelID)"
-            ]
+            ],
+            retainsEvidenceExcerptMismatches: true
         )
         var candidates: [FindingCandidate] = []
         var metrics = Metrics()

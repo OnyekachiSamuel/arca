@@ -12,6 +12,10 @@ public struct JSONReporter: Reporter {
         try encode(report)
     }
 
+    public func render(llmRun: LLMCodeAnalysisRunResult) throws -> String {
+        try encode(llmRun)
+    }
+
     private func encode(_ value: some Encodable) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]

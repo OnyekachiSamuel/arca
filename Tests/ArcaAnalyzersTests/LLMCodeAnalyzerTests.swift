@@ -91,6 +91,27 @@ struct LLMCodeAnalyzerTests {
         )
     }
 
+    @Test("review retains a candidate when its evidence lines mismatch")
+    func retainsCandidateForCategorization() async throws {
+        let mismatchedResponse = response(path: "App.swift").text
+            .replacingOccurrences(
+                of: "    let value = 1",
+                with: "    let value = 2"
+            )
+        let provider = RecordingCodeAnalysisProvider(responses: [
+            .success(llmResponse(text: mismatchedResponse))
+        ])
+
+        let result = try await makeAnalyzer(provider: provider).analyze(
+            context: context(files: [source(path: "/project/App.swift")])
+        )
+
+        #expect(result.candidates.count == 1)
+        #expect(result.diagnostics.map(\.code) == [
+            "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
+        ])
+    }
+
     @Test("provider failure becomes a diagnostic and later files continue")
     func reportsProviderFailureAndContinues() async throws {
         let provider = RecordingCodeAnalysisProvider(responses: [

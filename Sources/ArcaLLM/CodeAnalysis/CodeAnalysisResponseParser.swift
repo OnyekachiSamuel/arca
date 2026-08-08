@@ -6,25 +6,32 @@ public struct CodeAnalysisResponseParser: Sendable {
     private let knowledgeProvider: any RuleKnowledgeProviding
     private let sourceIdentifiers: [String]
     private let limits: CodeAnalysisResponseLimits
+    private let retainsEvidenceExcerptMismatches: Bool
 
     public init(
         knowledgeProvider: any RuleKnowledgeProviding,
         sourceIdentifier: String,
-        limits: CodeAnalysisResponseLimits = .default
+        limits: CodeAnalysisResponseLimits = .default,
+        retainsEvidenceExcerptMismatches: Bool = false
     ) {
         self.knowledgeProvider = knowledgeProvider
         sourceIdentifiers = [sourceIdentifier]
         self.limits = limits
+        self.retainsEvidenceExcerptMismatches =
+            retainsEvidenceExcerptMismatches
     }
 
     public init(
         knowledgeProvider: any RuleKnowledgeProviding,
         sourceIdentifiers: [String],
-        limits: CodeAnalysisResponseLimits = .default
+        limits: CodeAnalysisResponseLimits = .default,
+        retainsEvidenceExcerptMismatches: Bool = false
     ) {
         self.knowledgeProvider = knowledgeProvider
         self.sourceIdentifiers = Self.unique(sourceIdentifiers)
         self.limits = limits
+        self.retainsEvidenceExcerptMismatches =
+            retainsEvidenceExcerptMismatches
     }
 
     public func parse(
@@ -105,8 +112,9 @@ public struct CodeAnalysisResponseParser: Sendable {
                 sourceLines: sourceLines,
                 analyzerMetadata: analyzerMetadata
             ) {
-            case .accepted(let candidate):
+            case let .accepted(candidate, candidateDiagnostics):
                 candidates.append(candidate)
+                diagnostics.append(contentsOf: candidateDiagnostics)
             case .rejected(let diagnostic):
                 diagnostics.append(diagnostic)
             }
@@ -125,19 +133,20 @@ public struct CodeAnalysisResponseParser: Sendable {
         sourceLines: [String],
         analyzerMetadata: [String: FindingMetadataValue]
     ) -> CandidateValidationResult {
+        let findingNumber = findingIndex + 1
         guard let knowledge = knowledgeProvider.knowledge(
             for: response.ruleID
         ) else {
             return .rejected(diagnostic(
                 code: "ARCA-LLM-ANALYSIS-UNKNOWN-RULE",
-                message: "Finding \(findingIndex) references unknown rule ID '\(response.ruleID)'."
+                message: "Finding \(findingNumber) references unknown rule ID '\(response.ruleID)'."
             ))
         }
         guard isSafePath(response.filePath),
               response.filePath == context.filePath else {
             return .rejected(diagnostic(
                 code: "ARCA-LLM-ANALYSIS-INVALID-PATH",
-                message: "Finding \(findingIndex) references invalid file path '\(response.filePath)'."
+                message: "Finding \(findingNumber) references invalid file path '\(response.filePath)'."
             ))
         }
         guard isValid(
@@ -147,7 +156,7 @@ public struct CodeAnalysisResponseParser: Sendable {
         ) else {
             return .rejected(diagnostic(
                 code: "ARCA-LLM-ANALYSIS-INVALID-RANGE",
-                message: "Finding \(findingIndex) has a line range outside '\(context.filePath)'."
+                message: "Finding \(findingNumber) has a line range outside '\(context.filePath)'."
             ))
         }
 
@@ -157,7 +166,7 @@ public struct CodeAnalysisResponseParser: Sendable {
                 <= limits.maximumExplanationUTF8Bytes else {
             return .rejected(diagnostic(
                 code: "ARCA-LLM-ANALYSIS-INVALID-SCHEMA",
-                message: "Finding \(findingIndex) has an empty or oversized explanation."
+                message: "Finding \(findingNumber) has an empty or oversized explanation."
             ))
         }
         guard !response.evidence.isEmpty,
@@ -165,11 +174,12 @@ public struct CodeAnalysisResponseParser: Sendable {
                 <= limits.maximumEvidenceCountPerFinding else {
             return .rejected(diagnostic(
                 code: "ARCA-LLM-ANALYSIS-INVALID-EVIDENCE",
-                message: "Finding \(findingIndex) has an invalid number of evidence items."
+                message: "Finding \(findingNumber) has an invalid number of evidence items."
             ))
         }
 
         var evidence: [FindingEvidence] = []
+        var evidenceDiagnostics: [AnalyzerDiagnostic] = []
 
         for (evidenceIndex, item) in response.evidence.enumerated() {
             switch validateEvidence(
@@ -180,6 +190,25 @@ public struct CodeAnalysisResponseParser: Sendable {
             case .accepted(let validatedEvidence):
                 evidence.append(.sourceCode(validatedEvidence))
             case .rejected(let failure):
+                if retainsEvidenceExcerptMismatches,
+                   failure.isExcerptMismatch {
+                    evidence.append(.sourceCode(SourceCodeEvidence(
+                        description: item.description.trimmed,
+                        range: sourceRange(
+                            startLine: item.startLine,
+                            endLine: item.endLine,
+                            sourceLines: sourceLines
+                        ),
+                        excerpt: item.excerpt
+                    )))
+                    evidenceDiagnostics.append(diagnostic(
+                        code: failure.code,
+                        message: failure.evidenceVerificationMessage(
+                            evidenceIndex: evidenceIndex
+                        )
+                    ))
+                    continue
+                }
                 return .rejected(diagnostic(
                     code: failure.code,
                     message: failure.message(
@@ -207,11 +236,11 @@ public struct CodeAnalysisResponseParser: Sendable {
                 evidence: evidence,
                 sourceIdentifiers: sourceIdentifiers,
                 analyzerMetadata: analyzerMetadata
-            ))
+            ), diagnostics: evidenceDiagnostics)
         } catch {
             return .rejected(diagnostic(
                 code: "ARCA-LLM-ANALYSIS-INVALID-SCHEMA",
-                message: "Finding \(findingIndex) could not be converted into a candidate finding."
+                message: "Finding \(findingNumber) could not be converted into a candidate finding."
             ))
         }
     }
@@ -356,7 +385,10 @@ public struct CodeAnalysisResponseParser: Sendable {
 }
 
 private enum CandidateValidationResult {
-    case accepted(FindingCandidate)
+    case accepted(
+        FindingCandidate,
+        diagnostics: [AnalyzerDiagnostic] = []
+    )
     case rejected(AnalyzerDiagnostic)
 }
 
@@ -379,6 +411,22 @@ private enum EvidenceValidationFailure {
     )
     case excerptMismatch(startLine: Int, endLine: Int)
 
+    var isExcerptMismatch: Bool {
+        if case .excerptMismatch = self {
+            return true
+        }
+        return false
+    }
+
+    func evidenceVerificationMessage(evidenceIndex: Int) -> String {
+        switch self {
+        case let .excerptMismatch(startLine, endLine):
+            "Evidence \(evidenceIndex + 1) could not be matched exactly to source lines \(startLine)–\(endLine)."
+        default:
+            "Evidence \(evidenceIndex + 1) could not be verified."
+        }
+    }
+
     var code: String {
         switch self {
         case .emptyDescription:
@@ -399,7 +447,7 @@ private enum EvidenceValidationFailure {
     }
 
     func message(findingIndex: Int, evidenceIndex: Int) -> String {
-        let prefix = "Finding \(findingIndex), evidence \(evidenceIndex)"
+        let prefix = "Finding \(findingIndex + 1), evidence \(evidenceIndex + 1)"
         switch self {
         case .emptyDescription:
             return "\(prefix) has an empty description."

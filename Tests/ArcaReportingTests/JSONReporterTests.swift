@@ -5,6 +5,39 @@ import Testing
 
 @Suite("JSON reporter")
 struct JSONReporterTests {
+    @Test("isolated LLM output is versioned and decodable")
+    func rendersDecodableLLMRun() throws {
+        let run = LLMCodeAnalysisRunResult(
+            schemaVersion: LLMCodeAnalysisRunResult.currentSchemaVersion,
+            runID: UUID(),
+            filePath: "Sources/App.swift",
+            reviewType: .godObject,
+            promptVariant: .guided,
+            promptTemplateID: "arca.code-analysis.guided",
+            promptTemplateVersion: 1,
+            findings: [],
+            diagnostics: [],
+            executionMetadata: LLMExecutionMetadata(
+                providerID: "lm-studio",
+                modelID: "qwen",
+                requestCount: 1,
+                providerDurationMilliseconds: 9
+            ),
+            seed: 42,
+            temperature: 0
+        )
+
+        let output = try JSONReporter().render(llmRun: run)
+        let decoded = try JSONDecoder().decode(
+            LLMCodeAnalysisRunResult.self,
+            from: Data(output.utf8)
+        )
+
+        #expect(decoded == run)
+        #expect(output.contains(#""schemaVersion":1"#))
+        #expect(output.contains(#""promptVariant":"guided""#))
+    }
+
     @Test("categorized output is versioned and decodes to the report")
     func rendersDecodableReport() throws {
         let candidate = try makeCandidate()
