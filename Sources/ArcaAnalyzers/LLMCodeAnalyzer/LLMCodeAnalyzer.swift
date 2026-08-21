@@ -202,32 +202,8 @@ public struct LLMCodeAnalyzer: Analyzer {
                 ),
                 providerDurationMilliseconds:
                     metrics.providerDurationMilliseconds
-            ),
-            metadata: [
-                "promptVariant": .string(promptVariant.rawValue),
-                "promptTemplateID": .string(
-                    promptTemplate.id
-                ),
-                "promptTemplateVersion": .integer(
-                    promptTemplate.version
-                )
-            ]
+            )
         )
-    }
-
-    private var promptTemplate: (id: String, version: Int) {
-        switch promptVariant {
-        case .baseline:
-            (
-                BaselineCodeAnalysisPromptBuilder.templateID,
-                BaselineCodeAnalysisPromptBuilder.templateVersion
-            )
-        case .guided:
-            (
-                GuidedCodeAnalysisPromptBuilder.templateID,
-                GuidedCodeAnalysisPromptBuilder.templateVersion
-            )
-        }
     }
 
     private func diagnostic(

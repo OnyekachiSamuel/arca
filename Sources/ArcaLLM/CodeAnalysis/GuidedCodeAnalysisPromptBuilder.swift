@@ -3,10 +3,6 @@ import ArcaKnowledge
 import Foundation
 
 public struct GuidedCodeAnalysisPromptBuilder: Sendable {
-    public static let templateID = GuidedCodeAnalysisPromptTemplateV1.id
-    public static let templateVersion =
-        GuidedCodeAnalysisPromptTemplateV1.version
-
     private let limits: CodeAnalysisPromptLimits
 
     public init(limits: CodeAnalysisPromptLimits = .default) {

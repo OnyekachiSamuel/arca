@@ -1,19 +1,6 @@
 import ArcaDomain
 import Foundation
 
-public struct BaselineCodeAnalysisParsingResult: Equatable, Sendable {
-    public let candidates: [FindingCandidate]
-    public let diagnostics: [AnalyzerDiagnostic]
-
-    public init(
-        candidates: [FindingCandidate],
-        diagnostics: [AnalyzerDiagnostic]
-    ) {
-        self.candidates = candidates
-        self.diagnostics = diagnostics
-    }
-}
-
 public struct BaselineCodeAnalysisResponseParser: Sendable {
     private let sourceIdentifiers: [String]
     private let limits: CodeAnalysisResponseLimits
@@ -37,7 +24,7 @@ public struct BaselineCodeAnalysisResponseParser: Sendable {
         _ responseText: String,
         context: SourceFileAnalysisContext,
         metadata: [String: FindingMetadataValue] = [:]
-    ) -> BaselineCodeAnalysisParsingResult {
+    ) -> CodeAnalysisResponseParsingResult {
         guard limits.isValid,
               !sourceIdentifiers.isEmpty,
               sourceIdentifiers.allSatisfy({ !$0.trimmed.isEmpty }) else {
@@ -226,13 +213,13 @@ public struct BaselineCodeAnalysisResponseParser: Sendable {
             diagnostics.append(contentsOf: findingDiagnostics)
         }
 
-        return BaselineCodeAnalysisParsingResult(
+        return CodeAnalysisResponseParsingResult(
             candidates: candidates,
             diagnostics: diagnostics
         )
     }
 
-    private func invalidJSON() -> BaselineCodeAnalysisParsingResult {
+    private func invalidJSON() -> CodeAnalysisResponseParsingResult {
         rejected(
             code: "ARCA-LLM-ANALYSIS-INVALID-JSON",
             message: "The LLM code-analysis response is not a supported JSON document."
@@ -242,8 +229,8 @@ public struct BaselineCodeAnalysisResponseParser: Sendable {
     private func rejected(
         code: String,
         message: String
-    ) -> BaselineCodeAnalysisParsingResult {
-        BaselineCodeAnalysisParsingResult(
+    ) -> CodeAnalysisResponseParsingResult {
+        CodeAnalysisResponseParsingResult(
             candidates: [],
             diagnostics: [diagnostic(code: code, message: message)]
         )

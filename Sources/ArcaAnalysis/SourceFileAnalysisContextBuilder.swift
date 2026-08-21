@@ -78,7 +78,7 @@ public struct SourceFileAnalysisContextBuilder: Sendable {
         )
     }
 
-    private func contextPath(
+    public func contextPath(
         for path: String,
         repositoryRoot: String?
     ) -> String {

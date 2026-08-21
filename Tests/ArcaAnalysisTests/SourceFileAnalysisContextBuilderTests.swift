@@ -5,6 +5,24 @@ import Testing
 
 @Suite("Complete source-file analysis context")
 struct SourceFileAnalysisContextBuilderTests {
+    @Test("context paths can be shared with reporting")
+    func sharedContextPath() {
+        let builder = SourceFileAnalysisContextBuilder()
+
+        #expect(
+            builder.contextPath(
+                for: "/tmp/Shop/Sources/App.swift",
+                repositoryRoot: "/tmp/Shop"
+            ) == "Sources/App.swift"
+        )
+        #expect(
+            builder.contextPath(
+                for: "/tmp/Other/App.swift",
+                repositoryRoot: "/tmp/Shop"
+            ) == "App.swift"
+        )
+    }
+
     @Test("explicit file includes its complete current contents")
     func explicitFile() throws {
         let repositoryRoot = "/tmp/Shop"

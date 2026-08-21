@@ -2,10 +2,6 @@ import ArcaDomain
 import Foundation
 
 public struct BaselineCodeAnalysisPromptBuilder: Sendable {
-    public static let templateID = BaselineCodeAnalysisPromptTemplateV1.id
-    public static let templateVersion =
-        BaselineCodeAnalysisPromptTemplateV1.version
-
     private let limits: CodeAnalysisPromptLimits
 
     public init(limits: CodeAnalysisPromptLimits = .default) {

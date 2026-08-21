@@ -240,9 +240,9 @@ public enum ArcaCommand {
                 output: try reporter(for: options.outputFormat).render(
                     detectionReport: LLMIssueDetectionReport(
                         requestID: request.id,
-                        filePath: llmContextPath(
+                        filePath: SourceFileAnalysisContextBuilder().contextPath(
                             for: source.path,
-                            repositoryRoot: environment.repositoryRootURL
+                            repositoryRoot: environment.repositoryRootURL?.path
                         ),
                         reviewType: options.reviewType,
                         promptVariant: options.promptVariant,
@@ -629,25 +629,6 @@ public enum ArcaCommand {
             },
             workingDirectoryURL: workingDirectoryURL
         )
-    }
-
-    private static func llmContextPath(
-        for path: String,
-        repositoryRoot: URL?
-    ) -> String {
-        let fileURL = URL(fileURLWithPath: path)
-            .standardizedFileURL
-            .resolvingSymlinksInPath()
-        guard let repositoryRoot,
-              fileURL.pathComponents.starts(
-                with: repositoryRoot.pathComponents
-              ) else {
-            return fileURL.lastPathComponent
-        }
-
-        return fileURL.pathComponents
-            .dropFirst(repositoryRoot.pathComponents.count)
-            .joined(separator: "/")
     }
 
 }
