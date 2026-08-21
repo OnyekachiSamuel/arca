@@ -29,22 +29,25 @@ struct ArcaCommandTests {
                 swiftLintAvailability: .unavailable(.executableNotFound),
                 llmProvider: provider
             )
-            let run = try JSONDecoder().decode(
-                LLMCodeAnalysisRunResult.self,
+            let report = try JSONDecoder().decode(
+                LLMIssueDetectionReport.self,
                 from: Data(result.output.utf8)
             )
             let prompts = await provider.prompts
 
             #expect(result.exitStatus == .findingsDetected)
-            #expect(run.promptVariant == .baseline)
-            #expect(run.reviewType == .godObject)
-            #expect(run.findings.count == 1)
-            #expect(run.findings[0].canonicalRuleID == nil)
-            #expect(run.findings[0].title == "Large Class")
-            #expect(run.findings[0].issueType == .codeSmell)
-            #expect(run.executionMetadata.requestCount == 1)
-            #expect(run.seed == 7)
-            #expect(run.temperature == 0)
+            #expect(report.promptVariant == .baseline)
+            #expect(report.reviewType == .godObject)
+            #expect(report.analysis.candidates.count == 1)
+            #expect(report.analysis.candidates[0].ruleID == nil)
+            #expect(report.analysis.candidates[0].title == "Large Class")
+            #expect(
+                report.analysis.candidates[0]
+                    .analyzerMetadata["issueType"] == .string("codeSmell")
+            )
+            #expect(report.analysis.llmExecutionMetadata?.requestCount == 1)
+            #expect(report.seed == 7)
+            #expect(report.temperature == 0)
             #expect(prompts.count == 1)
             #expect(prompts[0].contains("Variant: baseline"))
             #expect(!prompts[0].contains("ARCA-GOD-001"))
@@ -81,15 +84,15 @@ struct ArcaCommandTests {
                 swiftLintAvailability: .unavailable(.executableNotFound),
                 llmProvider: provider
             )
-            let run = try JSONDecoder().decode(
-                LLMCodeAnalysisRunResult.self,
+            let report = try JSONDecoder().decode(
+                LLMIssueDetectionReport.self,
                 from: Data(result.output.utf8)
             )
             let prompts = await provider.prompts
 
             #expect(result.exitStatus == .success)
-            #expect(run.promptVariant == .guided)
-            #expect(run.findings.isEmpty)
+            #expect(report.promptVariant == .guided)
+            #expect(report.analysis.candidates.isEmpty)
             #expect(await provider.requestCount == 1)
             #expect(prompts.count == 1)
             #expect(prompts[0].contains("Variant: guided"))
@@ -127,14 +130,14 @@ struct ArcaCommandTests {
                 swiftLintAvailability: .unavailable(.executableNotFound),
                 llmProvider: provider
             )
-            let run = try JSONDecoder().decode(
-                LLMCodeAnalysisRunResult.self,
+            let report = try JSONDecoder().decode(
+                LLMIssueDetectionReport.self,
                 from: Data(result.output.utf8)
             )
 
             #expect(result.exitStatus == .findingsDetected)
-            #expect(run.findings.count == 1)
-            #expect(run.diagnostics.map(\.code) == [
+            #expect(report.analysis.candidates.count == 1)
+            #expect(report.analysis.diagnostics.map(\.code) == [
                 "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
             ])
         }

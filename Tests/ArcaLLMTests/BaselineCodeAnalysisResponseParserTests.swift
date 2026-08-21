@@ -12,16 +12,18 @@ struct BaselineCodeAnalysisResponseParserTests {
             metadata: ["promptVariant": .string("baseline")]
         )
 
-        let finding = try #require(result.findings.first)
+        let finding = try #require(result.candidates.first)
+        let range = try #require(finding.range)
         #expect(result.diagnostics.isEmpty)
-        #expect(finding.canonicalRuleID == nil)
+        #expect(finding.ruleID == nil)
         #expect(finding.title == "Large Class")
-        #expect(finding.issueType == .codeSmell)
+        #expect(finding.proposedCategory == .general)
         #expect(finding.filePath == "Example.swift")
-        #expect(finding.range.startLine == 1)
-        #expect(finding.range.endLine == 3)
+        #expect(range.startLine == 1)
+        #expect(range.endLine == 3)
         #expect(finding.sourceIdentifiers == ["llm-code-analysis"])
-        #expect(finding.metadata["promptVariant"] == .string("baseline"))
+        #expect(finding.analyzerMetadata["promptVariant"] == .string("baseline"))
+        #expect(finding.analyzerMetadata["issueType"] == .string("codeSmell"))
     }
 
     @Test("does not validate a model-invented identifier as an ARCA rule")
@@ -33,8 +35,8 @@ struct BaselineCodeAnalysisResponseParserTests {
 
         let result = parser.parse(response, context: context)
 
-        let finding = try #require(result.findings.first)
-        #expect(finding.canonicalRuleID == nil)
+        let finding = try #require(result.candidates.first)
+        #expect(finding.ruleID == nil)
         #expect(!result.diagnostics.map(\.code).contains(
             "ARCA-LLM-ANALYSIS-UNKNOWN-RULE"
         ))
@@ -49,7 +51,7 @@ struct BaselineCodeAnalysisResponseParserTests {
 
         let result = parser.parse(response, context: context)
 
-        #expect(result.findings.count == 1)
+        #expect(result.candidates.count == 1)
         #expect(result.diagnostics.map(\.code) == [
             "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
         ])
@@ -59,7 +61,7 @@ struct BaselineCodeAnalysisResponseParserTests {
     func rejectsMalformedJSON() {
         let result = parser.parse("not JSON", context: context)
 
-        #expect(result.findings.isEmpty)
+        #expect(result.candidates.isEmpty)
         #expect(result.diagnostics.map(\.code) == [
             "ARCA-LLM-ANALYSIS-INVALID-JSON"
         ])

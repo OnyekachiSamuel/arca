@@ -7,33 +7,17 @@ import Testing
 struct TerminalReporterTests {
     @Test("renders an isolated LLM run and its provider measurements")
     func rendersLLMRun() throws {
-        let run = LLMCodeAnalysisRunResult(
-            schemaVersion: LLMCodeAnalysisRunResult.currentSchemaVersion,
-            runID: UUID(),
-            filePath: "Sources/App.swift",
-            reviewType: .godObject,
+        let report = llmDetectionReport(
             promptVariant: .baseline,
-            promptTemplateID: "arca.code-analysis.baseline",
-            promptTemplateVersion: 1,
-            findings: [],
-            diagnostics: [],
-            executionMetadata: LLMExecutionMetadata(
-                providerID: "lm-studio",
-                modelID: "qwen",
-                requestCount: 1,
-                usage: LLMTokenUsageMetadata(
-                    inputTokens: 100,
-                    outputTokens: 20,
-                    totalTokens: 120
-                ),
-                providerDurationMilliseconds: 25
-            ),
-            seed: 42,
-            temperature: 0
+            usage: LLMTokenUsageMetadata(
+                inputTokens: 100,
+                outputTokens: 20,
+                totalTokens: 120
+            )
         )
 
         let output = try TerminalReporter(outputIsTTY: { false })
-            .render(llmRun: run)
+            .render(detectionReport: report)
 
         #expect(output == """
         ARCA LLM Detection Experiment
@@ -58,32 +42,18 @@ struct TerminalReporterTests {
 
     @Test("renders an LLM candidate and validation notes clearly")
     func rendersLLMCandidate() throws {
-        let run = LLMCodeAnalysisRunResult(
-            schemaVersion: LLMCodeAnalysisRunResult.currentSchemaVersion,
-            runID: UUID(),
-            filePath: "Sources/App.swift",
-            reviewType: .godObject,
+        let report = llmDetectionReport(
             promptVariant: .guided,
-            promptTemplateID: "arca.code-analysis.guided",
-            promptTemplateVersion: 1,
-            findings: [experimentalLLMFinding()],
+            candidates: [try experimentalLLMCandidate()],
             diagnostics: [AnalyzerDiagnostic(
                 code: "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH",
                 severity: .warning,
                 message: "Evidence 1 could not be matched exactly to source lines 2–10."
-            )],
-            executionMetadata: LLMExecutionMetadata(
-                providerID: "lm-studio",
-                modelID: "qwen",
-                requestCount: 1,
-                providerDurationMilliseconds: 25
-            ),
-            seed: 42,
-            temperature: 0
+            )]
         )
 
         let output = try TerminalReporter(outputIsTTY: { false })
-            .render(llmRun: run)
+            .render(detectionReport: report)
 
         #expect(output.contains("Overall result: 1 candidate detected"))
         #expect(output.contains(
@@ -107,10 +77,10 @@ struct TerminalReporterTests {
 
     @Test("renders a baseline finding without implying a canonical rule")
     func rendersRuleFreeBaselineFinding() throws {
-        let finding = LLMCodeAnalysisFinding(
-            canonicalRuleID: nil,
+        let finding = try FindingCandidate(
+            candidateID: UUID(),
+            ruleID: nil,
             title: "Large Class",
-            issueType: .codeSmell,
             explanation: "The type contains substantial state and behavior.",
             filePath: "Sources/App.swift",
             range: SourceRange(
@@ -119,7 +89,8 @@ struct TerminalReporterTests {
                 endLine: 20,
                 endColumn: 2
             ),
-            severity: .warning,
+            proposedSeverity: .warning,
+            proposedCategory: .general,
             evidence: [.sourceCode(SourceCodeEvidence(
                 description: "The type contains many members.",
                 range: SourceRange(
@@ -130,30 +101,16 @@ struct TerminalReporterTests {
                 ),
                 excerpt: "final class App"
             ))],
-            sourceIdentifiers: ["llm-code-analysis"]
+            sourceIdentifiers: ["llm-code-analysis"],
+            analyzerMetadata: ["issueType": .string("codeSmell")]
         )
-        let run = LLMCodeAnalysisRunResult(
-            schemaVersion: LLMCodeAnalysisRunResult.currentSchemaVersion,
-            runID: UUID(),
-            filePath: "Sources/App.swift",
-            reviewType: .godObject,
+        let report = llmDetectionReport(
             promptVariant: .baseline,
-            promptTemplateID: "arca.code-analysis.baseline",
-            promptTemplateVersion: 1,
-            findings: [finding],
-            diagnostics: [],
-            executionMetadata: LLMExecutionMetadata(
-                providerID: "lm-studio",
-                modelID: "qwen",
-                requestCount: 1,
-                providerDurationMilliseconds: 25
-            ),
-            seed: nil,
-            temperature: nil
+            candidates: [finding]
         )
 
         let output = try TerminalReporter(outputIsTTY: { false })
-            .render(llmRun: run)
+            .render(detectionReport: report)
 
         #expect(output.contains("Candidate 1 — Large Class"))
         #expect(output.contains("Issue type: Code smell"))
@@ -475,14 +432,13 @@ private func categorizedLLMCandidate() throws -> FindingCandidate {
     )
 }
 
-private func experimentalLLMFinding() -> LLMCodeAnalysisFinding {
-    LLMCodeAnalysisFinding(
-        id: UUID(
+private func experimentalLLMCandidate() throws -> FindingCandidate {
+    try FindingCandidate(
+        candidateID: UUID(
             uuidString: "22222222-2222-2222-2222-222222222222"
         )!,
-        canonicalRuleID: "ARCA-GOD-001",
+        ruleID: "ARCA-GOD-001",
         title: "God Object candidate",
-        issueType: .antiPattern,
         explanation: "The type owns unrelated responsibilities.",
         filePath: "Sources/App.swift",
         range: SourceRange(
@@ -491,7 +447,8 @@ private func experimentalLLMFinding() -> LLMCodeAnalysisFinding {
             endLine: 20,
             endColumn: 2
         ),
-        severity: .warning,
+        proposedSeverity: .warning,
+        proposedCategory: .antiPattern,
         evidence: [.sourceCode(SourceCodeEvidence(
             description: "The type handles users and invoices.",
             range: SourceRange(
@@ -507,6 +464,35 @@ private func experimentalLLMFinding() -> LLMCodeAnalysisFinding {
             "llm-provider:lm-studio",
             "llm-model:qwen"
         ]
+    )
+}
+
+private func llmDetectionReport(
+    promptVariant: CodeAnalysisPromptVariant,
+    candidates: [FindingCandidate] = [],
+    diagnostics: [AnalyzerDiagnostic] = [],
+    usage: LLMTokenUsageMetadata = LLMTokenUsageMetadata()
+) -> LLMIssueDetectionReport {
+    LLMIssueDetectionReport(
+        requestID: UUID(),
+        filePath: "Sources/App.swift",
+        reviewType: .godObject,
+        promptVariant: promptVariant,
+        analysis: AnalyzerResult(
+            analyzerID: "llm-code-analysis",
+            candidates: candidates,
+            tool: ToolMetadata(name: "lm-studio", version: "qwen"),
+            diagnostics: diagnostics,
+            llmExecutionMetadata: LLMExecutionMetadata(
+                providerID: "lm-studio",
+                modelID: "qwen",
+                requestCount: 1,
+                usage: usage,
+                providerDurationMilliseconds: 25
+            )
+        ),
+        seed: 42,
+        temperature: 0
     )
 }
 

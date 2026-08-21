@@ -7,7 +7,7 @@ public struct FindingCandidate:
     Identifiable
 {
     public let candidateID: UUID
-    public let ruleID: String
+    public let ruleID: String?
     public let title: String
     public let explanation: String
     public let filePath: String
@@ -24,7 +24,7 @@ public struct FindingCandidate:
 
     public init(
         candidateID: UUID,
-        ruleID: String,
+        ruleID: String?,
         title: String,
         explanation: String,
         filePath: String,
@@ -35,7 +35,7 @@ public struct FindingCandidate:
         sourceIdentifiers: [String],
         analyzerMetadata: [String: FindingMetadataValue] = [:]
     ) throws {
-        guard !ruleID.isBlank else {
+        guard ruleID.map({ !$0.isBlank }) ?? true else {
             throw FindingCandidateValidationError.missingRuleID
         }
         guard !title.isBlank else {
@@ -98,7 +98,7 @@ public struct FindingCandidate:
                 UUID.self,
                 forKey: .candidateID
             ),
-            ruleID: container.decode(String.self, forKey: .ruleID),
+            ruleID: container.decodeIfPresent(String.self, forKey: .ruleID),
             title: container.decode(String.self, forKey: .title),
             explanation: container.decode(
                 String.self,
@@ -136,7 +136,7 @@ public struct FindingCandidate:
         var container = encoder.container(keyedBy: CodingKeys.self)
 
         try container.encode(candidateID, forKey: .candidateID)
-        try container.encode(ruleID, forKey: .ruleID)
+        try container.encodeIfPresent(ruleID, forKey: .ruleID)
         try container.encode(title, forKey: .title)
         try container.encode(explanation, forKey: .explanation)
         try container.encode(filePath, forKey: .filePath)

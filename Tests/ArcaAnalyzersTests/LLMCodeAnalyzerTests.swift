@@ -8,6 +8,56 @@ import Testing
 
 @Suite("LLM code analyzer")
 struct LLMCodeAnalyzerTests {
+    @Test("baseline analysis returns rule-free candidates through AnalyzerResult")
+    func analyzesWithBaselinePrompt() async throws {
+        let provider = RecordingCodeAnalysisProvider(responses: [
+            .success(llmResponse(text: """
+            {
+              "findings": [
+                {
+                  "title": "Large Class",
+                  "issueType": "codeSmell",
+                  "filePath": "App.swift",
+                  "explanation": "The type owns substantial state and behavior.",
+                  "severity": "warning",
+                  "startLine": 1,
+                  "endLine": 3,
+                  "evidence": [
+                    {
+                      "description": "The type owns state.",
+                      "startLine": 2,
+                      "endLine": 2,
+                      "excerpt": "    let value = 1"
+                    }
+                  ]
+                }
+              ]
+            }
+            """))
+        ])
+        let analyzer = makeAnalyzer(
+            provider: provider,
+            promptVariant: .baseline,
+            knowledgeProvider: nil
+        )
+
+        let result = try await analyzer.analyze(
+            context: context(files: [source(path: "/project/App.swift")])
+        )
+        let candidate = try #require(result.candidates.first)
+        let requests = await provider.requests
+
+        #expect(result.analyzerID == "llm-code-analysis")
+        #expect(candidate.ruleID == nil)
+        #expect(candidate.title == "Large Class")
+        #expect(candidate.proposedCategory == .general)
+        #expect(candidate.analyzerMetadata["issueType"] == .string("codeSmell"))
+        #expect(candidate.analyzerMetadata["promptVariant"] == .string("baseline"))
+        #expect(requests.count == 1)
+        #expect(requests[0].prompt.contains("Variant: baseline"))
+        #expect(!requests[0].prompt.contains("ARCA-GOD-001"))
+    }
+
     @Test("analyzes every selected file and records provenance and usage")
     func analyzesEveryFile() async throws {
         let provider = RecordingCodeAnalysisProvider(responses: [
@@ -139,11 +189,15 @@ struct LLMCodeAnalyzerTests {
     }
 
     private func makeAnalyzer(
-        provider: RecordingCodeAnalysisProvider
+        provider: RecordingCodeAnalysisProvider,
+        promptVariant: CodeAnalysisPromptVariant = .guided,
+        knowledgeProvider: (any RuleKnowledgeProviding)? =
+            AnalyzerKnowledgeProvider()
     ) -> LLMCodeAnalyzer {
         LLMCodeAnalyzer(
             provider: provider,
-            knowledgeProvider: AnalyzerKnowledgeProvider(),
+            knowledgeProvider: knowledgeProvider,
+            promptVariant: promptVariant,
             modelID: "mock-model",
             timeout: .seconds(30),
             seed: 7,

@@ -8,10 +8,12 @@ public struct LLMCodeAnalyzer: Analyzer {
     public let supportedReviewTypes = Set(ReviewType.allCases)
 
     private let provider: any LLMProvider
-    private let knowledgeProvider: any RuleKnowledgeProviding
+    private let knowledgeProvider: (any RuleKnowledgeProviding)?
     private let ruleSelector: ReviewRuleSelector
     private let contextBuilder: SourceFileAnalysisContextBuilder
-    private let promptBuilder: GuidedCodeAnalysisPromptBuilder
+    private let promptVariant: CodeAnalysisPromptVariant
+    private let baselinePromptBuilder: BaselineCodeAnalysisPromptBuilder
+    private let guidedPromptBuilder: GuidedCodeAnalysisPromptBuilder
     private let modelID: String
     private let timeout: Duration
     private let seed: Int?
@@ -19,11 +21,14 @@ public struct LLMCodeAnalyzer: Analyzer {
 
     public init(
         provider: any LLMProvider,
-        knowledgeProvider: any RuleKnowledgeProviding,
+        knowledgeProvider: (any RuleKnowledgeProviding)?,
         ruleSelector: ReviewRuleSelector = ReviewRuleSelector(),
         contextBuilder: SourceFileAnalysisContextBuilder =
             SourceFileAnalysisContextBuilder(),
-        promptBuilder: GuidedCodeAnalysisPromptBuilder =
+        promptVariant: CodeAnalysisPromptVariant = .guided,
+        baselinePromptBuilder: BaselineCodeAnalysisPromptBuilder =
+            BaselineCodeAnalysisPromptBuilder(),
+        guidedPromptBuilder: GuidedCodeAnalysisPromptBuilder =
             GuidedCodeAnalysisPromptBuilder(),
         modelID: String,
         timeout: Duration,
@@ -34,7 +39,9 @@ public struct LLMCodeAnalyzer: Analyzer {
         self.knowledgeProvider = knowledgeProvider
         self.ruleSelector = ruleSelector
         self.contextBuilder = contextBuilder
-        self.promptBuilder = promptBuilder
+        self.promptVariant = promptVariant
+        self.baselinePromptBuilder = baselinePromptBuilder
+        self.guidedPromptBuilder = guidedPromptBuilder
         self.modelID = modelID
         self.timeout = timeout
         self.seed = seed
@@ -46,12 +53,14 @@ public struct LLMCodeAnalyzer: Analyzer {
     ) async throws -> AnalyzerResult {
         let builtContexts = contextBuilder.build(from: context)
         var diagnostics = builtContexts.diagnostics
-        let rules = ruleSelector.rules(
-            for: context.request.selectedReviewTypes,
-            from: knowledgeProvider
-        )
+        let rules = knowledgeProvider.map {
+            ruleSelector.rules(
+                for: context.request.selectedReviewTypes,
+                from: $0
+            )
+        } ?? []
 
-        guard !rules.isEmpty else {
+        guard promptVariant == .baseline || !rules.isEmpty else {
             diagnostics.append(diagnostic(
                 code: "ARCA-LLM-ANALYSIS-NO-APPLICABLE-RULES",
                 message: "No rule knowledge is available for the selected review types."
@@ -64,25 +73,23 @@ public struct LLMCodeAnalyzer: Analyzer {
             )
         }
 
-        let parser = CodeAnalysisResponseParser(
-            knowledgeProvider: knowledgeProvider,
-            sourceIdentifiers: [
-                id,
-                "llm-provider:\(provider.id)",
-                "llm-model:\(modelID)"
-            ],
-            retainsEvidenceExcerptMismatches: true
-        )
         var candidates: [FindingCandidate] = []
         var metrics = Metrics()
 
         for sourceContext in builtContexts.contexts {
             let prompt: CodeAnalysisPrompt
             do {
-                prompt = try promptBuilder.build(
-                    context: sourceContext,
-                    rules: rules
-                )
+                switch promptVariant {
+                case .baseline:
+                    prompt = try baselinePromptBuilder.build(
+                        context: sourceContext
+                    )
+                case .guided:
+                    prompt = try guidedPromptBuilder.build(
+                        context: sourceContext,
+                        rules: rules
+                    )
+                }
             } catch {
                 diagnostics.append(diagnostic(
                     code: "ARCA-LLM-ANALYSIS-PROMPT-FAILED",
@@ -110,20 +117,56 @@ public struct LLMCodeAnalyzer: Analyzer {
             }
 
             metrics.record(response)
-            let parsingResult = parser.parse(
-                response.text,
-                context: sourceContext,
-                analyzerMetadata: [
-                    "providerID": .string(provider.id),
-                    "modelID": .string(modelID),
-                    "promptTemplateID": .string(prompt.templateID),
-                    "promptTemplateVersion": .integer(
-                        prompt.templateVersion
-                    )
-                ]
-            )
-            candidates.append(contentsOf: parsingResult.candidates)
-            diagnostics.append(contentsOf: parsingResult.diagnostics)
+            let metadata: [String: FindingMetadataValue] = [
+                "providerID": .string(provider.id),
+                "modelID": .string(modelID),
+                "promptVariant": .string(promptVariant.rawValue),
+                "promptTemplateID": .string(prompt.templateID),
+                "promptTemplateVersion": .integer(
+                    prompt.templateVersion
+                )
+            ]
+            switch promptVariant {
+            case .baseline:
+                let parsingResult = BaselineCodeAnalysisResponseParser(
+                    sourceIdentifiers: [
+                        id,
+                        "llm-provider:\(provider.id)",
+                        "llm-model:\(modelID)"
+                    ],
+                    retainsEvidenceExcerptMismatches: true
+                ).parse(
+                    response.text,
+                    context: sourceContext,
+                    metadata: metadata
+                )
+                candidates.append(contentsOf: parsingResult.candidates)
+                diagnostics.append(contentsOf: parsingResult.diagnostics)
+            case .guided:
+                guard let knowledgeProvider else {
+                    diagnostics.append(diagnostic(
+                        code: "ARCA-LLM-ANALYSIS-NO-APPLICABLE-RULES",
+                        message: "No rule knowledge is available for the selected review types."
+                    ))
+                    continue
+                }
+                let guidedParser = CodeAnalysisResponseParser(
+                    knowledgeProvider: knowledgeProvider,
+                    sourceIdentifiers: [
+                        id,
+                        "llm-provider:\(provider.id)",
+                        "llm-model:\(modelID)"
+                    ],
+                    retainsEvidenceExcerptMismatches: true
+                )
+                let parsingResult = guidedParser.parse(
+                    response.text,
+                    context: sourceContext,
+                    analyzerMetadata: metadata
+                )
+                candidates.append(contentsOf: parsingResult.candidates)
+                diagnostics.append(contentsOf: parsingResult.diagnostics)
+            }
         }
 
         return result(
@@ -159,8 +202,32 @@ public struct LLMCodeAnalyzer: Analyzer {
                 ),
                 providerDurationMilliseconds:
                     metrics.providerDurationMilliseconds
-            )
+            ),
+            metadata: [
+                "promptVariant": .string(promptVariant.rawValue),
+                "promptTemplateID": .string(
+                    promptTemplate.id
+                ),
+                "promptTemplateVersion": .integer(
+                    promptTemplate.version
+                )
+            ]
         )
+    }
+
+    private var promptTemplate: (id: String, version: Int) {
+        switch promptVariant {
+        case .baseline:
+            (
+                BaselineCodeAnalysisPromptBuilder.templateID,
+                BaselineCodeAnalysisPromptBuilder.templateVersion
+            )
+        case .guided:
+            (
+                GuidedCodeAnalysisPromptBuilder.templateID,
+                GuidedCodeAnalysisPromptBuilder.templateVersion
+            )
+        }
     }
 
     private func diagnostic(

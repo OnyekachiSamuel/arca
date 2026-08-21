@@ -30,9 +30,10 @@ public struct TerminalReporter: Reporter {
 
         for candidate in analysis.candidates {
             lines.append("")
+            let ruleDescription = candidate.ruleID ?? "Unmapped LLM candidate"
             lines.append(
                 "\(severityLabel(for: candidate.proposedSeverity, usesColor: usesColor)) "
-                    + "\(candidate.ruleID): \(candidate.title)"
+                    + "\(ruleDescription): \(candidate.title)"
             )
             lines.append("File: \(location(for: candidate))")
             lines.append("Explanation: \(candidate.explanation)")
@@ -135,47 +136,59 @@ public struct TerminalReporter: Reporter {
         return lines.joined(separator: "\n")
     }
 
-    public func render(llmRun: LLMCodeAnalysisRunResult) throws -> String {
+    public func render(
+        detectionReport: LLMIssueDetectionReport
+    ) throws -> String {
         let usesColor = outputIsTTY()
+        let analysis = detectionReport.analysis
+        let executionMetadata = analysis.llmExecutionMetadata
+            ?? LLMExecutionMetadata(
+                providerID: analysis.tool?.name ?? "unknown",
+                modelID: analysis.tool?.version ?? "unknown",
+                requestCount: 0,
+                providerDurationMilliseconds: 0
+            )
         var lines = [
             "ARCA LLM Detection Experiment",
-            "Overall result: \(llmDetectionResult(count: llmRun.findings.count))",
+            "Overall result: \(llmDetectionResult(count: analysis.candidates.count))",
             "",
             "Run configuration",
             "-----------------",
-            "Prompt: \(promptDescription(for: llmRun.promptVariant))",
-            "Review: \(reviewDescription(for: llmRun.reviewType))",
-            "File: \(llmRun.filePath)",
-            "Provider: \(llmRun.executionMetadata.providerID)",
-            "Model: \(llmRun.executionMetadata.modelID)",
-            "Requests: \(llmRun.executionMetadata.requestCount)",
-            "Duration: \(llmRun.executionMetadata.providerDurationMilliseconds) ms",
-            "Token usage: \(tokenSummary(for: llmRun.executionMetadata.usage))"
+            "Prompt: \(promptDescription(for: detectionReport.promptVariant))",
+            "Review: \(reviewDescription(for: detectionReport.reviewType))",
+            "File: \(detectionReport.filePath)",
+            "Provider: \(executionMetadata.providerID)",
+            "Model: \(executionMetadata.modelID)",
+            "Requests: \(executionMetadata.requestCount)",
+            "Duration: \(executionMetadata.providerDurationMilliseconds) ms",
+            "Token usage: \(tokenSummary(for: executionMetadata.usage))"
         ]
 
-        if llmRun.findings.isEmpty {
+        if analysis.candidates.isEmpty {
             lines.append("")
             lines.append("Detection results")
             lines.append("-----------------")
             lines.append("No candidates were returned by the model.")
         }
 
-        for (index, finding) in llmRun.findings.enumerated() {
+        for (index, finding) in analysis.candidates.enumerated() {
             lines.append("")
             lines.append("Candidate \(index + 1) — \(finding.title)")
             lines.append("----------------------------------")
             lines.append(
-                "Severity: \(severityLabel(for: finding.severity, usesColor: usesColor))"
+                "Severity: \(severityLabel(for: finding.proposedSeverity, usesColor: usesColor))"
             )
-            lines.append("Issue type: \(displayName(for: finding.issueType))")
-            if let ruleID = finding.canonicalRuleID {
+            lines.append("Issue type: \(issueTypeDisplayName(for: finding))")
+            if let ruleID = finding.ruleID {
                 lines.append("Canonical rule: \(ruleID)")
             }
             lines.append("Location: \(finding.filePath)")
-            let lineRange = finding.range.startLine == finding.range.endLine
-                ? "\(finding.range.startLine)"
-                : "\(finding.range.startLine)–\(finding.range.endLine)"
-            lines.append("Lines: \(lineRange)")
+            if let range = finding.range {
+                let lineRange = range.startLine == range.endLine
+                    ? "\(range.startLine)"
+                    : "\(range.startLine)–\(range.endLine)"
+                lines.append("Lines: \(lineRange)")
+            }
             lines.append("")
             lines.append("LLM detection")
             lines.append("-------------")
@@ -183,11 +196,11 @@ public struct TerminalReporter: Reporter {
             appendEvidence(finding.evidence, to: &lines)
         }
 
-        let evidenceVerificationDiagnostics = llmRun.diagnostics.filter {
+        let evidenceVerificationDiagnostics = analysis.diagnostics.filter {
             $0.code
                 == "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
         }
-        let remainingDiagnostics = llmRun.diagnostics.filter {
+        let remainingDiagnostics = analysis.diagnostics.filter {
             $0.code
                 != "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
         }
@@ -233,15 +246,14 @@ public struct TerminalReporter: Reporter {
         }
     }
 
-    private func displayName(for issueType: LLMDetectedIssueType) -> String {
-        switch issueType {
-        case .codeSmell: "Code smell"
-        case .antiPattern: "Anti-pattern"
-        case .architecture: "Architecture"
-        case .style: "Style"
-        case .teamConvention: "Team convention"
-        case .general: "General"
+    private func issueTypeDisplayName(
+        for candidate: FindingCandidate
+    ) -> String {
+        if case .string(let issueType) = candidate.analyzerMetadata["issueType"],
+           issueType == "codeSmell" {
+            return "Code smell"
         }
+        return displayName(for: candidate.proposedCategory)
     }
 
     private func promptDescription(

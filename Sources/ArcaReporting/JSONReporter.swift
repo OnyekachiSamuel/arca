@@ -12,8 +12,10 @@ public struct JSONReporter: Reporter {
         try encode(report)
     }
 
-    public func render(llmRun: LLMCodeAnalysisRunResult) throws -> String {
-        try encode(llmRun)
+    public func render(
+        detectionReport: LLMIssueDetectionReport
+    ) throws -> String {
+        try encode(detectionReport)
     }
 
     private func encode(_ value: some Encodable) throws -> String {

@@ -8,6 +8,7 @@ public struct AnalyzerResult: Codable, Equatable, Sendable {
     public let diagnostics: [AnalyzerDiagnostic]
     public let durationMilliseconds: Int
     public let llmExecutionMetadata: LLMExecutionMetadata?
+    public let metadata: [String: FindingMetadataValue]
 
     public init(
         analyzerID: String,
@@ -16,7 +17,8 @@ public struct AnalyzerResult: Codable, Equatable, Sendable {
         executionStatus: AnalyzerExecutionStatus = .completed,
         diagnostics: [AnalyzerDiagnostic] = [],
         durationMilliseconds: Int = 0,
-        llmExecutionMetadata: LLMExecutionMetadata? = nil
+        llmExecutionMetadata: LLMExecutionMetadata? = nil,
+        metadata: [String: FindingMetadataValue] = [:]
     ) {
         self.analyzerID = analyzerID
         self.candidates = candidates
@@ -25,6 +27,7 @@ public struct AnalyzerResult: Codable, Equatable, Sendable {
         self.diagnostics = diagnostics
         self.durationMilliseconds = durationMilliseconds
         self.llmExecutionMetadata = llmExecutionMetadata
+        self.metadata = metadata
     }
 
 }

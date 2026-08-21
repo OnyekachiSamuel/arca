@@ -203,27 +203,33 @@ public enum ArcaCommand {
             let provider = try llmProvider ?? LLMProviderFactory().make(
                 configuration: configuration
             )
-            let result = await LLMCodeAnalysisRunner(
+            let knowledgeProvider: RuleKnowledgeRegistry? =
+                options.promptVariant == .guided
+                    ? try RuleKnowledgeRegistry.bundled()
+                    : nil
+            let request = ReviewRequest(
+                id: UUID(),
+                repositoryRoot: environment.repositoryRootURL?.path,
+                selectedFiles: [source.path],
+                selectedReviewTypes: [options.reviewType],
+                configuration: environment.configuration
+            )
+            let result = try await LLMCodeAnalyzer(
                 provider: provider,
-                knowledgeProvider: try RuleKnowledgeRegistry.bundled(),
+                knowledgeProvider: knowledgeProvider,
+                promptVariant: options.promptVariant,
                 modelID: configuration.modelID,
                 timeout: .seconds(configuration.timeoutSeconds),
                 seed: configuration.seed,
                 temperature: configuration.temperature
-            ).run(
-                context: SourceFileAnalysisContext(
-                    filePath: llmContextPath(
-                        for: source.path,
-                        repositoryRoot: environment.repositoryRootURL
-                    ),
-                    sourceContent: source.content,
-                    lineCount: source.lineCount
-                ),
-                reviewType: options.reviewType,
-                promptVariant: options.promptVariant
+            ).analyze(
+                context: AnalysisContext(
+                    request: request,
+                    sourceFiles: [source]
+                )
             )
             let exitStatus: ArcaExitStatus
-            if !result.findings.isEmpty {
+            if !result.candidates.isEmpty {
                 exitStatus = .findingsDetected
             } else if !result.diagnostics.isEmpty {
                 exitStatus = .executionFailure
@@ -232,9 +238,21 @@ public enum ArcaCommand {
             }
             return CommandResult(
                 output: try reporter(for: options.outputFormat).render(
-                    llmRun: result
+                    detectionReport: LLMIssueDetectionReport(
+                        requestID: request.id,
+                        filePath: llmContextPath(
+                            for: source.path,
+                            repositoryRoot: environment.repositoryRootURL
+                        ),
+                        reviewType: options.reviewType,
+                        promptVariant: options.promptVariant,
+                        analysis: result,
+                        seed: configuration.seed,
+                        temperature: configuration.temperature
+                    )
                 ),
-                exitStatus: exitStatus
+                exitStatus: exitStatus,
+                reviewRequest: request
             )
         } catch let error as LLMCommandParsingError {
             return CommandResult(

@@ -32,7 +32,7 @@ public struct IssueCategorizationPromptBuilder: Sendable {
         }
         let assessments = FindingAssessment.allCases
         let payload = IssueCategorizationPromptInput(
-            candidates: candidates.map(makeCandidateInput),
+            candidates: try candidates.map(makeCandidateInput),
             ruleKnowledge: sortedKnowledge.map(makeRuleInput),
             allowedCategories: categories,
             allowedAssessments: assessments
@@ -87,11 +87,15 @@ public struct IssueCategorizationPromptBuilder: Sendable {
 
     private func makeCandidateInput(
         _ candidate: FindingCandidate
-    ) -> IssueCategorizationCandidateInput {
-        IssueCategorizationCandidateInput(
+    ) throws -> IssueCategorizationCandidateInput {
+        guard let ruleID = candidate.ruleID else {
+            throw IssueCategorizationPromptBuildingError
+                .missingCandidateRuleID(candidate.candidateID.uuidString)
+        }
+        return IssueCategorizationCandidateInput(
             candidateID: candidate.candidateID,
             analyzerSources: candidate.sourceIdentifiers,
-            ruleID: candidate.ruleID,
+            ruleID: ruleID,
             title: candidate.title,
             path: candidate.filePath,
             range: candidate.range,

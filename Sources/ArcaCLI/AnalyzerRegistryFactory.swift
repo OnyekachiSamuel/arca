@@ -62,6 +62,7 @@ struct AnalyzerRegistryFactory: Sendable {
             analyzers.append(LLMCodeAnalyzer(
                 provider: llmProvider,
                 knowledgeProvider: knowledgeProvider,
+                promptVariant: .guided,
                 modelID: llmConfiguration.modelID,
                 timeout: .seconds(llmConfiguration.timeoutSeconds),
                 seed: llmConfiguration.seed,

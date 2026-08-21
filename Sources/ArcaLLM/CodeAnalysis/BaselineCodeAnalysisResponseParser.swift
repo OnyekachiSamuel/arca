@@ -2,14 +2,14 @@ import ArcaDomain
 import Foundation
 
 public struct BaselineCodeAnalysisParsingResult: Equatable, Sendable {
-    public let findings: [LLMCodeAnalysisFinding]
+    public let candidates: [FindingCandidate]
     public let diagnostics: [AnalyzerDiagnostic]
 
     public init(
-        findings: [LLMCodeAnalysisFinding],
+        candidates: [FindingCandidate],
         diagnostics: [AnalyzerDiagnostic]
     ) {
-        self.findings = findings
+        self.candidates = candidates
         self.diagnostics = diagnostics
     }
 }
@@ -96,7 +96,7 @@ public struct BaselineCodeAnalysisResponseParser: Sendable {
             limits: limits
         )
 
-        var findings: [LLMCodeAnalysisFinding] = []
+        var candidates: [FindingCandidate] = []
         var diagnostics: [AnalyzerDiagnostic] = []
         for (findingIndex, responseFinding) in response.findings.enumerated() {
             let findingNumber = findingIndex + 1
@@ -193,26 +193,41 @@ public struct BaselineCodeAnalysisResponseParser: Sendable {
                 continue
             }
 
-            findings.append(LLMCodeAnalysisFinding(
-                canonicalRuleID: nil,
-                title: title,
-                issueType: responseFinding.issueType,
-                explanation: explanation,
-                filePath: context.filePath,
-                range: sourceValidator.sourceRange(
-                    startLine: responseFinding.startLine,
-                    endLine: responseFinding.endLine
-                ),
-                severity: responseFinding.severity,
-                evidence: evidence,
-                sourceIdentifiers: sourceIdentifiers,
-                metadata: metadata
-            ))
+            do {
+                var candidateMetadata = metadata
+                candidateMetadata["issueType"] = .string(
+                    responseFinding.issueType.rawValue
+                )
+                candidates.append(try FindingCandidate(
+                    candidateID: UUID(),
+                    ruleID: nil,
+                    title: title,
+                    explanation: explanation,
+                    filePath: context.filePath,
+                    range: sourceValidator.sourceRange(
+                        startLine: responseFinding.startLine,
+                        endLine: responseFinding.endLine
+                    ),
+                    proposedSeverity: responseFinding.severity,
+                    proposedCategory: category(
+                        for: responseFinding.issueType
+                    ),
+                    evidence: evidence,
+                    sourceIdentifiers: sourceIdentifiers,
+                    analyzerMetadata: candidateMetadata
+                ))
+            } catch {
+                diagnostics.append(diagnostic(
+                    code: "ARCA-LLM-ANALYSIS-INVALID-SCHEMA",
+                    message: "Finding \(findingNumber) could not be represented as a candidate."
+                ))
+                continue
+            }
             diagnostics.append(contentsOf: findingDiagnostics)
         }
 
         return BaselineCodeAnalysisParsingResult(
-            findings: findings,
+            candidates: candidates,
             diagnostics: diagnostics
         )
     }
@@ -229,9 +244,26 @@ public struct BaselineCodeAnalysisResponseParser: Sendable {
         message: String
     ) -> BaselineCodeAnalysisParsingResult {
         BaselineCodeAnalysisParsingResult(
-            findings: [],
+            candidates: [],
             diagnostics: [diagnostic(code: code, message: message)]
         )
+    }
+
+    private func category(
+        for issueType: BaselineIssueDetectedType
+    ) -> FindingCategory {
+        switch issueType {
+        case .antiPattern:
+            .antiPattern
+        case .architecture:
+            .architecture
+        case .style:
+            .style
+        case .teamConvention:
+            .teamConvention
+        case .codeSmell, .general:
+            .general
+        }
     }
 
     private func diagnostic(
@@ -248,13 +280,22 @@ private struct BaselineCodeAnalysisResponse: Decodable {
 
 private struct BaselineCodeAnalysisFindingResponse: Decodable {
     let title: String
-    let issueType: LLMDetectedIssueType
+    let issueType: BaselineIssueDetectedType
     let filePath: String
     let explanation: String
     let severity: Severity
     let startLine: Int
     let endLine: Int
     let evidence: [BaselineCodeAnalysisEvidenceResponse]
+}
+
+private enum BaselineIssueDetectedType: String, Decodable {
+    case codeSmell
+    case antiPattern
+    case architecture
+    case style
+    case teamConvention
+    case general
 }
 
 private struct BaselineCodeAnalysisEvidenceResponse: Decodable {

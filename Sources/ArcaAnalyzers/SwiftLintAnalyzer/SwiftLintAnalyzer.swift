@@ -149,13 +149,13 @@ public struct SwiftLintAnalyzer: Analyzer {
             left.filePath,
             left.range?.startLine ?? 0,
             left.range?.startColumn ?? 0,
-            left.ruleID
+            left.ruleID ?? ""
         )
         let rightLocation = (
             right.filePath,
             right.range?.startLine ?? 0,
             right.range?.startColumn ?? 0,
-            right.ruleID
+            right.ruleID ?? ""
         )
 
         if leftLocation.0 != rightLocation.0 {

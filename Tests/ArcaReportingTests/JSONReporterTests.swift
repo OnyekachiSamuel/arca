@@ -7,33 +7,34 @@ import Testing
 struct JSONReporterTests {
     @Test("isolated LLM output is versioned and decodable")
     func rendersDecodableLLMRun() throws {
-        let run = LLMCodeAnalysisRunResult(
-            schemaVersion: LLMCodeAnalysisRunResult.currentSchemaVersion,
-            runID: UUID(),
+        let report = LLMIssueDetectionReport(
+            schemaVersion: LLMIssueDetectionReport.currentSchemaVersion,
+            requestID: UUID(),
             filePath: "Sources/App.swift",
             reviewType: .godObject,
             promptVariant: .guided,
-            promptTemplateID: "arca.code-analysis.guided",
-            promptTemplateVersion: 1,
-            findings: [],
-            diagnostics: [],
-            executionMetadata: LLMExecutionMetadata(
-                providerID: "lm-studio",
-                modelID: "qwen",
-                requestCount: 1,
-                providerDurationMilliseconds: 9
+            analysis: AnalyzerResult(
+                analyzerID: "llm-code-analysis",
+                candidates: [],
+                tool: ToolMetadata(name: "lm-studio", version: "qwen"),
+                llmExecutionMetadata: LLMExecutionMetadata(
+                    providerID: "lm-studio",
+                    modelID: "qwen",
+                    requestCount: 1,
+                    providerDurationMilliseconds: 9
+                )
             ),
             seed: 42,
             temperature: 0
         )
 
-        let output = try JSONReporter().render(llmRun: run)
+        let output = try JSONReporter().render(detectionReport: report)
         let decoded = try JSONDecoder().decode(
-            LLMCodeAnalysisRunResult.self,
+            LLMIssueDetectionReport.self,
             from: Data(output.utf8)
         )
 
-        #expect(decoded == run)
+        #expect(decoded == report)
         #expect(output.contains(#""schemaVersion":1"#))
         #expect(output.contains(#""promptVariant":"guided""#))
     }
