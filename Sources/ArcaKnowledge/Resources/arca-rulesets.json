@@ -1,0 +1,317 @@
+{
+  "schemaVersion": 1,
+  "rules": [
+    {
+      "ruleID": "ARCA-SWIFT-CONCURRENCY-001",
+      "reviewType": "swift",
+      "category": "concurrency",
+      "issueType": "unsafe-code",
+      "title": "Improper Isolation of Shared Mutable State",
+      "problemContext": "Swift concurrency relies on actor isolation and other synchronization mechanisms to protect mutable state that may be accessed from multiple execution contexts. Shared mutable state without an appropriate isolation boundary can result in data races, while incorrect actor isolation can allow state to be accessed or modified from inappropriate concurrency domains.",
+      "expectedBehavior": "Mutable state that can be accessed concurrently should have an appropriate isolation strategy. UI-related mutable state should normally respect @MainActor isolation, while other shared mutable state should be protected using actors or another suitable synchronization mechanism. Actor isolation boundaries should be respected when accessing isolated state.",
+      "violationCriteria": "A violation occurs when mutable state is accessible from multiple concurrent contexts without appropriate isolation or synchronization, when UI-related mutable state is accessed outside the appropriate main-actor context, or when actor-isolated state is accessed in a way that violates its isolation boundary.",
+      "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-001.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFT-CONCURRENCY-002",
+      "reviewType": "swift",
+      "category": "concurrency",
+      "issueType": "anti-pattern",
+      "title": "Unstructured Concurrency Without Appropriate Lifecycle Management",
+      "problemContext": "Creating independent Task instances without a clear ownership, cancellation, or lifetime relationship can result in asynchronous work continuing beyond the lifetime of the operation that initiated it. This can make concurrency behavior difficult to reason about and can lead to unnecessary work or stale state updates.",
+      "expectedBehavior": "Concurrent operations that form part of the same logical operation should use structured concurrency where appropriate, such as async let or task groups. Unstructured tasks should only be used where independent lifetime or execution is intentional and justified.",
+      "violationCriteria": "A violation occurs when independent Task instances are created for related asynchronous operations without an apparent need for independent lifetime and without appropriate cancellation or lifecycle management, where structured concurrency would better represent the relationship between the operations.",
+      "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-002.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFT-CONCURRENCY-003",
+      "reviewType": "swift",
+      "category": "concurrency",
+      "issueType": "unsafe-code",
+      "title": "Unsafe Sendable Conformance",
+      "problemContext": "Values transferred across concurrency boundaries must be safe to access from those boundaries. Reference types containing mutable state may be incorrectly declared Sendable or @unchecked Sendable even when their internal state is not protected against concurrent access.",
+      "expectedBehavior": "Types crossing concurrency boundaries should satisfy Swift Sendable requirements. Reference types using @unchecked Sendable should provide an implementation that makes access to mutable state thread-safe, such as actor isolation, locking, immutability, or another appropriate synchronization strategy.",
+      "violationCriteria": "A violation occurs when a type crosses concurrency boundaries without appropriate Sendable safety, or when a reference type is marked @unchecked Sendable while containing mutable state for which no visible thread-safety or isolation mechanism is provided.",
+      "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-003.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFT-CONCURRENCY-004",
+      "reviewType": "swift",
+      "category": "concurrency",
+      "issueType": "anti-pattern",
+      "title": "Mutable Global or Static State",
+      "problemContext": "Mutable global and static state can be accessed from different parts of an application and potentially from different concurrency contexts. Without isolation, this creates implicit shared state and increases the risk of data races and unpredictable dependencies between components.",
+      "expectedBehavior": "Mutable state that requires application-wide or shared access should be encapsulated behind an appropriate ownership and isolation mechanism rather than exposed as unrestricted mutable global or static state.",
+      "violationCriteria": "A violation occurs when mutable global or static state is accessible from concurrent execution contexts without appropriate actor isolation, synchronization, or another visible mechanism that guarantees safe access.",
+      "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-004.md"
+    },
+
+    {
+      "ruleID": "ARCA-SWIFT-SAFETY-001",
+      "reviewType": "swift",
+      "category": "optional-safety",
+      "issueType": "unsafe-code",
+      "title": "Unjustified Force Unwrapping",
+      "problemContext": "Swift optionals represent values that may be absent. Force unwrapping bypasses the language's optional-safety mechanisms and causes a runtime failure when the optional contains nil.",
+      "expectedBehavior": "Optional values should normally be handled using optional binding, guard statements, optional chaining, nil coalescing, or another safe mechanism. Force unwrapping should only be used when the non-nil invariant is clearly guaranteed by the visible code or surrounding API contract.",
+      "violationCriteria": "A violation occurs when an optional value is force-unwrapped and the visible code does not establish a reliable guarantee that the value cannot be nil at the point of access.",
+      "knowledgeFile": "references/ARCA-SWIFT-SAFETY-001.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFT-SAFETY-002",
+      "reviewType": "swift",
+      "category": "optional-safety",
+      "issueType": "unsafe-code",
+      "title": "Unnecessary Implicitly Unwrapped Optional",
+      "problemContext": "Implicitly unwrapped optionals allow values to be accessed without explicit optional handling and can introduce runtime crashes when initialization assumptions are violated. They may also hide incomplete dependency initialization.",
+      "expectedBehavior": "Properties should normally be initialized as non-optional values when they are required dependencies or represented as regular optionals when absence is valid. Implicitly unwrapped optionals should be limited to situations where delayed initialization is required and reliably guaranteed.",
+      "violationCriteria": "A violation occurs when a property is declared as an implicitly unwrapped optional without a visible requirement for delayed guaranteed initialization, particularly when the property represents a dependency that could instead be supplied during initialization.",
+      "knowledgeFile": "references/ARCA-SWIFT-SAFETY-002.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFT-SAFETY-003",
+      "reviewType": "swift",
+      "category": "error-handling",
+      "issueType": "unsafe-code",
+      "title": "Unjustified Force Try",
+      "problemContext": "Using try! suppresses Swift's error-handling mechanism and converts a thrown error into a runtime crash. This makes failure conditions unsafe when the operation can legitimately fail.",
+      "expectedBehavior": "Throwing operations should normally propagate or handle errors using throws, do-catch, Result, or another appropriate error-handling mechanism. Force try should only be used when failure is demonstrably impossible or guaranteed by a controlled invariant.",
+      "violationCriteria": "A violation occurs when try! is used for an operation that can fail and the visible code or surrounding invariant does not provide sufficient evidence that failure is impossible.",
+      "knowledgeFile": "references/ARCA-SWIFT-SAFETY-003.md"
+    },
+
+    {
+      "ruleID": "ARCA-SWIFT-MEMORY-001",
+      "reviewType": "swift",
+      "category": "memory-management",
+      "issueType": "unsafe-code",
+      "title": "Strong Reference Cycle in Closure Capture",
+      "problemContext": "Swift Automatic Reference Counting does not automatically resolve strong reference cycles. A closure stored by an object can capture that same object strongly, preventing both the closure and object from being released.",
+      "expectedBehavior": "Closures should use capture semantics appropriate to their ownership relationship. When an escaping or stored closure would otherwise create a strong reference cycle, an appropriate weak or unowned capture should be used.",
+      "violationCriteria": "A violation occurs when an object strongly retains a closure and that closure strongly captures the same object, creating a visible ownership cycle without an appropriate capture strategy to break the cycle.",
+      "knowledgeFile": "references/ARCA-SWIFT-MEMORY-001.md"
+    },
+
+    {
+      "ruleID": "ARCA-SWIFT-DESIGN-001",
+      "reviewType": "swift",
+      "category": "type-design",
+      "issueType": "code-smell",
+      "title": "Inappropriate Value or Reference Semantics",
+      "problemContext": "Swift provides structs, classes, and actors with different ownership and mutation semantics. Choosing a reference type where independent value semantics are expected can introduce unintended shared mutation, while using an inappropriate type for concurrent mutable state can make ownership and synchronization unclear.",
+      "expectedBehavior": "Structs should generally represent independent values and data models, classes should be used where identity or shared reference semantics are required, and actors should be considered for mutable state that must be safely accessed across concurrency domains.",
+      "violationCriteria": "A violation occurs when the responsibilities and usage visible in the code conflict with the semantics of the chosen type, such as using a mutable shared reference type for data that is expected to behave as an independent value or using an ordinary mutable class where concurrent isolated state is required.",
+      "knowledgeFile": "references/ARCA-SWIFT-DESIGN-001.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFT-ARCH-002",
+      "reviewType": "swift",
+      "category": "architecture",
+      "issueType": "anti-pattern",
+      "title": "Hard-Coded Singleton Dependency",
+      "problemContext": "Directly accessing a global singleton service from application components creates an implicit dependency that is difficult to substitute, isolate, or control during testing and can introduce shared mutable state.",
+      "expectedBehavior": "External services and other application dependencies should be supplied explicitly through an appropriate dependency mechanism such as constructor injection, environment-based injection, or an architecture-specific dependency system.",
+      "violationCriteria": "A violation occurs when a component directly obtains an operational dependency through a global singleton or shared service instead of receiving the dependency through an explicit and replaceable dependency boundary.",
+      "knowledgeFile": "references/ARCA-SWIFT-ARCH-002.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFTUI-STATE-001",
+      "reviewType": "swiftui",
+      "category": "state-management",
+      "issueType": "anti-pattern",
+      "title": "Incorrect SwiftUI State Ownership",
+      "problemContext": "SwiftUI state wrappers communicate ownership and data-flow semantics. Using @State, @Binding, or observable state for data that is owned elsewhere can create duplicate sources of truth, stale state, or unclear ownership relationships.",
+      "expectedBehavior": "@State should be used for state owned by the view, @Binding should represent writable state owned by another component, and externally supplied read-only values should normally remain regular properties. Observable state should have a clear owner.",
+      "violationCriteria": "A violation occurs when a SwiftUI property wrapper conflicts with the visible ownership of the data, such as using @State for data passed into a view, using @Binding for read-only data, or otherwise creating competing sources of truth.",
+      "knowledgeFile": "references/ARCA-SWIFTUI-STATE-001.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFTUI-STATE-002",
+      "reviewType": "swiftui",
+      "category": "state-management",
+      "issueType": "code-smell",
+      "title": "Incompatible Observation Mechanisms",
+      "problemContext": "SwiftUI provides different observation mechanisms with different lifecycle and ownership semantics. Mixing mechanisms such as the Observation framework and ObservableObject-based wrappers can create redundant observation, misleading ownership semantics, and unnecessary complexity.",
+      "expectedBehavior": "A type and its consuming views should use an observation mechanism appropriate to the application's platform requirements and should avoid combining incompatible or redundant observation mechanisms without a specific interoperability requirement.",
+      "violationCriteria": "A violation occurs when a type using the Observation framework is unnecessarily combined with ObservableObject-related state mechanisms, or when a view applies ownership wrappers that do not correspond to the observation model used by the object.",
+      "knowledgeFile": "references/ARCA-SWIFTUI-STATE-002.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFTUI-STATE-003",
+      "reviewType": "swiftui",
+      "category": "state-management",
+      "issueType": "anti-pattern",
+      "title": "Improper Async Work Lifecycle in SwiftUI View",
+      "problemContext": "Asynchronous work launched manually from SwiftUI lifecycle callbacks may continue after the view disappears or may require manual cancellation management. SwiftUI provides task modifiers whose lifecycle is associated with the view.",
+      "expectedBehavior": "View-bound asynchronous work should use SwiftUI task lifecycle mechanisms such as .task or .task(id:) where appropriate so that execution and cancellation correspond to the view lifecycle. Manually created tasks should have an explicit lifecycle reason when used instead.",
+      "violationCriteria": "A violation occurs when view-bound asynchronous work is launched through manual Task creation from lifecycle callbacks such as onAppear or onChange without an apparent need for an independent task lifetime and without equivalent cancellation management.",
+      "knowledgeFile": "references/ARCA-SWIFTUI-STATE-003.md"
+    },
+
+    {
+      "ruleID": "ARCA-SWIFTUI-PERFORMANCE-001",
+      "reviewType": "swiftui",
+      "category": "performance",
+      "issueType": "code-smell",
+      "title": "Heavy Computation in SwiftUI View Body",
+      "problemContext": "SwiftUI may evaluate a view's body repeatedly as state changes. Performing filtering, sorting, mapping, complex calculations, network access, database access, or other expensive work directly during body evaluation can repeat unnecessary work and degrade rendering performance.",
+      "expectedBehavior": "A SwiftUI view body should primarily describe the view hierarchy. Expensive data transformations, I/O operations, and complex calculations should be performed outside body or moved into an appropriate model, view model, cached computation, or asynchronous operation.",
+      "violationCriteria": "A violation occurs when the body of a SwiftUI view performs substantial data processing, synchronous I/O, networking, database access, or complex computation that may be repeated as part of view rendering.",
+      "knowledgeFile": "references/ARCA-SWIFTUI-PERFORMANCE-001.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFTUI-PERFORMANCE-002",
+      "reviewType": "swiftui",
+      "category": "performance",
+      "issueType": "code-smell",
+      "title": "Unnecessary GeometryReader Usage",
+      "problemContext": "GeometryReader participates in SwiftUI layout and can introduce additional layout complexity. Unnecessary or nested GeometryReader instances can make layouts harder to reason about and may introduce avoidable layout work.",
+      "expectedBehavior": "GeometryReader should be used when a view genuinely requires information about its available geometry. Simpler layout mechanisms such as flexible frames, container-relative sizing, or appropriate layout APIs should be preferred when they can express the same layout.",
+      "violationCriteria": "A violation occurs when GeometryReader is used without a visible need for geometry information, when it only reproduces behavior available through simpler layout APIs, or when nested GeometryReader instances introduce unnecessary layout complexity.",
+      "knowledgeFile": "references/ARCA-SWIFTUI-PERFORMANCE-002.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFTUI-PERFORMANCE-003",
+      "reviewType": "swiftui",
+      "category": "performance",
+      "issueType": "code-smell",
+      "title": "Excessive Observable State Dependency",
+      "problemContext": "SwiftUI invalidates views when observed state on which they depend changes. Passing broad observable objects through a view hierarchy or observing more state than a view requires can cause unnecessary view updates and increase rendering work.",
+      "expectedBehavior": "Views should depend only on the state required for their presentation and behavior. Observable state should be scoped so that changes invalidate only the parts of the view hierarchy that actually depend on those changes.",
+      "violationCriteria": "A violation occurs when a view observes or receives a broad mutable observable object despite using only a small portion of it, or when the visible state structure causes unrelated state changes to trigger unnecessary updates across a substantial view hierarchy.",
+      "knowledgeFile": "references/ARCA-SWIFTUI-PERFORMANCE-003.md"
+    },
+
+    {
+      "ruleID": "ARCA-SWIFTUI-ARCH-001",
+      "reviewType": "swiftui",
+      "category": "architecture",
+      "issueType": "anti-pattern",
+      "title": "Business Logic in SwiftUI View",
+      "problemContext": "SwiftUI views are primarily responsible for describing presentation and handling user interaction. Embedding domain operations, networking, persistence, validation, or substantial business logic directly in a view couples presentation to application behavior and reduces testability and maintainability.",
+      "expectedBehavior": "SwiftUI views should primarily contain presentation and interaction logic. Business operations, data transformation, validation, networking, persistence, and other application behavior should be delegated to an appropriate model, feature, service, reducer, view model, or other architecture-specific component.",
+      "violationCriteria": "A violation occurs when a SwiftUI view directly implements substantial business or domain logic, performs network or persistence operations, or assumes responsibilities that should belong to a separate application or domain component.",
+      "knowledgeFile": "references/ARCA-SWIFTUI-ARCH-001.md"
+    },
+    {
+      "ruleID": "ARCA-TCA-DEPRECATED-001",
+      "reviewType": "tca",
+      "category": "deprecated-api",
+      "issueType": "deprecated-api",
+      "title": "Legacy Reducer API Usage",
+      "problemContext": "Modern TCA features define application logic in a reducer body using `Reduce` and reducer composition. The legacy `reduce(into:action:)` API and direct reducer invocation rely on an older pattern and can bypass the normal Store-driven action flow.",      
+      "expectedBehavior": "A TCA feature should define its reducer logic through the reducer body, typically using Reduce and reducer composition operators. Child feature behavior should be composed into the reducer hierarchy or triggered by sending actions through the Store rather than by manually invoking another reducer.",
+      "violationCriteria": "A violation occurs when a feature implements its application logic using the legacy reduce(into:action:) reducer API, or when application code directly invokes reduce(into:action:) on another reducer instead of composing that reducer or sending an action through the Store.",
+      "knowledgeFile": "references/ARCA-TCA-DEPRECATED-001.md"
+    },
+    {
+      "ruleID": "ARCA-TCA-DEPRECATED-002",
+      "reviewType": "tca",
+      "category": "deprecated-api",
+      "title": "Legacy TCA View Observation API",
+      "problemContext": "TCA's modern observation model allows SwiftUI views to observe observable feature state directly through Store. Legacy ViewStore and WithViewStore APIs introduce an older observation layer that is no longer required for features using observable state and can result in unnecessary observation boilerplate.",
+      "expectedBehavior": "Feature State should use TCA's observable-state mechanism where appropriate, and SwiftUI views should read state and send actions directly through Store. Legacy ViewStore, ViewStoreOf, WithViewStore, and related view-observation wrappers should not be introduced into modern observable features.",
+      "violationCriteria": "A violation occurs when a modern TCA feature uses ViewStore, ViewStoreOf, WithViewStore, or equivalent legacy observation APIs where the feature can use ObservableState and direct Store observation instead.",
+      "knowledgeFile": "references/ARCA-TCA-DEPRECATED-002.md"
+    },
+    {
+      "ruleID": "ARCA-TCA-DEPRECATED-003",
+      "reviewType": "tca",
+      "category": "deprecated-api",
+      "issueType": "deprecated-api",
+      "title": "Deprecated TaskResult Usage",
+      "problemContext": "Older TCA code represents the result of asynchronous effects with TaskResult. Modern TCA uses Swift's standard Result type for this purpose, avoiding a framework-specific result wrapper that has been deprecated.",
+      "expectedBehavior": "Actions representing the outcome of asynchronous work should use Swift Result or another appropriate domain-specific result representation rather than TCA's deprecated TaskResult type.",
+      "violationCriteria": "A violation occurs when TaskResult is used in TCA feature state, actions, effects, or supporting code where Result can represent the asynchronous success or failure.",
+      "knowledgeFile": "references/ARCA-TCA-DEPRECATED-003.md"
+    },
+    {
+      "ruleID": "ARCA-TCA-DEPRECATED-004",
+      "reviewType": "tca",
+      "category": "deprecated-api",
+      "issueType": "deprecated-api",
+      "title": "Legacy TCA Binding API",
+      "problemContext": "Modern TCA derives bindings directly from observable stores. Legacy APIs such as `BindingState`, `BindingViewState`, and `BindingViewStore` belong to the older `ViewStore` model and add unnecessary wrappers to modern features.",
+      "expectedBehavior": "Bindable feature state should use ObservableState, with the Action domain conforming to BindableAction where necessary and BindingReducer participating in the reducer. SwiftUI views should derive bindings from a bindable Store rather than using legacy BindingState or BindingViewStore mechanisms.",
+      "violationCriteria": "A violation occurs when a modern observable TCA feature uses deprecated BindingState, BindingViewState, BindingViewStore, or equivalent legacy binding mechanisms instead of deriving bindings directly from an observable Store.",
+      "knowledgeFile": "references/ARCA-TCA-DEPRECATED-004.md"
+    },
+    {
+      "ruleID": "ARCA-TCA-DEPRECATED-005",
+      "reviewType": "tca",
+      "category": "deprecated-api",
+      "issueType": "deprecated-api",
+      "title": "Legacy TCA Presentation API",
+      "problemContext": "Modern TCA models presentation using `@Presents` state and `PresentationAction`, with SwiftUI presentation driven from scoped store bindings. Legacy APIs such as `@PresentationState` and store-specific presentation modifiers use the older presentation model.",
+      "expectedBehavior": "Optional presentation domains should normally be modeled with @Presents and PresentationAction, composed using the appropriate presentation reducer operator, and presented in SwiftUI using standard item-driven APIs with a scoped Store binding.",
+      "violationCriteria": "A violation occurs when a modern observable TCA feature uses @PresentationState or legacy store-specific presentation modifiers such as sheet(store:) where @Presents and Store-based item presentation are applicable.",
+      "knowledgeFile": "references/ARCA-TCA-DEPRECATED-005.md"
+    },
+    {
+      "ruleID": "ARCA-TCA-DEPENDENCY-001",
+      "reviewType": "tca",
+      "category": "dependency-management",
+      "issueType": "anti-pattern",
+      "title": "Bypassing a Controlled TCA Dependency",
+      "problemContext": "TCA dependencies provide explicit and controllable access to external or nondeterministic behavior such as clocks, dates, UUID generation, networking, persistence, and services. Calling an uncontrolled implementation directly can bypass dependency substitution and make feature behavior harder to test and reproduce.",
+      "expectedBehavior": "External and nondeterministic operations used by reducer logic should be accessed through the feature's declared TCA dependencies. When a controllable dependency such as uuid, date, clock, or an application client is declared, feature logic should consistently use that dependency rather than constructing or accessing an uncontrolled equivalent.",
+      "violationCriteria": "A violation occurs when reducer logic directly invokes an uncontrolled dependency such as UUID(), Date(), a global service, or another concrete external implementation despite an appropriate TCA dependency being declared or clearly serving that responsibility.",
+      "knowledgeFile": "references/ARCA-TCA-DEPENDENCY-001.md"
+    },
+    {
+      "ruleID": "ARCA-TCA-EFFECT-001",
+      "reviewType": "tca",
+      "category": "effects",
+      "issueType": "unsafe-code",
+      "title": "Missing Cancellation Management for Cancellable Effect",
+      "problemContext": "TCA effects may continue beyond the action that starts them. Effects that can be cancelled, replaced by newer work, or stopped by user action need an explicit cancellation mechanism.",      
+      "expectedBehavior": "Asynchronous effects that have a visible cancellation requirement should use an appropriate cancellation identifier and cancellable effect composition, and cancellation actions should cancel the corresponding effect. Independent short-lived effects that do not require cancellation do not need cancellation identifiers.",
+      "violationCriteria": "A violation occurs when the visible feature domain establishes that an effect must be cancellable or replaceable, such as by providing a cancel action or repeatedly starting mutually exclusive work, but the launched effect has no corresponding TCA cancellation mechanism.",
+      "knowledgeFile": "references/ARCA-TCA-EFFECT-001.md"
+    },
+    {
+      "ruleID": "ARCA-TCA-COMPOSITION-001",
+      "reviewType": "tca",
+      "category": "reducer-composition",
+      "issueType": "code-smell",
+      "title": "Unnecessary CombineReducers Wrapper",
+      "problemContext": "CombineReducers is useful when a group of reducers must be combined before applying reducer modifiers such as ifLet or forEach. Wrapping reducers in CombineReducers when no modifier needs to operate on the combined reducer adds an unnecessary composition layer and obscures the reducer hierarchy.",
+      "expectedBehavior": "Reducers should normally be composed directly in the reducer body. CombineReducers should be introduced when multiple reducers need to be grouped as a unit before a reducer modifier is applied.",
+      "violationCriteria": "A violation occurs when CombineReducers wraps one or more reducers but the resulting group is not used as the base for a modifier or another composition requirement that needs the reducers to be grouped together.",
+      "knowledgeFile": "references/ARCA-TCA-COMPOSITION-001.md"
+    },
+    {
+      "ruleID": "ARCA-OWASP-MASWE-0001",
+      "reviewType": "security",
+      "category": "security",
+      "issueType": "security-weakness",
+      "title": "Sensitive Data Stored Unencrypted in Private Storage",
+      "problemContext": "Mobile applications may persist sensitive information such as credentials, authentication tokens, cryptographic material, or personal data in private application storage without sufficient protection. If the application sandbox or device is compromised, this information may become accessible.",
+      "expectedBehavior": "Sensitive information stored locally should be protected using storage mechanisms appropriate to the type of data, such as the iOS Keychain for credentials and cryptographic material or suitable data-protection and encryption mechanisms for application files.",
+      "violationCriteria": "A violation occurs when sensitive information is persisted in private application storage without appropriate protection, for example by storing credentials, tokens, passwords, cryptographic material, or sensitive personal data in plaintext using mechanisms such as UserDefaults, unencrypted files, or insufficiently protected local databases.",
+      "knowledgeFile": "references/ARCA-OWASP-MASWE-0001.md"
+    },
+    {
+      "ruleID": "ARCA-OWASP-MASWE-0005",
+      "reviewType": "security",
+      "category": "security",
+      "issueType": "security-weakness",
+      "title": "Insertion of Sensitive Data into Logs",
+      "problemContext": "Application logs used for debugging and diagnostics can expose sensitive data when credentials, authentication tokens, personal information, cryptographic material, or other secrets are included in log messages.",
+      "expectedBehavior": "Sensitive user or application data should not be written to logs. Diagnostic messages should contain only the information required for debugging, with sensitive values omitted or appropriately redacted.",
+      "violationCriteria": "A violation occurs when sensitive data is passed to system logging APIs, console output, custom loggers, or third-party logging services without appropriate redaction.",
+      "knowledgeFile": "references/ARCA-OWASP-MASWE-0005.md"
+    },
+    {
+      "ruleID": "ARCA-GOD-Object-001",
+      "reviewType": "god-object",
+      "category": "architecture",
+      "issueType": "anti-pattern",
+      "title": "God Object Candidate",
+      "problemContext": "A God Object occurs when a Swift type accumulates substantial knowledge or behavior across several unrelated concerns. This centralization produces weak cohesion, broad dependencies, and a type that becomes difficult to understand, test, change, and maintain.",
+      "expectedBehavior": "A Swift type should have a focused and cohesive responsibility. Its properties and methods should contribute to that responsibility, while unrelated domain, persistence, networking, presentation, navigation, or coordination concerns should remain under appropriate ownership.",
+      "violationCriteria": "A violation occurs when a Swift type owns substantial state or behavior for multiple unrelated concerns, demonstrated by distinct groups of properties and methods serving different responsibilities.",
+      "knowledgeFile": "references/ARCA-GOD-Object-001.md"
+  }
+  ]
+}
