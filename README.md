@@ -1,123 +1,88 @@
 # Arca
 
-Code review tool for detecting and categorizing Swift anti-patterns, code
-smells, style issues, and team-convention violations.
+ARCA is an LLM-based Swift code-issue detection tool for experiments comparing
+a baseline prompt with a guided prompt containing explicit rules and supporting
+knowledge.
 
-## Build and run
+## Build
 
 ```sh
 swift build
-.build/debug/arca review --help
+swift run arca --help
 ```
 
-## Exit statuses
+## Configure the model
 
-| Status | Meaning |
-| ---: | --- |
-| `0` | Review completed without findings. |
-| `1` | Review completed with findings. |
-| `2` | Invalid input or configuration. |
-| `3` | Analyzer or internal execution failure. |
-
-Completed reports are written to standard output for both status `0` and
-status `1`. Errors are written to standard error.
-
-## Normalized findings
-
-JSON reports use schema version `1`. Findings inside a discovered Git
-repository use repository-relative paths; explicit files outside it retain
-canonical absolute paths. Source ranges are one-based and inclusive.
-
-Each candidate has a proposed category and severity. Analyzer-specific input is
-retained in `analyzerMetadata`, such as SwiftLint's original rule, severity and
-location or the God Object analyzer's structural metrics. Categorized findings
-then contain the validated category, severity, assessment, and rationale.
-
-Candidate `sourceIdentifiers` and categorized finding `sources` record stable
-analyzer identifiers such as `god-object`, `swiftlint`, and
-`llm-code-analysis`. Arrays preserve every analyzer involved in a grouped issue
-while keeping deterministic JSON order.
-
-## Complete-file LLM analysis context
-
-LLM source analysis is prepared one selected Swift file at a time. An explicit
-file contributes only that file, while changed-file review contributes one
-independent context for each selected current file together with its added,
-modified and deleted line ranges. ARCA does not scan or include the whole
-repository automatically.
-
-Source content is preserved without truncation or rewriting. The default
-complete-file limit is 64,000 UTF-8 bytes. A file above that limit is skipped
-for LLM analysis with an explicit warning, while smaller selected files and
-static analyzers can continue. The complete-file limit and the later total
-prompt limit are separate controls.
-
-## LLM provider boundary
-
-`ArcaLLM` defines a provider-independent asynchronous interface with model,
-prompt, timeout and optional generation settings. `LLMServerProvider` connects
-to a local or remote HTTP server that accepts chat-completion requests.
-
-LLM detection and categorization are disabled when `.arca.json` has no `llm`
-block. Adding the block enables the combined static and LLM review pipeline:
+Create `.arca.json` in the repository root:
 
 ```json
 {
   "schemaVersion": 1,
   "llm": {
-    "providerID": "local-qwen",
-    "baseURL": "http://127.0.0.1:8080",
+    "providerID": "lm-studio",
+    "baseURL": "http://127.0.0.1:1234",
     "completionPath": "/v1/chat/completions",
-    "modelID": "qwen2.5-coder",
+    "modelID": "qwen2.5-coder-7b-instruct",
     "timeoutSeconds": 120,
-    "temperature": 0.2,
+    "temperature": 0,
     "seed": 42
   }
 }
 ```
 
-Start the configured model server, then review a known God Object:
+The configured server must expose an OpenAI-compatible chat-completions API.
+Set `ARCA_LLM_API_KEY` when authentication is required.
 
-```sh
-swift run arca review \
-  --file Sources/Example/LargeCoordinator.swift \
-  --review god-object
-```
+## Run an experiment
 
-## Isolated LLM prompt experiments
-
-Use `arca llm` to run LLM detection by itself. The command does not run
-static analyzers, aggregate findings, categorize findings, or compare runs.
-Choose and record one prompt variant per invocation:
+Choose one prompt variant for each run:
 
 ```sh
 swift run arca llm \
-  --file Sources/Example/LargeCoordinator.swift \
-  --review god-object \
+  --file Sources/Feature.swift \
   --prompt baseline \
   --format json
 
 swift run arca llm \
-  --file Sources/Example/LargeCoordinator.swift \
-  --review god-object \
+  --file Sources/Feature.swift \
+  --review swift \
   --prompt guided \
   --format json
 ```
 
-`baseline` uses its own prompt template containing the source and broad
-instructions to detect code smells and anti-patterns. The selected review is
-recorded as experiment metadata, but its name, canonical rule ID, and knowledge
-are not sent to the model. Baseline findings therefore preserve the model's own
-issue title and type and do not claim an ARCA rule ID. `guided` uses a separate
-prompt template containing the selected rule knowledge and retains canonical
-rule IDs. Omit `--format json` for a human-readable terminal report. JSON records
-the prompt variant, template identity and version, provider, model, generation
-settings, usage, duration, findings, and diagnostics for that run.
-If an evidence excerpt does not exactly match its declared source lines, the
-tool retains the finding and records a warning. Isolated runs keep it for
-human evaluation, while normal reviews also pass it into aggregation and
-categorization. Malformed responses and structurally unusable findings remain
-validation failures.
+The baseline command does not accept `--review`. Guided review values are
+`swift`, `swiftui`, `tca`, `security`, `god-object`, and `all`. Guided `all`
+runs each rule set independently and aggregates its findings and measurements.
 
-For an authenticated remote server, provide the secret through
-`ARCA_LLM_API_KEY`; do not store it in `.arca.json`.
+Omit `--format json` for a human-readable terminal report. JSON output uses
+schema version `1` and records the prompt variant, provider, model, generation
+parameters, duration, token usage, findings, and diagnostics.
+
+## Prompt variants
+
+- `baseline` sends the complete selected source file with broad code-issue
+  detection instructions. It does not include rule IDs, rule definitions, or
+  supporting knowledge and therefore does not require a review type.
+- `guided` selects rules by review type from
+  `Sources/ArcaKnowledge/Resources/arca-rulesets.json`. For every selected
+  rule, it includes the structured rule definition and the referenced Markdown
+  file from `Sources/ArcaKnowledge/Resources/References`.
+
+Both variants use a compact response schema. The model returns an explanation
+and evidence line numbers, plus a title for baseline analysis or a supplied rule
+ID for guided analysis. It does not classify severity or repeat source text and
+file metadata.
+
+ARCA supplies the file path, derives each finding's range from its evidence, and
+extracts the exact evidence excerpt from the source. In guided runs, ARCA also
+adds the canonical title, category, and issue type from its rule registry. The
+parser rejects unknown rule IDs and unsupported response fields.
+
+## Exit statuses
+
+| Status | Meaning |
+| ---: | --- |
+| `0` | Analysis completed without findings. |
+| `1` | Analysis completed with findings. |
+| `2` | Invalid input or configuration. |
+| `3` | Provider, parser, or internal execution failure. |

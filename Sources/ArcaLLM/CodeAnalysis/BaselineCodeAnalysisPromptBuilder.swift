@@ -2,92 +2,92 @@ import ArcaDomain
 import Foundation
 
 public struct BaselineCodeAnalysisPromptBuilder: Sendable {
-    private let limits: CodeAnalysisPromptLimits
+  private let limits: CodeAnalysisPromptLimits
 
-    public init(limits: CodeAnalysisPromptLimits = .default) {
-        self.limits = limits
+  public init(limits: CodeAnalysisPromptLimits = .default) {
+    self.limits = limits
+  }
+
+  public func build(
+    context: SourceFileAnalysisContext
+  ) throws -> CodeAnalysisPrompt {
+    guard limits.maximumPromptUTF8Bytes > 0 else {
+      throw CodeAnalysisPromptBuildingError.invalidLimits
+    }
+    let sourceLines = SourceTextLineExtractor.lines(
+      in: context.sourceContent
+    )
+    guard sourceLines.count == context.lineCount else {
+      throw CodeAnalysisPromptBuildingError.sourceLineCountMismatch(
+        expected: context.lineCount,
+        actual: sourceLines.count
+      )
     }
 
-    public func build(
-        context: SourceFileAnalysisContext
-    ) throws -> CodeAnalysisPrompt {
-        guard limits.maximumPromptUTF8Bytes > 0 else {
-            throw CodeAnalysisPromptBuildingError.invalidLimits
-        }
-        let sourceLines = SourceTextLineExtractor.lines(
-            in: context.sourceContent
-        )
-        guard sourceLines.count == context.lineCount else {
-            throw CodeAnalysisPromptBuildingError.sourceLineCountMismatch(
-                expected: context.lineCount,
-                actual: sourceLines.count
+    let payload = BaselineCodeAnalysisPromptInput(
+      file: BaselineCodeAnalysisFileInput(
+        path: context.filePath,
+        lineCount: context.lineCount,
+        lines: sourceLines.enumerated().map { index, text in
+          BaselineCodeAnalysisSourceLineInput(
+            lineNumber: index + 1,
+            text: PromptTextRedactor.redactCommonSecrets(
+              in: text
             )
+          )
         }
-
-        let payload = BaselineCodeAnalysisPromptInput(
-            file: BaselineCodeAnalysisFileInput(
-                path: context.filePath,
-                lineCount: context.lineCount,
-                lines: sourceLines.enumerated().map { index, text in
-                    BaselineCodeAnalysisSourceLineInput(
-                        lineNumber: index + 1,
-                        text: PromptTextRedactor.redactCommonSecrets(
-                            in: text
-                        )
-                    )
-                }
-            ),
-            change: context.change
-        )
-        let inputJSON = try encode(payload)
-        let promptText = BaselineCodeAnalysisPromptTemplateV1.render(
-            inputJSON: inputJSON
-        )
-        let promptByteCount = promptText.utf8.count
-        guard promptByteCount <= limits.maximumPromptUTF8Bytes else {
-            throw CodeAnalysisPromptBuildingError.promptTooLarge(
-                actualBytes: promptByteCount,
-                maximumBytes: limits.maximumPromptUTF8Bytes
-            )
-        }
-
-        return CodeAnalysisPrompt(
-            templateID: BaselineCodeAnalysisPromptTemplateV1.id,
-            templateVersion: BaselineCodeAnalysisPromptTemplateV1.version,
-            text: promptText
-        )
+      ),
+      change: context.change
+    )
+    let inputJSON = try encode(payload)
+    let promptText = BaselineCodeAnalysisPromptTemplateV2.render(
+      inputJSON: inputJSON
+    )
+    let promptByteCount = promptText.utf8.count
+    guard promptByteCount <= limits.maximumPromptUTF8Bytes else {
+      throw CodeAnalysisPromptBuildingError.promptTooLarge(
+        actualBytes: promptByteCount,
+        maximumBytes: limits.maximumPromptUTF8Bytes
+      )
     }
 
-    private func encode(
-        _ input: BaselineCodeAnalysisPromptInput
-    ) throws -> String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [
-            .prettyPrinted,
-            .sortedKeys,
-            .withoutEscapingSlashes
-        ]
-        do {
-            let data = try encoder.encode(input)
-            return String(decoding: data, as: UTF8.self)
-        } catch {
-            throw CodeAnalysisPromptBuildingError.inputEncodingFailed
-        }
+    return CodeAnalysisPrompt(
+      templateID: BaselineCodeAnalysisPromptTemplateV2.id,
+      templateVersion: BaselineCodeAnalysisPromptTemplateV2.version,
+      text: promptText
+    )
+  }
+
+  private func encode(
+    _ input: BaselineCodeAnalysisPromptInput
+  ) throws -> String {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [
+      .prettyPrinted,
+      .sortedKeys,
+      .withoutEscapingSlashes,
+    ]
+    do {
+      let data = try encoder.encode(input)
+      return String(decoding: data, as: UTF8.self)
+    } catch {
+      throw CodeAnalysisPromptBuildingError.inputEncodingFailed
     }
+  }
 }
 
 private struct BaselineCodeAnalysisPromptInput: Encodable {
-    let file: BaselineCodeAnalysisFileInput
-    let change: SourceFileChangeContext?
+  let file: BaselineCodeAnalysisFileInput
+  let change: SourceFileChangeContext?
 }
 
 private struct BaselineCodeAnalysisFileInput: Encodable {
-    let path: String
-    let lineCount: Int
-    let lines: [BaselineCodeAnalysisSourceLineInput]
+  let path: String
+  let lineCount: Int
+  let lines: [BaselineCodeAnalysisSourceLineInput]
 }
 
 private struct BaselineCodeAnalysisSourceLineInput: Encodable {
-    let lineNumber: Int
-    let text: String
+  let lineNumber: Int
+  let text: String
 }

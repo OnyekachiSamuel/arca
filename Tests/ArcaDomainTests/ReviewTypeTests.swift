@@ -3,40 +3,38 @@ import Testing
 
 @Suite("Review type")
 struct ReviewTypeTests {
-    @Test("command-line names use kebab case")
-    func commandLineNames() {
-        #expect(ReviewType.godObject.commandLineName == "god-object")
-        #expect(
-            ReviewType.tcaArchitecture.commandLineName == "tca-architecture"
-        )
-        #expect(ReviewType.style.commandLineName == "style")
-        #expect(
-            ReviewType.teamConvention.commandLineName == "team-convention"
-        )
-    }
+  @Test("LLM review types use stable command-line names")
+  func commandLineNames() {
+    #expect(ReviewType.swift.commandLineName == "swift")
+    #expect(ReviewType.swiftUI.commandLineName == "swiftui")
+    #expect(ReviewType.tca.commandLineName == "tca")
+    #expect(ReviewType.security.commandLineName == "security")
+    #expect(ReviewType.godObject.commandLineName == "god-object")
+    #expect(ReviewType.all.commandLineName == "all")
+  }
 
-    @Test("review types describe review concerns, not analyzer mechanisms")
-    func excludesAnalyzerMechanisms() {
-        #expect(
-            Set(ReviewType.allCases) == [
-                .godObject,
-                .tcaArchitecture,
-                .style,
-                .teamConvention
-            ]
-        )
-        #expect(ReviewType(commandLineName: "general-llm") == nil)
-    }
+  @Test("only the LLM-only MVP review types are available")
+  func availableReviewTypes() {
+    #expect(
+      ReviewType.analysisTypes == [
+        .swift, .swiftUI, .tca, .security, .godObject,
+      ])
+  }
 
-    @Test("command-line names are converted to review types")
-    func parsesCommandLineNames() {
-        #expect(
-            ReviewType(commandLineName: "god-object") == .godObject
-        )
-        #expect(
-            ReviewType(commandLineName: "team-convention")
-                == .teamConvention
-        )
-        #expect(ReviewType(commandLineName: "security") == nil)
-    }
+  @Test("removed review types are rejected")
+  func rejectsRemovedReviewTypes() {
+    #expect(ReviewType(commandLineName: "style") == nil)
+    #expect(ReviewType(commandLineName: "team-convention") == nil)
+    #expect(ReviewType(commandLineName: "tca-architecture") == nil)
+  }
+
+  @Test("command-line names are converted to review types")
+  func parsesCommandLineNames() {
+    #expect(ReviewType(commandLineName: "swift") == .swift)
+    #expect(ReviewType(commandLineName: "swiftui") == .swiftUI)
+    #expect(ReviewType(commandLineName: "tca") == .tca)
+    #expect(ReviewType(commandLineName: "security") == .security)
+    #expect(ReviewType(commandLineName: "god-object") == .godObject)
+    #expect(ReviewType(commandLineName: "all") == .all)
+  }
 }

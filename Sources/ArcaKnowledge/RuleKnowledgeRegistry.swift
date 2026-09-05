@@ -2,212 +2,221 @@ import ArcaDomain
 import Foundation
 
 public struct RuleKnowledgeRegistry: RuleKnowledgeProviding {
-    public static let currentSchemaVersion = 2
+  public static let currentSchemaVersion = 1
 
-    private let knowledgeByRuleID: [String: RuleKnowledge]
-    public let allKnowledge: [RuleKnowledge]
+  private let knowledgeByRuleID: [String: RuleKnowledge]
+  public let allKnowledge: [RuleKnowledge]
 
-    public init(data: Data) throws {
-        let document: RuleKnowledgeDocument
-
-        do {
-            document = try JSONDecoder().decode(
-                RuleKnowledgeDocument.self,
-                from: data
-            )
-        } catch {
-            throw RuleKnowledgeRegistryError.invalidJSON
-        }
-
-        guard document.schemaVersion == Self.currentSchemaVersion else {
-            throw RuleKnowledgeRegistryError.unsupportedSchemaVersion(
-                document.schemaVersion
-            )
-        }
-
-        guard !document.rules.isEmpty else {
-            throw RuleKnowledgeRegistryError.emptyRegistry
-        }
-
-        var indexedKnowledge: [String: RuleKnowledge] = [:]
-
-        for knowledge in document.rules {
-            try Self.validate(knowledge)
-
-            guard indexedKnowledge[knowledge.ruleID] == nil else {
-                throw RuleKnowledgeRegistryError.duplicateRuleID(
-                    knowledge.ruleID
-                )
-            }
-
-            indexedKnowledge[knowledge.ruleID] = knowledge
-        }
-
-        knowledgeByRuleID = indexedKnowledge
-        allKnowledge = document.rules
+  public init(rulesetURL: URL) throws {
+    let rulesetURL = rulesetURL.standardizedFileURL
+    let baseURL = rulesetURL.deletingLastPathComponent()
+    let data: Data
+    do {
+      data = try Data(contentsOf: rulesetURL)
+    } catch {
+      throw RuleKnowledgeRegistryError.unreadableRuleset(
+        rulesetURL.path
+      )
     }
 
-    public static func bundled() throws -> RuleKnowledgeRegistry {
-        guard let resourceURL = Bundle.module.url(
-            forResource: "rule-knowledge",
-            withExtension: "json"
-        ) else {
-            throw RuleKnowledgeRegistryError.bundledResourceNotFound
-        }
+    try self.init(data: data) { knowledgeFile in
+      let knowledgeURL =
+        baseURL
+        .appendingPathComponent(knowledgeFile)
+        .standardizedFileURL
+      guard knowledgeURL.path.hasPrefix(baseURL.path + "/") else {
+        throw RuleKnowledgeRegistryError.invalidKnowledgePath(
+          knowledgeFile
+        )
+      }
+      return try Self.readKnowledge(
+        at: knowledgeURL,
+        declaredPath: knowledgeFile
+      )
+    }
+  }
 
-        let data: Data
-
-        do {
-            data = try Data(contentsOf: resourceURL)
-        } catch {
-            throw RuleKnowledgeRegistryError.unreadableResource
-        }
-
-        return try RuleKnowledgeRegistry(data: data)
+  public static func bundled() throws -> RuleKnowledgeRegistry {
+    guard
+      let rulesetURL = Bundle.module.url(
+        forResource: "arca-rulesets",
+        withExtension: "json"
+      )
+    else {
+      throw RuleKnowledgeRegistryError.bundledResourceNotFound
+    }
+    let data: Data
+    do {
+      data = try Data(contentsOf: rulesetURL)
+    } catch {
+      throw RuleKnowledgeRegistryError.unreadableRuleset(
+        rulesetURL.path
+      )
     }
 
-    public func knowledge(for ruleID: String) -> RuleKnowledge? {
-        knowledgeByRuleID[ruleID]
+    return try RuleKnowledgeRegistry(data: data) { knowledgeFile in
+      let components = knowledgeFile.split(separator: "/")
+      guard components.count == 2,
+        components.first == "references",
+        !knowledgeFile.hasPrefix("/")
+      else {
+        throw RuleKnowledgeRegistryError.invalidKnowledgePath(
+          knowledgeFile
+        )
+      }
+      let fileURL = URL(fileURLWithPath: knowledgeFile)
+      guard
+        let knowledgeURL = Bundle.module.url(
+          forResource: fileURL.deletingPathExtension().lastPathComponent,
+          withExtension: fileURL.pathExtension
+        )
+      else {
+        throw RuleKnowledgeRegistryError.missingKnowledgeFile(
+          knowledgeFile
+        )
+      }
+      return try readKnowledge(
+        at: knowledgeURL,
+        declaredPath: knowledgeFile
+      )
+    }
+  }
+
+  public func knowledge(for ruleID: String) -> RuleKnowledge? {
+    knowledgeByRuleID[ruleID]
+  }
+
+  public func knowledge(for reviewType: ReviewType) -> [RuleKnowledge] {
+    allKnowledge.filter { $0.reviewType == reviewType }
+  }
+
+  private init(
+    data: Data,
+    knowledgeLoader: (String) throws -> String
+  ) throws {
+    let document: RuleKnowledgeDocument
+    do {
+      document = try JSONDecoder().decode(
+        RuleKnowledgeDocument.self,
+        from: data
+      )
+    } catch {
+      throw RuleKnowledgeRegistryError.invalidJSON
+    }
+    guard document.schemaVersion == Self.currentSchemaVersion else {
+      throw RuleKnowledgeRegistryError.unsupportedSchemaVersion(
+        document.schemaVersion
+      )
+    }
+    guard !document.rules.isEmpty else {
+      throw RuleKnowledgeRegistryError.emptyRegistry
     }
 
-    public func knowledge(
-        in group: RuleKnowledgeGroup
-    ) -> [RuleKnowledge] {
-        allKnowledge.filter { $0.group == group }
+    var indexed: [String: RuleKnowledge] = [:]
+    var loaded: [RuleKnowledge] = []
+    for definition in document.rules {
+      try Self.validate(definition)
+      guard indexed[definition.ruleID] == nil else {
+        throw RuleKnowledgeRegistryError.duplicateRuleID(
+          definition.ruleID
+        )
+      }
+      let markdown = try knowledgeLoader(definition.knowledgeFile)
+      guard
+        !markdown.trimmingCharacters(
+          in: .whitespacesAndNewlines
+        ).isEmpty
+      else {
+        throw RuleKnowledgeRegistryError.emptyKnowledgeFile(
+          definition.knowledgeFile
+        )
+      }
+      let knowledge = RuleKnowledge(
+        ruleID: definition.ruleID,
+        reviewType: definition.reviewType,
+        category: definition.category,
+        issueType: definition.issueType,
+        title: definition.title,
+        problemContext: definition.problemContext,
+        expectedBehavior: definition.expectedBehavior,
+        violationCriteria: definition.violationCriteria,
+        knowledgeFile: definition.knowledgeFile,
+        supportingKnowledge: markdown,
+        deprecatedFromVersion: definition.deprecatedFromVersion
+      )
+      indexed[knowledge.ruleID] = knowledge
+      loaded.append(knowledge)
     }
+    knowledgeByRuleID = indexed
+    allKnowledge = loaded
+  }
 
-    private static func validate(_ knowledge: RuleKnowledge) throws {
-        guard !knowledge.ruleID.trimmed.isEmpty else {
-            throw invalidRule(knowledge, reason: "rule ID must not be empty.")
-        }
-
-        guard knowledge.ruleID == knowledge.ruleID.trimmed else {
-            throw invalidRule(
-                knowledge,
-                reason: "rule ID must not contain surrounding whitespace."
-            )
-        }
-
-        guard !knowledge.title.trimmed.isEmpty else {
-            throw invalidRule(knowledge, reason: "title must not be empty.")
-        }
-
-        guard !knowledge.definition.trimmed.isEmpty else {
-            throw invalidRule(
-                knowledge,
-                reason: "definition must not be empty."
-            )
-        }
-
-        guard !knowledge.evidenceCriteria.isEmpty else {
-            throw invalidRule(
-                knowledge,
-                reason: "must contain at least one evidence criterion."
-            )
-        }
-
-        guard knowledge.evidenceCriteria.allSatisfy({
-            !$0.trimmed.isEmpty
-        }) else {
-            throw invalidRule(
-                knowledge,
-                reason: "evidence criteria must not contain empty values."
-            )
-        }
-
-        guard !knowledge.classificationGuidance.isEmpty else {
-            throw invalidRule(
-                knowledge,
-                reason: """
-                must contain at least one classification guidance item.
-                """
-            )
-        }
-
-        guard knowledge.classificationGuidance.allSatisfy({
-            !$0.trimmed.isEmpty
-        }) else {
-            throw invalidRule(
-                knowledge,
-                reason: """
-                classification guidance must not contain empty values.
-                """
-            )
-        }
-
-        guard !knowledge.severityGuidance.isEmpty else {
-            throw invalidRule(
-                knowledge,
-                reason: "must contain at least one severity guidance item."
-            )
-        }
-
-        guard knowledge.severityGuidance.allSatisfy({
-            !$0.trimmed.isEmpty
-        }) else {
-            throw invalidRule(
-                knowledge,
-                reason: "severity guidance must not contain empty values."
-            )
-        }
-
-        guard !knowledge.refactoringGuardrails.isEmpty else {
-            throw invalidRule(
-                knowledge,
-                reason: "must contain at least one refactoring guardrail."
-            )
-        }
-
-        guard knowledge.refactoringGuardrails.allSatisfy({
-            !$0.trimmed.isEmpty
-        }) else {
-            throw invalidRule(
-                knowledge,
-                reason: "refactoring guardrails must not contain empty values."
-            )
-        }
-
-        guard knowledge.category == expectedCategory(for: knowledge.group)
-        else {
-            throw invalidRule(
-                knowledge,
-                reason: """
-                category '\(knowledge.category.rawValue)' does not match group '\(knowledge.group.rawValue)'.
-                """
-            )
-        }
+  private static func readKnowledge(
+    at url: URL,
+    declaredPath: String
+  ) throws -> String {
+    do {
+      return try String(contentsOf: url, encoding: .utf8)
+    } catch {
+      throw RuleKnowledgeRegistryError.missingKnowledgeFile(
+        declaredPath
+      )
     }
+  }
 
-    private static func expectedCategory(
-        for group: RuleKnowledgeGroup
-    ) -> FindingCategory {
-        switch group {
-        case .codeSmellsAndAntiPatterns:
-            .antiPattern
-        case .tcaArchitecture:
-            .architecture
-        case .style:
-            .style
-        case .teamConventions:
-            .teamConvention
-        }
+  private static func validate(_ rule: RuleDefinition) throws {
+    let requiredValues = [
+      ("rule ID", rule.ruleID),
+      ("category", rule.category),
+      ("title", rule.title),
+      ("problem context", rule.problemContext),
+      ("expected behavior", rule.expectedBehavior),
+      ("violation criteria", rule.violationCriteria),
+      ("knowledge file", rule.knowledgeFile),
+    ]
+    for (field, value) in requiredValues where value.trimmed.isEmpty {
+      throw RuleKnowledgeRegistryError.invalidRule(
+        ruleID: rule.ruleID,
+        reason: "\(field) must not be empty."
+      )
     }
-
-    private static func invalidRule(
-        _ knowledge: RuleKnowledge,
-        reason: String
-    ) -> RuleKnowledgeRegistryError {
-        .invalidRule(ruleID: knowledge.ruleID, reason: reason)
+    guard rule.ruleID == rule.ruleID.trimmed else {
+      throw RuleKnowledgeRegistryError.invalidRule(
+        ruleID: rule.ruleID,
+        reason: "rule ID must not contain surrounding whitespace."
+      )
     }
+    if rule.issueType == .deprecatedAPI,
+      rule.deprecatedFromVersion?.trimmed.isEmpty != false
+    {
+      throw RuleKnowledgeRegistryError.invalidRule(
+        ruleID: rule.ruleID,
+        reason: "deprecated API rules require deprecatedFromVersion."
+      )
+    }
+  }
 }
 
 private struct RuleKnowledgeDocument: Decodable {
-    let schemaVersion: Int
-    let rules: [RuleKnowledge]
+  let schemaVersion: Int
+  let rules: [RuleDefinition]
 }
 
-private extension String {
-    var trimmed: String {
-        trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+private struct RuleDefinition: Decodable {
+  let ruleID: String
+  let reviewType: ReviewType
+  let category: String
+  let issueType: IssueType
+  let title: String
+  let problemContext: String
+  let expectedBehavior: String
+  let violationCriteria: String
+  let knowledgeFile: String
+  let deprecatedFromVersion: String?
+}
+
+extension String {
+  fileprivate var trimmed: String {
+    trimmingCharacters(in: .whitespacesAndNewlines)
+  }
 }

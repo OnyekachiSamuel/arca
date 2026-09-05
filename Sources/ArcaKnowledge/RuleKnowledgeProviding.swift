@@ -1,6 +1,14 @@
-public protocol RuleKnowledgeProviding: Sendable {
-    var allKnowledge: [RuleKnowledge] { get }
+import ArcaDomain
 
-    func knowledge(for ruleID: String) -> RuleKnowledge?
-    func knowledge(in group: RuleKnowledgeGroup) -> [RuleKnowledge]
+public protocol RuleKnowledgeProviding: Sendable {
+  var allKnowledge: [RuleKnowledge] { get }
+
+  func knowledge(for ruleID: String) -> RuleKnowledge?
+  func knowledge(for reviewType: ReviewType) -> [RuleKnowledge]
+}
+
+extension RuleKnowledgeProviding {
+  public func knowledge(for reviewType: ReviewType) -> [RuleKnowledge] {
+    allKnowledge.filter { $0.reviewType == reviewType }
+  }
 }

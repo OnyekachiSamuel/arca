@@ -202,16 +202,19 @@
       "problemContext": "Modern TCA features define application logic in a reducer body using `Reduce` and reducer composition. The legacy `reduce(into:action:)` API and direct reducer invocation rely on an older pattern and can bypass the normal Store-driven action flow.",      
       "expectedBehavior": "A TCA feature should define its reducer logic through the reducer body, typically using Reduce and reducer composition operators. Child feature behavior should be composed into the reducer hierarchy or triggered by sending actions through the Store rather than by manually invoking another reducer.",
       "violationCriteria": "A violation occurs when a feature implements its application logic using the legacy reduce(into:action:) reducer API, or when application code directly invokes reduce(into:action:) on another reducer instead of composing that reducer or sending an action through the Store.",
+      "deprecatedFromVersion": "1.25.0",
       "knowledgeFile": "references/ARCA-TCA-DEPRECATED-001.md"
     },
     {
       "ruleID": "ARCA-TCA-DEPRECATED-002",
       "reviewType": "tca",
       "category": "deprecated-api",
+      "issueType": "deprecated-api",
       "title": "Legacy TCA View Observation API",
       "problemContext": "TCA's modern observation model allows SwiftUI views to observe observable feature state directly through Store. Legacy ViewStore and WithViewStore APIs introduce an older observation layer that is no longer required for features using observable state and can result in unnecessary observation boilerplate.",
       "expectedBehavior": "Feature State should use TCA's observable-state mechanism where appropriate, and SwiftUI views should read state and send actions directly through Store. Legacy ViewStore, ViewStoreOf, WithViewStore, and related view-observation wrappers should not be introduced into modern observable features.",
       "violationCriteria": "A violation occurs when a modern TCA feature uses ViewStore, ViewStoreOf, WithViewStore, or equivalent legacy observation APIs where the feature can use ObservableState and direct Store observation instead.",
+      "deprecatedFromVersion": "1.24.0",
       "knowledgeFile": "references/ARCA-TCA-DEPRECATED-002.md"
     },
     {
@@ -223,6 +226,7 @@
       "problemContext": "Older TCA code represents the result of asynchronous effects with TaskResult. Modern TCA uses Swift's standard Result type for this purpose, avoiding a framework-specific result wrapper that has been deprecated.",
       "expectedBehavior": "Actions representing the outcome of asynchronous work should use Swift Result or another appropriate domain-specific result representation rather than TCA's deprecated TaskResult type.",
       "violationCriteria": "A violation occurs when TaskResult is used in TCA feature state, actions, effects, or supporting code where Result can represent the asynchronous success or failure.",
+      "deprecatedFromVersion": "1.24.0",
       "knowledgeFile": "references/ARCA-TCA-DEPRECATED-003.md"
     },
     {
@@ -234,6 +238,7 @@
       "problemContext": "Modern TCA derives bindings directly from observable stores. Legacy APIs such as `BindingState`, `BindingViewState`, and `BindingViewStore` belong to the older `ViewStore` model and add unnecessary wrappers to modern features.",
       "expectedBehavior": "Bindable feature state should use ObservableState, with the Action domain conforming to BindableAction where necessary and BindingReducer participating in the reducer. SwiftUI views should derive bindings from a bindable Store rather than using legacy BindingState or BindingViewStore mechanisms.",
       "violationCriteria": "A violation occurs when a modern observable TCA feature uses deprecated BindingState, BindingViewState, BindingViewStore, or equivalent legacy binding mechanisms instead of deriving bindings directly from an observable Store.",
+      "deprecatedFromVersion": "1.24.0",
       "knowledgeFile": "references/ARCA-TCA-DEPRECATED-004.md"
     },
     {
@@ -242,9 +247,10 @@
       "category": "deprecated-api",
       "issueType": "deprecated-api",
       "title": "Legacy TCA Presentation API",
-      "problemContext": "Modern TCA models presentation using `@Presents` state and `PresentationAction`, with SwiftUI presentation driven from scoped store bindings. Legacy APIs such as `@PresentationState` and store-specific presentation modifiers use the older presentation model.",
-      "expectedBehavior": "Optional presentation domains should normally be modeled with @Presents and PresentationAction, composed using the appropriate presentation reducer operator, and presented in SwiftUI using standard item-driven APIs with a scoped Store binding.",
+      "problemContext": "Modern observable TCA features model presentation using `@Presents` state and `PresentationAction`, with SwiftUI presentation driven from scoped store bindings. Store-specific presentation modifiers use the older presentation model.",
+      "expectedBehavior": "When feature state adopts @ObservableState, optional presentation domains should use @Presents and PresentationAction, be composed using the appropriate presentation reducer operator, and be presented using standard item-driven APIs with a scoped Store binding.",
       "violationCriteria": "A violation occurs when a modern observable TCA feature uses @PresentationState or legacy store-specific presentation modifiers such as sheet(store:) where @Presents and Store-based item presentation are applicable.",
+      "deprecatedFromVersion": "1.24.0",
       "knowledgeFile": "references/ARCA-TCA-DEPRECATED-005.md"
     },
     {

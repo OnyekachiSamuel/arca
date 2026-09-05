@@ -2,1343 +2,205 @@ import ArcaDomain
 import ArcaLLM
 import Foundation
 import Testing
+
 @testable import ArcaCLI
 
-@Suite("Arca command")
+@Suite("Arca LLM command")
 struct ArcaCommandTests {
-    @Test("llm runs one selected prompt variant without categorization")
-    func runsIsolatedLLMAnalysis() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("Example.swift")
-            try "struct Example {\n    let value = 1\n}\n".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-            try writeLLMConfiguration(to: directory)
-            let provider = CLILLMRunProvider(filePath: file.lastPathComponent)
+  @Test("baseline sends one broad prompt without rule knowledge")
+  func runsBaseline() async throws {
+    try await withFixture { directory, file in
+      let provider = RecordingProvider()
+      let result = await run(
+        directory: directory,
+        file: file,
+        review: nil,
+        prompt: "baseline",
+        provider: provider
+      )
+      let report = try decode(result)
+      let prompts = await provider.prompts
 
-            let result = await ArcaCommand.execute(
-                arguments: [
-                    "llm", "--file", file.path,
-                    "--review", "god-object",
-                    "--prompt", "baseline",
-                    "--format", "json"
-                ],
-                currentDirectory: directory.path,
-                swiftLintAvailability: .unavailable(.executableNotFound),
-                llmProvider: provider
-            )
-            let report = try JSONDecoder().decode(
-                LLMIssueDetectionReport.self,
-                from: Data(result.output.utf8)
-            )
-            let prompts = await provider.prompts
-
-            #expect(result.exitStatus == .findingsDetected)
-            #expect(report.promptVariant == .baseline)
-            #expect(report.reviewType == .godObject)
-            #expect(report.analysis.candidates.count == 1)
-            #expect(report.analysis.candidates[0].ruleID == nil)
-            #expect(report.analysis.candidates[0].title == "Large Class")
-            #expect(
-                report.analysis.candidates[0]
-                    .analyzerMetadata["issueType"] == .string("codeSmell")
-            )
-            #expect(report.analysis.llmExecutionMetadata?.requestCount == 1)
-            #expect(report.seed == 7)
-            #expect(report.temperature == 0)
-            #expect(prompts.count == 1)
-            #expect(prompts[0].contains("Variant: baseline"))
-            #expect(!prompts[0].contains("ARCA-GOD-001"))
-            #expect(!prompts[0].contains("God Object"))
-            #expect(!prompts[0].contains("arca.issue-categorization"))
-            #expect(
-                !prompts[0].contains(
-                    "A God Object candidate is a type that combines"
-                )
-            )
-        }
+      #expect(result.exitStatus == .success)
+      #expect(report.promptVariant == .baseline)
+      #expect(report.reviewType == nil)
+      #expect(result.reviewRequest?.selectedReviewTypes.isEmpty == true)
+      #expect(prompts.count == 1)
+      #expect(prompts[0].contains("Variant: baseline"))
+      #expect(!prompts[0].contains("RULES_AND_KNOWLEDGE"))
+      #expect(!prompts[0].contains("ARCA-SWIFT-CONCURRENCY-001"))
     }
+  }
 
-    @Test("llm guided prompt includes rule knowledge")
-    func runsGuidedLLMAnalysis() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("Example.swift")
-            try "struct Example {}\n".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-            try writeLLMConfiguration(to: directory)
-            let provider = CLINoFindingLLMProvider()
+  @Test("guided sends the selected rule definitions and Markdown knowledge")
+  func runsGuided() async throws {
+    try await withFixture { directory, file in
+      let provider = RecordingProvider()
+      let result = await run(
+        directory: directory,
+        file: file,
+        review: "god-object",
+        prompt: "guided",
+        provider: provider
+      )
+      let report = try decode(result)
+      let prompt = try #require(await provider.prompts.first)
 
-            let result = await ArcaCommand.execute(
-                arguments: [
-                    "llm", "--file", file.path,
-                    "--review", "god-object",
-                    "--prompt", "guided",
-                    "--format", "json"
-                ],
-                currentDirectory: directory.path,
-                swiftLintAvailability: .unavailable(.executableNotFound),
-                llmProvider: provider
-            )
-            let report = try JSONDecoder().decode(
-                LLMIssueDetectionReport.self,
-                from: Data(result.output.utf8)
-            )
-            let prompts = await provider.prompts
-
-            #expect(result.exitStatus == .success)
-            #expect(report.promptVariant == .guided)
-            #expect(report.analysis.candidates.isEmpty)
-            #expect(await provider.requestCount == 1)
-            #expect(prompts.count == 1)
-            #expect(prompts[0].contains("Variant: guided"))
-            #expect(
-                prompts[0].contains(
-                    "A God Object candidate is a type that combines"
-                )
-            )
-        }
+      #expect(result.exitStatus == .success)
+      #expect(report.promptVariant == .guided)
+      #expect(report.reviewType == .godObject)
+      #expect(prompt.contains("ARCA-GOD-Object-001"))
+      #expect(prompt.contains("Problem context:"))
+      #expect(prompt.contains("Violation criteria:"))
+      #expect(prompt.contains("# God Object"))
+      #expect(prompt.contains("```swift"))
+      #expect(!prompt.contains("ARCA-SWIFT-CONCURRENCY-001"))
+      #expect(!prompt.contains("arca.issue-categorization"))
     }
+  }
 
-    @Test("llm retains mismatched evidence for human evaluation")
-    func retainsExperimentalFindingWithWarning() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("Example.swift")
-            try "struct Example {\n    let value = 1\n}\n".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-            try writeLLMConfiguration(to: directory)
-            let provider = CLILLMRunProvider(
-                filePath: file.lastPathComponent,
-                evidenceExcerpt: "    let value = 2"
-            )
+  @Test("guided all runs each rule set separately and aggregates usage")
+  func runsAllGuidedRuleSets() async throws {
+    try await withFixture { directory, file in
+      let provider = RecordingProvider()
+      let result = await run(
+        directory: directory,
+        file: file,
+        review: "all",
+        prompt: "guided",
+        provider: provider
+      )
+      let report = try decode(result)
+      let prompts = await provider.prompts
 
-            let result = await ArcaCommand.execute(
-                arguments: [
-                    "llm", "--file", file.path,
-                    "--review", "god-object",
-                    "--prompt", "baseline",
-                    "--format", "json"
-                ],
-                currentDirectory: directory.path,
-                swiftLintAvailability: .unavailable(.executableNotFound),
-                llmProvider: provider
-            )
-            let report = try JSONDecoder().decode(
-                LLMIssueDetectionReport.self,
-                from: Data(result.output.utf8)
-            )
-
-            #expect(result.exitStatus == .findingsDetected)
-            #expect(report.analysis.candidates.count == 1)
-            #expect(report.analysis.diagnostics.map(\.code) == [
-                "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
-            ])
-        }
-    }
-
-    @Test("llm help documents the isolated prompt variants")
-    func llmHelpDescribesVariants() async {
-        let result = await ArcaCommand.run(arguments: ["llm", "--help"])
-
-        #expect(result.exitStatus == .success)
-        #expect(result.output.contains("USAGE: arca llm [options]"))
-        #expect(result.output.contains("baseline"))
-        #expect(result.output.contains("guided"))
-    }
-
-    @Test("configured clean review returns a categorized report")
-    func configuredCleanReviewReturnsStableReport() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("Small.swift")
-            try "struct Small {}\n".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-            try writeLLMConfiguration(to: directory)
-            let provider = CLINoFindingLLMProvider()
-
-            let result = await ArcaCommand.execute(
-                arguments: [
-                    "review", "--file", file.path,
-                    "--review", "god-object",
-                    "--format", "json"
-                ],
-                currentDirectory: directory.path,
-                swiftLintAvailability: .unavailable(.executableNotFound),
-                llmProvider: provider
-            )
-            let report = try JSONDecoder().decode(
-                CategorizedReviewReport.self,
-                from: Data(result.output.utf8)
-            )
-
-            #expect(result.exitStatus == .success)
-            #expect(await provider.requestCount == 1)
-            #expect(report.candidates.isEmpty)
-            #expect(report.counts.totalCandidates == 0)
-            #expect(report.categorizationDecisions.isEmpty)
-            #expect(
-                report.categorizationSummary
-                    == "No candidate findings were detected."
-            )
-            #expect(
-                report.categorizationExecutionMetadata.requestCount == 0
-            )
-        }
-    }
-
-    @Test("configured file review runs detection, categorization, and reporting")
-    func runsConfiguredFilePipeline() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {\n    let value = 1; let other = 2\n    func run() {}; func stop() {}\n}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-            try writeLLMConfiguration(
-                to: directory,
-                godObjectThresholds: true
-            )
-            let provider = CLIPipelineLLMProvider(filePath: "App.swift")
-
-            let result = await ArcaCommand.execute(
-                arguments: [
-                    "review", "--file", file.path,
-                    "--review", "god-object",
-                    "--format", "json"
-                ],
-                currentDirectory: directory.path,
-                swiftLintAvailability: .unavailable(.executableNotFound),
-                llmProvider: provider
-            )
-            let report = try JSONDecoder().decode(
-                CategorizedReviewReport.self,
-                from: Data(result.output.utf8)
-            )
-            let prompts = await provider.prompts
-
-            #expect(
-                result.exitStatus == .findingsDetected,
-                Comment(rawValue: result.output)
-            )
-            #expect(prompts.count == 2)
-            #expect(
-                prompts[0].contains("arca.code-analysis.guided/v1")
-            )
-            #expect(prompts[1].contains("arca.issue-categorization/v1"))
-            #expect(report.candidates.count == 2)
-            let confirmedFinding = try #require(
-                report.confirmedFindings.first,
-                Comment(rawValue: result.output)
-            )
-            #expect(
-                confirmedFinding.candidateIDs
-                    == report.candidates.map(\.candidateID)
-            )
-            #expect(confirmedFinding.sources == [
-                "god-object",
-                "llm-code-analysis",
-                "llm-provider:mock-pipeline",
-                "llm-model:mock-model"
-            ])
-            #expect(report.counts.totalCandidates == 2)
-            #expect(report.counts.confirmed == 2)
-            #expect(
-                report.categorizationExecutionMetadata.providerID
-                    == "mock-pipeline"
-            )
-        }
-    }
-
-    @Test("review categorizes an LLM candidate with mismatched evidence")
-    func categorizesRetainedLLMCandidate() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {\n    let value = 1; let other = 2\n    func run() {}; func stop() {}\n}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-            try writeLLMConfiguration(
-                to: directory,
-                godObjectThresholds: true
-            )
-            let provider = CLIPipelineLLMProvider(
-                filePath: "App.swift",
-                evidenceExcerpt: "    let value = 999"
-            )
-
-            let result = await ArcaCommand.execute(
-                arguments: [
-                    "review", "--file", file.path,
-                    "--review", "god-object",
-                    "--format", "json"
-                ],
-                currentDirectory: directory.path,
-                swiftLintAvailability: .unavailable(.executableNotFound),
-                llmProvider: provider
-            )
-            let report = try JSONDecoder().decode(
-                CategorizedReviewReport.self,
-                from: Data(result.output.utf8)
-            )
-
-            #expect(result.exitStatus == .findingsDetected)
-            #expect(report.candidates.count == 2)
-            #expect(report.confirmedFindings.count == 1)
-            #expect(report.diagnostics.map(\.code).contains(
-                "ARCA-LLM-ANALYSIS-EVIDENCE-EXCERPT-MISMATCH"
-            ))
-        }
-    }
-
-    @Test("configured changed review runs the complete pipeline")
-    func runsConfiguredChangedPipeline() async throws {
-        try await withTemporaryDirectory { directory in
-            try initializeGitRepository(at: directory)
-            let file = directory.appendingPathComponent("Changed.swift")
-            try "struct Changed {\n    let value = 1\n}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-            try writeLLMConfiguration(to: directory)
-            let provider = CLIPipelineLLMProvider(filePath: "Changed.swift")
-
-            let result = await ArcaCommand.execute(
-                arguments: [
-                    "review", "--changed",
-                    "--review", "god-object",
-                    "--format", "json"
-                ],
-                currentDirectory: directory.path,
-                swiftLintAvailability: .unavailable(.executableNotFound),
-                llmProvider: provider
-            )
-            let report = try JSONDecoder().decode(
-                CategorizedReviewReport.self,
-                from: Data(result.output.utf8)
-            )
-            let prompts = await provider.prompts
-
-            #expect(result.exitStatus == .findingsDetected)
-            #expect(result.reviewRequest?.selectedFiles == [
-                file.standardizedFileURL.resolvingSymlinksInPath().path
-            ])
-            #expect(prompts.count == 2)
-            #expect(prompts[0].contains(#""addedLineRanges""#))
-            #expect(report.confirmedFindings.count == 1)
-        }
-    }
-
-    @Test("configured provider failure returns a structured failed report")
-    func reportsConfiguredProviderFailure() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("Large.swift")
-            try "class Large {\n    var left = 1\n    var right = 2\n    func runLeft() { print(left) }\n    func runRight() { print(right) }\n}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-            try writeLLMConfiguration(
-                to: directory,
-                godObjectThresholds: true
-            )
-
-            let result = await ArcaCommand.execute(
-                arguments: [
-                    "review", "--file", file.path,
-                    "--review", "god-object",
-                    "--format", "json"
-                ],
-                currentDirectory: directory.path,
-                swiftLintAvailability: .unavailable(.executableNotFound),
-                llmProvider: CLIFailingLLMProvider()
-            )
-            let report = try JSONDecoder().decode(
-                CategorizedReviewReport.self,
-                from: Data(result.output.utf8)
-            )
-
-            #expect(result.exitStatus == .executionFailure)
-            #expect(report.candidates.count == 1)
-            #expect(report.confirmedFindings.isEmpty)
-            #expect(report.diagnostics.map(\.code).contains(
-                "ARCA-LLM-ANALYSIS-PROVIDER-FAILED"
-            ))
-            #expect(report.diagnostics.map(\.code).contains(
-                "ARCA-LLM-CATEGORIZATION-PROVIDER-FAILED"
-            ))
-        }
-    }
-
-    @Test("a rejected categorization keeps candidates but exits cleanly")
-    func rejectedCategorizationIsNotAReportedFinding() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {\n    let value = 1\n}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-            try writeLLMConfiguration(to: directory)
-            let provider = CLIPipelineLLMProvider(
-                filePath: "App.swift",
-                assessment: .rejected
-            )
-
-            let result = await ArcaCommand.execute(
-                arguments: [
-                    "review", "--file", file.path,
-                    "--review", "god-object",
-                    "--format", "json"
-                ],
-                currentDirectory: directory.path,
-                swiftLintAvailability: .unavailable(.executableNotFound),
-                llmProvider: provider
-            )
-            let report = try JSONDecoder().decode(
-                CategorizedReviewReport.self,
-                from: Data(result.output.utf8)
-            )
-
-            #expect(result.exitStatus == .success)
-            #expect(report.candidates.count == 1)
-            #expect(report.categorizationDecisions.first?.assessment == .rejected)
-            #expect(report.confirmedFindings.isEmpty)
-            #expect(report.uncertainFindings.isEmpty)
-            #expect(report.counts.rejected == 1)
-        }
-    }
-
-    @Test("review help matches the command snapshot")
-    func reviewHelpSnapshot() async {
-        let expected = """
-        OVERVIEW: Review Swift code for anti-patterns and convention violations.
-
-        USAGE: arca review [options]
-
-        OPTIONS:
-          --file <path>           Review an explicit Swift file.
-          --changed               Review changed Swift files in the Git repository.
-          --review <type>         Select a review; repeatable. Values: god-object, style, team-convention, all.
-          --format <format>       Select output format. Values: terminal, json.
-          --debug                 Print loaded source and metadata.
-          -h, --help              Show help information.
-
-        EXIT STATUS:
-          0  Review completed without findings.
-          1  Review completed with findings.
-          2  Invalid input or configuration.
-          3  Analyzer or internal execution failure.
-        """
-
-        let result = await ArcaCommand.run(arguments: ["review", "--help"])
-
-        #expect(result.exitCode == 0)
-        #expect(result.exitStatus == .success)
-        #expect(result.outputDestination == .standardOutput)
-        #expect(result.output == expected)
-    }
-
-    @Test("review supports the short help flag")
-    func reviewShortHelp() async {
-        let result = await ArcaCommand.run(arguments: ["review", "-h"])
-
+      #expect(report.reviewType == .all)
+      #expect(prompts.count == ReviewType.analysisTypes.count)
+      #expect(report.analysis.llmExecutionMetadata?.requestCount == 5)
+      #expect(report.analysis.llmExecutionMetadata?.usage.totalTokens == 15)
+      for reviewType in ReviewType.analysisTypes {
         #expect(
-            result == CommandResult(
-                output: ArcaCommand.reviewHelp,
-                exitStatus: .success
-            )
-        )
+          prompts.contains {
+            $0.contains("Review type: \(reviewType.commandLineName)")
+          })
+      }
     }
+  }
 
-    @Test("review without a source is an input error")
-    func reviewWithoutSourceReturnsInputError() async {
-        let result = await ArcaCommand.run(arguments: ["review"])
+  @Test("baseline rejects any review selection")
+  func rejectsReviewForBaseline() async throws {
+    try await withFixture { directory, file in
+      let provider = RecordingProvider()
+      let result = await run(
+        directory: directory,
+        file: file,
+        review: "swift",
+        prompt: "baseline",
+        provider: provider
+      )
 
-        #expect(result.exitStatus == .invalidInput)
-        #expect(result.exitCode == 2)
-        #expect(result.outputDestination == .standardError)
-        #expect(
-            result.output
-                == "Error: No review source selected. Use --file or --changed."
-        )
+      #expect(result.exitStatus == .invalidInput)
+      #expect(result.output.contains("must not be provided with the baseline prompt"))
+      #expect(await provider.prompts.isEmpty)
     }
+  }
 
-    @Test("review with a Swift file includes it in the request")
-    func reviewFileBuildsRequest() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {}".write(to: file, atomically: true, encoding: .utf8)
+  @Test("legacy combined review command is not exposed by the LLM-only MVP")
+  func rejectsLegacyReviewCommand() async {
+    let result = await ArcaCommand.run(arguments: ["review", "--help"])
 
-            let result = await ArcaCommand.run(
-                arguments: ["review", "--file", file.path],
-                currentDirectory: directory.path
-            )
+    #expect(result.exitStatus == .invalidInput)
+    #expect(!ArcaCommand.rootHelp.contains("review                  "))
+  }
 
-            #expect(result.exitCode == 0)
-            #expect(result.exitStatus == .success)
-            #expect(result.outputDestination == .standardOutput)
-            #expect(result.reviewRequest?.selectedFiles == [file.path])
-            #expect(result.reviewRequest?.repositoryRoot == nil)
-            #expect(result.output.hasPrefix("ARCA Review Analysis"))
-            #expect(
-                result.reviewRequest?.selectedReviewTypes
-                    == [.godObject, .style, .teamConvention]
-            )
-            #expect(result.output.contains("1 analyzer skipped"))
-        }
+  @Test("help describes the experiment variants and rule sets")
+  func describesCommand() async {
+    let result = await ArcaCommand.run(arguments: ["llm", "--help"])
+
+    #expect(result.exitStatus == .success)
+    #expect(result.output.contains("baseline"))
+    #expect(result.output.contains("guided"))
+    #expect(result.output.contains("swiftui"))
+    #expect(result.output.contains("security"))
+    #expect(result.output.contains("all"))
+  }
+
+  private func run(
+    directory: URL,
+    file: URL,
+    review: String?,
+    prompt: String,
+    provider: RecordingProvider
+  ) async -> CommandResult {
+    var arguments = ["llm", "--file", file.path]
+    if let review {
+      arguments += ["--review", review]
     }
+    arguments += ["--prompt", prompt, "--format", "json"]
+    return await ArcaCommand.execute(
+      arguments: arguments,
+      currentDirectory: directory.path,
+      llmProvider: provider
+    )
+  }
 
-    @Test("review JSON format returns a decodable report without decoration")
-    func reviewReturnsJSON() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
+  private func decode(_ result: CommandResult) throws -> LLMIssueDetectionReport {
+    try JSONDecoder().decode(
+      LLMIssueDetectionReport.self,
+      from: Data(result.output.utf8)
+    )
+  }
 
-            let result = await ArcaCommand.run(
-                arguments: [
-                    "review",
-                    "--file", file.path,
-                    "--format", "json"
-                ],
-                currentDirectory: directory.path
-            )
-            let report = try JSONDecoder().decode(
-                ReviewAnalysisResult.self,
-                from: Data(result.output.utf8)
-            )
-
-            #expect(result.exitCode == 0)
-            #expect(
-                report.schemaVersion
-                    == ReviewAnalysisResult.currentSchemaVersion
-            )
-            #expect(
-                report.analyzerResults.map(\.analyzerID)
-                    == ["god-object", "swiftlint"]
-            )
-            #expect(
-                report.analyzerResults.map(\.executionStatus)
-                    == [.completed, .skipped]
-            )
-            #expect(!result.output.contains("ARCA Review Analysis"))
-            #expect(!result.output.contains("\u{001B}["))
-        }
+  private func withFixture(
+    _ body: (URL, URL) async throws -> Void
+  ) async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: directory,
+      withIntermediateDirectories: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let file = directory.appendingPathComponent("Example.swift")
+    try "struct Example {}\n".write(
+      to: file,
+      atomically: true,
+      encoding: .utf8
+    )
+    try """
+    {
+      "schemaVersion": 1,
+      "llm": {
+        "providerID": "mock",
+        "baseURL": "http://127.0.0.1:1234",
+        "modelID": "mock-model",
+        "timeoutSeconds": 30,
+        "temperature": 0,
+        "seed": 7
+      }
     }
-
-    @Test("style review executes SwiftLint and returns normalized findings")
-    func reviewExecutesSwiftLint() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "let value = 1;".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-            let executable = directory.appendingPathComponent("swiftlint")
-            try """
-            #!/bin/sh
-            if [ "$1" = "version" ]; then
-              printf 'test-version\\n'
-              exit 0
-            fi
-            printf '[{"character":14,"file":"\(file.path)","line":1,"reason":"Unneeded semicolon.","rule_id":"trailing_semicolon","severity":"Warning","type":"Trailing Semicolon"}]'
-            """.write(
-                to: executable,
-                atomically: true,
-                encoding: .utf8
-            )
-            try FileManager.default.setAttributes(
-                [.posixPermissions: 0o755],
-                ofItemAtPath: executable.path
-            )
-
-            let result = await ArcaCommand.run(
-                arguments: [
-                    "review",
-                    "--file", file.path,
-                    "--review", "style",
-                    "--format", "json"
-                ],
-                currentDirectory: directory.path,
-                swiftLintAvailability: .available(executable)
-            )
-            let report = try JSONDecoder().decode(
-                ReviewAnalysisResult.self,
-                from: Data(result.output.utf8)
-            )
-            let analyzerResult = try #require(
-                report.analyzerResults.first
-            )
-            let candidate = try #require(analyzerResult.candidates.first)
-
-            #expect(result.exitCode == 1)
-            #expect(result.exitStatus == .findingsDetected)
-            #expect(result.outputDestination == .standardOutput)
-            #expect(
-                result.reviewRequest?.selectedReviewTypes == [.style]
-            )
-            #expect(analyzerResult.analyzerID == "swiftlint")
-            #expect(analyzerResult.tool?.version == "test-version")
-            #expect(candidate.ruleID == "swiftlint.trailing_semicolon")
-            #expect(
-                candidate.analyzerMetadata["rule_id"]
-                    == .string("trailing_semicolon")
-            )
-            #expect(candidate.sourceIdentifiers == ["swiftlint"])
-            #expect(
-                report.candidates.first?.sourceIdentifiers == ["swiftlint"]
-            )
-        }
-    }
-
-    @Test("unsupported output format returns a clear error")
-    func unsupportedOutputFormatReturnsError() async {
-        let result = await ArcaCommand.run(arguments: [
-            "review",
-            "--format", "xml"
-        ])
-
-        #expect(result.exitCode == 2)
-        #expect(result.outputDestination == .standardError)
-        #expect(
-            result.output
-                == "Error: Unsupported output format 'xml'. Available values: terminal, json."
-        )
-    }
-
-    @Test("output format may only be specified once")
-    func repeatedOutputFormatReturnsError() async {
-        let result = await ArcaCommand.run(arguments: [
-            "review",
-            "--format", "json",
-            "--format", "json"
-        ])
-
-        #expect(result.exitCode == 2)
-        #expect(
-            result.output
-                == "Error: Option '--format' may only be specified once."
-        )
-    }
-
-    @Test("JSON output cannot be combined with debug output")
-    func jsonAndDebugReturnError() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-
-            let result = await ArcaCommand.run(arguments: [
-                "review",
-                "--file", file.path,
-                "--format", "json",
-                "--debug"
-            ])
-
-            #expect(result.exitCode == 2)
-            #expect(
-                result.output
-                    == "Error: Options '--debug' and '--format json' cannot be used together."
-            )
-        }
-    }
-
-    @Test("review accepts an explicit God Object review type")
-    func reviewAcceptsGodObjectType() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-
-            let result = await ArcaCommand.run(
-                arguments: [
-                    "review",
-                    "--review", "god-object",
-                    "--file", file.path
-                ],
-                currentDirectory: directory.path
-            )
-
-            #expect(result.exitCode == 0)
-            #expect(
-                result.reviewRequest?.selectedReviewTypes == [.godObject]
-            )
-        }
-    }
-
-    @Test("review all resolves to every registered review type")
-    func reviewAcceptsAllTypes() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-
-            let result = await ArcaCommand.run(
-                arguments: [
-                    "review",
-                    "--file", file.path,
-                    "--review", "all"
-                ],
-                currentDirectory: directory.path
-            )
-
-            #expect(result.exitCode == 0)
-            #expect(
-                result.reviewRequest?.selectedReviewTypes
-                    == [.godObject, .style, .teamConvention]
-            )
-        }
-    }
-
-    @Test("repeated review types are deduplicated")
-    func repeatedReviewTypesAreDeduplicated() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-
-            let result = await ArcaCommand.run(
-                arguments: [
-                    "review",
-                    "--file", file.path,
-                    "--review", "god-object",
-                    "--review", "god-object"
-                ],
-                currentDirectory: directory.path
-            )
-
-            #expect(result.exitCode == 0)
-            #expect(
-                result.reviewRequest?.selectedReviewTypes == [.godObject]
-            )
-        }
-    }
-
-    @Test("all takes precedence when review types are repeated")
-    func allTakesPrecedence() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-
-            let result = await ArcaCommand.run(
-                arguments: [
-                    "review",
-                    "--file", file.path,
-                    "--review", "god-object",
-                    "--review", "all"
-                ],
-                currentDirectory: directory.path
-            )
-
-            #expect(result.exitCode == 0)
-            #expect(
-                result.reviewRequest?.selectedReviewTypes
-                    == [.godObject, .style, .teamConvention]
-            )
-        }
-    }
-
-    @Test("unsupported review type returns a clear error")
-    func unsupportedReviewTypeReturnsError() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-
-            let result = await ArcaCommand.run(arguments: [
-                "review",
-                "--file", file.path,
-                "--review", "security"
-            ])
-
-            #expect(result.exitCode == 2)
-            #expect(
-                result.output
-                    == "Error: Unsupported review type 'security'."
-            )
-            #expect(result.reviewRequest == nil)
-        }
-    }
-
-    @Test("LLM is an analyzer mechanism, not a review type")
-    func generalLLMReviewTypeIsRejected() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-
-            let result = await ArcaCommand.run(arguments: [
-                "review",
-                "--file", file.path,
-                "--review", "general-llm"
-            ])
-
-            #expect(result.exitCode == 2)
-            #expect(
-                result.output
-                    == "Error: Unsupported review type 'general-llm'."
-            )
-            #expect(result.reviewRequest == nil)
-        }
-    }
-
-    @Test("optional unavailable SwiftLint returns a skipped style result")
-    func optionalUnavailableSwiftLintIsSkipped() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-
-            let result = await ArcaCommand.run(
-                arguments: [
-                    "review",
-                    "--file", file.path,
-                    "--review", "style"
-                ],
-                currentDirectory: directory.path
-            )
-
-            #expect(result.exitCode == 0)
-            #expect(
-                result.reviewRequest?.selectedReviewTypes == [.style]
-            )
-            #expect(result.output.contains("0 candidates"))
-            #expect(result.output.contains("1 analyzer skipped"))
-            #expect(
-                result.output.contains("ARCA-SWIFTLINT-UNAVAILABLE")
-            )
-        }
-    }
-
-    @Test("optional unavailable SwiftLint is explicit in JSON output")
-    func optionalUnavailableSwiftLintIsJSONDiagnostic() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-
-            let result = await ArcaCommand.run(
-                arguments: [
-                    "review",
-                    "--file", file.path,
-                    "--review", "style",
-                    "--format", "json"
-                ],
-                currentDirectory: directory.path
-            )
-            let report = try JSONDecoder().decode(
-                ReviewAnalysisResult.self,
-                from: Data(result.output.utf8)
-            )
-            let analyzerResult = try #require(
-                report.analyzerResults.first
-            )
-
-            #expect(result.exitCode == 0)
-            #expect(analyzerResult.executionStatus == .skipped)
-            #expect(analyzerResult.candidates.isEmpty)
-            #expect(
-                analyzerResult.diagnostics.map(\.code)
-                    == ["ARCA-SWIFTLINT-UNAVAILABLE"]
-            )
-        }
-    }
-
-    @Test("required unavailable SwiftLint fails with unavailable exit code")
-    func requiredUnavailableSwiftLintFails() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-            try """
-            {
-              "schemaVersion": 1,
-              "swiftLint": {
-                "availability": "required"
-              }
-            }
-            """.write(
-                to: directory.appendingPathComponent(".arca.json"),
-                atomically: true,
-                encoding: .utf8
-            )
-
-            let result = await ArcaCommand.run(
-                arguments: [
-                    "review",
-                    "--file", file.path,
-                    "--review", "style"
-                ],
-                currentDirectory: directory.path
-            )
-
-            #expect(result.exitCode == 3)
-            #expect(result.exitStatus == .executionFailure)
-            #expect(result.outputDestination == .standardError)
-            #expect(result.output == "Error: SwiftLint is required but unavailable: SwiftLint executable was not found. Install SwiftLint or set ARCA_SWIFTLINT_EXECUTABLE.")
-            #expect(result.reviewRequest == nil)
-        }
-    }
-
-    @Test("required SwiftLint does not block an unselected review")
-    func requiredSwiftLintDoesNotBlockGodObjectReview() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-            try """
-            {
-              "schemaVersion": 1,
-              "swiftLint": {
-                "availability": "required"
-              }
-            }
-            """.write(
-                to: directory.appendingPathComponent(".arca.json"),
-                atomically: true,
-                encoding: .utf8
-            )
-
-            let result = await ArcaCommand.run(
-                arguments: [
-                    "review",
-                    "--file", file.path,
-                    "--review", "god-object"
-                ],
-                currentDirectory: directory.path
-            )
-
-            #expect(result.exitCode == 0)
-            #expect(
-                result.reviewRequest?.selectedReviewTypes == [.godObject]
-            )
-        }
-    }
-
-    @Test("review with a missing file returns a clear error")
-    func reviewMissingFile() async throws {
-        try await withTemporaryDirectory { directory in
-            let path = directory.appendingPathComponent("Missing.swift").path
-
-            let result = await ArcaCommand.run(
-                arguments: ["review", "--file", path]
-            )
-
-            #expect(result.exitCode == 2)
-            #expect(result.output == "Error: Swift file does not exist: \(path)")
-            #expect(result.reviewRequest == nil)
-        }
-    }
-
-    @Test("review debug mode prints loaded source and metadata")
-    func reviewDebugOutput() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("Greeting.swift")
-            let content = "let greeting = \"Hej 👋\""
-            try content.write(to: file, atomically: true, encoding: .utf8)
-
-            let result = await ArcaCommand.run(
-                arguments: ["review", "--file", file.path, "--debug"]
-            )
-
-            let normalizedPath = file.standardizedFileURL.path
-            #expect(result.exitCode == 0)
-            #expect(
-                result.output
-                    == "Source: \(normalizedPath)\nLines: 1\n\n\(content)"
-            )
-        }
-    }
-
-    @Test("review changed selects current Swift changes")
-    func reviewChangedBuildsRequest() async throws {
-        try await withTemporaryDirectory { directory in
-            try initializeGitRepository(at: directory)
-            let file = directory.appendingPathComponent("Changed File.swift")
-            try "struct ChangedFile {}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-
-            let result = await ArcaCommand.run(
-                arguments: ["review", "--changed"],
-                currentDirectory: directory.path
-            )
-
-            #expect(result.exitCode == 0)
-            #expect(
-                result.reviewRequest?.repositoryRoot
-                    == directory.standardizedFileURL
-                        .resolvingSymlinksInPath().path
-            )
-            #expect(
-                result.reviewRequest?.selectedFiles
-                    == [file.standardizedFileURL.resolvingSymlinksInPath().path]
-            )
-            let change = try #require(result.reviewRequest?.changes.first)
-            #expect(change.addedLineRanges.first?.startLine == 1)
-            #expect(change.addedLineRanges.first?.endLine == 1)
-        }
-    }
-
-    @Test("review uses configured God Object thresholds from repository root")
-    func reviewUsesRepositoryConfiguration() async throws {
-        try await withTemporaryDirectory { repository in
-            try initializeGitRepository(at: repository)
-            let sources = repository.appendingPathComponent(
-                "Sources",
-                isDirectory: true
-            )
-            try FileManager.default.createDirectory(
-                at: sources,
-                withIntermediateDirectories: true
-            )
-            let file = sources.appendingPathComponent("LargeType.swift")
-            try """
-            class LargeType {
-                var left = 1
-                var right = 2
-                func first() { print(left) }
-                func second() { print(right) }
-            }
-            """.write(to: file, atomically: true, encoding: .utf8)
-            try """
-            {
-              "schemaVersion": 1,
-              "godObject": {
-                "maximumLines": 3,
-                "maximumMethods": 1,
-                "maximumStoredProperties": 1
-              }
-            }
-            """.write(
-                to: repository.appendingPathComponent(".arca.json"),
-                atomically: true,
-                encoding: .utf8
-            )
-
-            let result = await ArcaCommand.run(
-                arguments: ["review", "--file", file.path],
-                currentDirectory: sources.path
-            )
-
-            #expect(result.exitCode == 1)
-            #expect(result.output.contains("ARCA-GOD-001"))
-            #expect(result.output.contains("File: Sources/LargeType.swift:"))
-            #expect(
-                result.reviewRequest?.repositoryRoot
-                    == repository.standardizedFileURL
-                        .resolvingSymlinksInPath().path
-            )
-            #expect(
-                result.reviewRequest?
-                    .configuration
-                    .godObjectThresholds
-                    .maximumLines == 3
-            )
-        }
-    }
-
-    @Test("review reports invalid configuration")
-    func reviewReportsInvalidConfiguration() async throws {
-        try await withTemporaryDirectory { directory in
-            let file = directory.appendingPathComponent("App.swift")
-            try "struct App {}".write(
-                to: file,
-                atomically: true,
-                encoding: .utf8
-            )
-            try """
-            {
-              "schemaVersion": 99
-            }
-            """.write(
-                to: directory.appendingPathComponent(".arca.json"),
-                atomically: true,
-                encoding: .utf8
-            )
-
-            let result = await ArcaCommand.run(
-                arguments: ["review", "--file", file.path],
-                currentDirectory: directory.path
-            )
-
-            #expect(result.exitCode == 2)
-            #expect(
-                result.output
-                    == "Error: Unsupported configuration schema version: 99. Supported version: 1."
-            )
-            #expect(result.reviewRequest == nil)
-        }
-    }
-
-    @Test("help remains available when configuration is invalid")
-    func helpDoesNotLoadConfiguration() async throws {
-        try await withTemporaryDirectory { directory in
-            try "not json".write(
-                to: directory.appendingPathComponent(".arca.json"),
-                atomically: true,
-                encoding: .utf8
-            )
-
-            let result = await ArcaCommand.run(
-                arguments: ["review", "--help"],
-                currentDirectory: directory.path
-            )
-
-            #expect(result.exitCode == 0)
-            #expect(result.output == ArcaCommand.reviewHelp)
-        }
-    }
-
-    private func initializeGitRepository(at directory: URL) throws {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = ["init", "--quiet"]
-        process.currentDirectoryURL = directory
-        try process.run()
-        process.waitUntilExit()
-        #expect(process.terminationStatus == 0)
-    }
-
-    private func writeLLMConfiguration(
-        to directory: URL,
-        godObjectThresholds: Bool = false
-    ) throws {
-        let godObject = godObjectThresholds
-            ? """
-              ,"godObject": {
-                "maximumLines": 1,
-                "maximumMethods": 0,
-                "maximumStoredProperties": 0,
-                "minimumTriggeredSignals": 3
-              }
-            """
-            : ""
-        try """
-        {
-          "schemaVersion": 1\(godObject),
-          "llm": {
-            "providerID": "mock-pipeline",
-            "baseURL": "http://127.0.0.1:11434",
-            "modelID": "mock-model",
-            "timeoutSeconds": 30,
-            "temperature": 0,
-            "seed": 7
-          }
-        }
-        """.write(
-            to: directory.appendingPathComponent(".arca.json"),
-            atomically: true,
-            encoding: .utf8
-        )
-    }
-
-    private func withTemporaryDirectory<Result>(
-        _ body: (URL) async throws -> Result
-    ) async throws -> Result {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true
-        )
-        defer { try? FileManager.default.removeItem(at: directory) }
-        return try await body(directory)
-    }
+    """.write(
+      to: directory.appendingPathComponent(".arca.json"),
+      atomically: true,
+      encoding: .utf8
+    )
+    try await body(directory, file)
+  }
 }
 
-private actor CLINoFindingLLMProvider: LLMProvider {
-    nonisolated let id = "mock-pipeline"
-    private(set) var requestCount = 0
-    private(set) var prompts: [String] = []
+private actor RecordingProvider: LLMProvider {
+  nonisolated let id = "mock"
+  private(set) var prompts: [String] = []
 
-    func submit(_ request: LLMRequest) async throws -> LLMResponse {
-        requestCount += 1
-        prompts.append(request.prompt)
-        return LLMResponse(
-            text: #"{"findings":[]}"#,
-            usage: LLMTokenUsageMetadata(
-                inputTokens: 10,
-                outputTokens: 2,
-                totalTokens: 12
-            ),
-            durationMilliseconds: 2
-        )
-    }
-}
-
-private actor CLILLMRunProvider: LLMProvider {
-    nonisolated let id = "mock-llm-run"
-    private let filePath: String
-    private let evidenceExcerpt: String
-    private(set) var prompts: [String] = []
-
-    init(
-        filePath: String,
-        evidenceExcerpt: String = "    let value = 1"
-    ) {
-        self.filePath = filePath
-        self.evidenceExcerpt = evidenceExcerpt
-    }
-
-    func submit(_ request: LLMRequest) async throws -> LLMResponse {
-        prompts.append(request.prompt)
-        return LLMResponse(
-            text: """
-            {"findings":[{"title":"Large Class","issueType":"codeSmell","filePath":"\(filePath)","explanation":"The type may own too many responsibilities.","severity":"warning","startLine":1,"endLine":3,"evidence":[{"description":"The type owns state directly.","startLine":2,"endLine":2,"excerpt":"\(evidenceExcerpt)"}]}]}
-            """,
-            usage: LLMTokenUsageMetadata(
-                inputTokens: 15,
-                outputTokens: 8,
-                totalTokens: 23
-            ),
-            durationMilliseconds: 3
-        )
-    }
-}
-
-private actor CLIPipelineLLMProvider: LLMProvider {
-    nonisolated let id = "mock-pipeline"
-    private let filePath: String
-    private let assessment: FindingAssessment
-    private let evidenceExcerpt: String
-    private(set) var prompts: [String] = []
-
-    init(
-        filePath: String,
-        assessment: FindingAssessment = .confirmed,
-        evidenceExcerpt: String = "    let value = 1"
-    ) {
-        self.filePath = filePath
-        self.assessment = assessment
-        self.evidenceExcerpt = evidenceExcerpt
-    }
-
-    func submit(_ request: LLMRequest) async throws -> LLMResponse {
-        prompts.append(request.prompt)
-        if request.prompt.contains("arca.code-analysis.guided/v1") {
-            return response(text: """
-            {"findings":[{"ruleID":"ARCA-GOD-001","filePath":"\(filePath)","explanation":"The type owns unrelated responsibilities.","severity":"warning","startLine":1,"endLine":3,"evidence":[{"description":"The type owns state directly.","startLine":2,"endLine":2,"excerpt":"\(evidenceExcerpt)"}]}]}
-            """)
-        }
-
-        let ids = candidateIDs(in: request.prompt)
-        let encodedIDs = ids.map { "\"\($0)\"" }.joined(separator: ",")
-        return response(text: """
-        {"summary":"The candidates were assessed.","decisions":[{"candidateIDs":[\(encodedIDs)],"assessment":"\(assessment.rawValue)","category":"antiPattern","severity":"warning","canonicalRuleID":"ARCA-GOD-001","title":"God Object","rationale":"The supplied evidence was evaluated."}]}
-        """)
-    }
-
-    private func candidateIDs(in prompt: String) -> [String] {
-        let expression = try! NSRegularExpression(
-            pattern: #""candidateID"\s*:\s*"([0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12})""#
-        )
-        let range = NSRange(prompt.startIndex..<prompt.endIndex, in: prompt)
-        var encountered: Set<String> = []
-        return expression.matches(in: prompt, range: range).compactMap {
-            guard let matchRange = Range(
-                $0.range(at: 1),
-                in: prompt
-            ) else {
-                return nil
-            }
-            let value = String(prompt[matchRange])
-            return encountered.insert(value).inserted ? value : nil
-        }
-    }
-
-    private func response(text: String) -> LLMResponse {
-        LLMResponse(
-            text: text,
-            usage: LLMTokenUsageMetadata(
-                inputTokens: 20,
-                outputTokens: 10,
-                totalTokens: 30
-            ),
-            durationMilliseconds: 4
-        )
-    }
-}
-
-private actor CLIRecordingLLMProvider: LLMProvider {
-    let id = "mock"
-    private let responseText: String
-    private(set) var requestCount = 0
-
-    init(responseText: String) {
-        self.responseText = responseText
-    }
-
-    func submit(_ request: LLMRequest) async throws -> LLMResponse {
-        requestCount += 1
-        return LLMResponse(
-            text: responseText,
-            usage: LLMTokenUsageMetadata(),
-            durationMilliseconds: 1
-        )
-    }
-}
-
-private struct CLIFailingLLMProvider: LLMProvider {
-    let id = "failing"
-
-    func submit(_ request: LLMRequest) async throws -> LLMResponse {
-        throw CLILLMProviderError.unavailable
-    }
-}
-
-private enum CLILLMProviderError: Error {
-    case unavailable
+  func submit(_ request: LLMRequest) async throws -> LLMResponse {
+    prompts.append(request.prompt)
+    return LLMResponse(
+      text: #"{"findings":[]}"#,
+      usage: LLMTokenUsageMetadata(
+        inputTokens: 1,
+        outputTokens: 1,
+        totalTokens: 3
+      ),
+      durationMilliseconds: 2
+    )
+  }
 }
