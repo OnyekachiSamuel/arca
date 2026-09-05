@@ -77,6 +77,11 @@ struct ArcaCommandTests {
       #expect(prompts.count == ReviewType.analysisTypes.count)
       #expect(report.analysis.llmExecutionMetadata?.requestCount == 5)
       #expect(report.analysis.llmExecutionMetadata?.usage.totalTokens == 15)
+      #expect(report.analysis.candidates.isEmpty)
+      #expect(report.analysis.diagnostics.isEmpty)
+      #expect(
+        prompts.allSatisfy { $0.contains("RULE APPLICABILITY") }
+      )
       for reviewType in ReviewType.analysisTypes {
         #expect(
           prompts.contains {

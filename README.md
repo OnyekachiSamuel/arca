@@ -66,7 +66,10 @@ parameters, duration, token usage, findings, and diagnostics.
 - `guided` selects rules by review type from
   `Sources/ArcaKnowledge/Resources/arca-rulesets.json`. For every selected
   rule, it includes the structured rule definition and the referenced Markdown
-  file from `Sources/ArcaKnowledge/Resources/References`.
+  file from `Sources/ArcaKnowledge/Resources/References`. The model first
+  checks each rule for applicability to the visible source. Irrelevant TCA or
+  SwiftUI rules produce no findings, and a framework import alone is not
+  treated as a violation.
 
 Both variants use a compact response schema. The model returns an explanation
 and evidence line numbers, plus a title for baseline analysis or a supplied rule

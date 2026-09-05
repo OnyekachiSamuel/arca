@@ -47,7 +47,7 @@ public struct GuidedCodeAnalysisPromptBuilder: Sendable {
       change: context.change
     )
     let inputJSON = try encode(payload)
-    let promptText = GuidedCodeAnalysisPromptTemplateV2.render(
+    let promptText = GuidedCodeAnalysisPromptTemplateV1.render(
       rulesAndKnowledge: sortedRules.map(renderRule).joined(
         separator: "\n\n"
       ),
@@ -62,8 +62,8 @@ public struct GuidedCodeAnalysisPromptBuilder: Sendable {
     }
 
     return CodeAnalysisPrompt(
-      templateID: GuidedCodeAnalysisPromptTemplateV2.id,
-      templateVersion: GuidedCodeAnalysisPromptTemplateV2.version,
+      templateID: GuidedCodeAnalysisPromptTemplateV1.id,
+      templateVersion: GuidedCodeAnalysisPromptTemplateV1.version,
       text: promptText
     )
   }
@@ -83,10 +83,6 @@ public struct GuidedCodeAnalysisPromptBuilder: Sendable {
   }
 
   private func renderRule(_ knowledge: RuleKnowledge) -> String {
-    let deprecation =
-      knowledge.deprecatedFromVersion.map {
-        "\nDeprecated from TCA version: \($0)"
-      } ?? ""
     return """
       <RULE>
       <RULE_DEFINITION>
@@ -94,7 +90,7 @@ public struct GuidedCodeAnalysisPromptBuilder: Sendable {
       Review type: \(knowledge.reviewType.commandLineName)
       Category: \(knowledge.category)
       Issue type: \(knowledge.issueType.rawValue)
-      Title: \(knowledge.title)\(deprecation)
+      Title: \(knowledge.title)
 
       Problem context:
       \(knowledge.problemContext)

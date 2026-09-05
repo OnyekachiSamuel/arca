@@ -40,7 +40,7 @@ public struct BaselineCodeAnalysisPromptBuilder: Sendable {
       change: context.change
     )
     let inputJSON = try encode(payload)
-    let promptText = BaselineCodeAnalysisPromptTemplateV2.render(
+    let promptText = BaselineCodeAnalysisPromptTemplateV1.render(
       inputJSON: inputJSON
     )
     let promptByteCount = promptText.utf8.count
@@ -52,8 +52,8 @@ public struct BaselineCodeAnalysisPromptBuilder: Sendable {
     }
 
     return CodeAnalysisPrompt(
-      templateID: BaselineCodeAnalysisPromptTemplateV2.id,
-      templateVersion: BaselineCodeAnalysisPromptTemplateV2.version,
+      templateID: BaselineCodeAnalysisPromptTemplateV1.id,
+      templateVersion: BaselineCodeAnalysisPromptTemplateV1.version,
       text: promptText
     )
   }

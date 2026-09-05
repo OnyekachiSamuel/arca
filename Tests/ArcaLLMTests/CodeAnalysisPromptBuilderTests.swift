@@ -12,7 +12,7 @@ struct CodeAnalysisPromptBuilderTests {
     )
 
     #expect(prompt.templateID == "arca.code-analysis.baseline")
-    #expect(prompt.templateVersion == 2)
+    #expect(prompt.templateVersion == 1)
     #expect(prompt.text.contains("code smells and anti-patterns"))
     #expect(!prompt.text.contains("ARCA-GOD-001"))
     #expect(!prompt.text.contains("God Object"))
@@ -40,11 +40,51 @@ struct CodeAnalysisPromptBuilderTests {
     )
 
     #expect(prompt.templateID == "arca.code-analysis.guided")
-    #expect(prompt.templateVersion == 2)
+    #expect(prompt.templateVersion == 1)
     #expect(prompt.text.contains(godObjectKnowledge.problemContext))
     #expect(prompt.text.contains(#""rules""#))
     #expect(prompt.text.contains(godObjectKnowledge.expectedBehavior))
     #expect(prompt.text.contains(godObjectKnowledge.violationCriteria))
+  }
+
+  @Test("guided prompt omits rules that do not apply to the source")
+  func requiresRuleApplicabilityBeforeViolationDetection() throws {
+    let prompt = try GuidedCodeAnalysisPromptBuilder().build(
+      context: validContext,
+      rules: [godObjectKnowledge]
+    )
+
+    #expect(prompt.text.contains("RULE APPLICABILITY"))
+    #expect(
+      prompt.text.contains(
+        "First determine whether each supplied rule applies"
+      )
+    )
+    #expect(
+      prompt.text.contains(
+        "A TCA rule applies only when the source visibly contains relevant TCA constructs or behavior"
+      )
+    )
+    #expect(
+      prompt.text.contains(
+        "A SwiftUI rule applies only when the source visibly contains relevant SwiftUI constructs or behavior"
+      )
+    )
+    #expect(
+      prompt.text.contains(
+        "Importing a framework alone does not establish a violation"
+      )
+    )
+    #expect(
+      prompt.text.contains(
+        "Do not report missing TCA or SwiftUI usage as a violation"
+      )
+    )
+    #expect(
+      prompt.text.contains(
+        #"If no applicable rule is violated, return {"findings":[]}"#
+      )
+    )
   }
 
   @Test("guided prompt preserves the rule definition and Markdown knowledge")
@@ -88,6 +128,31 @@ struct CodeAnalysisPromptBuilderTests {
     #expect(prompt.text.contains(markdown))
   }
 
+  @Test("guided prompt does not include framework deprecation versions")
+  func omitsDeprecationVersion() throws {
+    let rule = RuleKnowledge(
+      ruleID: "ARCA-TCA-DEPRECATED-001",
+      reviewType: .tca,
+      category: "framework-usage",
+      issueType: .deprecatedAPI,
+      title: "Legacy reducer API usage",
+      problemContext: "A legacy TCA reducer API is used.",
+      expectedBehavior: "Use the current reducer composition API.",
+      violationCriteria: "Legacy reducer syntax is visible.",
+      knowledgeFile: "references/ARCA-TCA-DEPRECATED-001.md",
+      supportingKnowledge: "# Legacy reducer API",
+      deprecatedFromVersion: "1.25.0"
+    )
+
+    let prompt = try GuidedCodeAnalysisPromptBuilder().build(
+      context: validContext,
+      rules: [rule]
+    )
+
+    #expect(!prompt.text.contains("Deprecated from TCA version"))
+    #expect(!prompt.text.contains("1.25.0"))
+  }
+
   @Test("prompt contains the complete file, changes, every rule, and response contract")
   func buildsGroundedMultiRulePrompt() throws {
     let context = SourceFileAnalysisContext(
@@ -124,7 +189,7 @@ struct CodeAnalysisPromptBuilderTests {
     )
 
     #expect(prompt.templateID == "arca.code-analysis.guided")
-    #expect(prompt.templateVersion == 2)
+    #expect(prompt.templateVersion == 1)
     #expect(prompt.text.contains("Sources/Checkout.swift"))
     #expect(prompt.text.contains("Sources/OldCheckout.swift"))
     #expect(prompt.text.contains("Hello 👋"))
