@@ -57,20 +57,6 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "ArcaSwiftSyntax"
-               BuildableName = "ArcaSwiftSyntax"
-               BlueprintName = "ArcaSwiftSyntax"
-               ReferencedContainer = "container:">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "ArcaAnalyzers"
                BuildableName = "ArcaAnalyzers"
                BlueprintName = "ArcaAnalyzers"
@@ -116,20 +102,6 @@
                BlueprintIdentifier = "ArcaConfiguration"
                BuildableName = "ArcaConfiguration"
                BlueprintName = "ArcaConfiguration"
-               ReferencedContainer = "container:">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "ArcaProcess"
-               BuildableName = "ArcaProcess"
-               BlueprintName = "ArcaProcess"
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>
@@ -214,16 +186,6 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "ArcaSwiftSyntaxTests"
-               BuildableName = "ArcaSwiftSyntaxTests"
-               BlueprintName = "ArcaSwiftSyntaxTests"
-               ReferencedContainer = "container:">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "ArcaAnalyzersTests"
                BuildableName = "ArcaAnalyzersTests"
                BlueprintName = "ArcaAnalyzersTests"
@@ -244,16 +206,6 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "ArcaEndToEndTests"
-               BuildableName = "ArcaEndToEndTests"
-               BlueprintName = "ArcaEndToEndTests"
-               ReferencedContainer = "container:">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "ArcaGitTests"
                BuildableName = "ArcaGitTests"
                BlueprintName = "ArcaGitTests"
@@ -267,16 +219,6 @@
                BlueprintIdentifier = "ArcaConfigurationTests"
                BuildableName = "ArcaConfigurationTests"
                BlueprintName = "ArcaConfigurationTests"
-               ReferencedContainer = "container:">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "ArcaProcessTests"
-               BuildableName = "ArcaProcessTests"
-               BlueprintName = "ArcaProcessTests"
                ReferencedContainer = "container:">
             </BuildableReference>
          </TestableReference>

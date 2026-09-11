@@ -84,16 +84,6 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "ArcaEndToEndTests"
-               BuildableName = "ArcaEndToEndTests"
-               BlueprintName = "ArcaEndToEndTests"
-               ReferencedContainer = "container:">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "ArcaGitTests"
                BuildableName = "ArcaGitTests"
                BlueprintName = "ArcaGitTests"
@@ -124,16 +114,6 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "ArcaProcessTests"
-               BuildableName = "ArcaProcessTests"
-               BlueprintName = "ArcaProcessTests"
-               ReferencedContainer = "container:">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "ArcaReportingTests"
                BuildableName = "ArcaReportingTests"
                BlueprintName = "ArcaReportingTests"
@@ -147,16 +127,6 @@
                BlueprintIdentifier = "ArcaSourceTests"
                BuildableName = "ArcaSourceTests"
                BlueprintName = "ArcaSourceTests"
-               ReferencedContainer = "container:">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "ArcaSwiftSyntaxTests"
-               BuildableName = "ArcaSwiftSyntaxTests"
-               BlueprintName = "ArcaSwiftSyntaxTests"
                ReferencedContainer = "container:">
             </BuildableReference>
          </TestableReference>

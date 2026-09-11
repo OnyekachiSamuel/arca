@@ -19,19 +19,46 @@ Create `.arca.json` in the repository root:
 {
   "schemaVersion": 1,
   "llm": {
-    "providerID": "lm-studio",
-    "baseURL": "http://127.0.0.1:1234",
-    "completionPath": "/v1/chat/completions",
-    "modelID": "qwen2.5-coder-7b-instruct",
-    "timeoutSeconds": 120,
-    "temperature": 0,
-    "seed": 42
+    "defaultProvider": "local",
+    "providers": [
+      {
+        "id": "local",
+        "baseURL": "http://127.0.0.1:1234",
+        "completionPath": "/v1/chat/completions",
+        "modelID": "qwen2.5-coder-7b-instruct",
+        "timeoutSeconds": 120,
+        "temperature": 0,
+        "seed": 42
+      },
+      {
+        "id": "openai",
+        "baseURL": "https://api.openai.com",
+        "completionPath": "/v1/chat/completions",
+        "modelID": "YOUR_OPENAI_MODEL_ID",
+        "apiKeyEnvironmentVariable": "OPENAI_API_KEY",
+        "timeoutSeconds": 120,
+        "temperature": 0,
+        "seed": 42
+      }
+    ]
   }
 }
 ```
 
-The configured server must expose an OpenAI-compatible chat-completions API.
-Set `ARCA_LLM_API_KEY` when authentication is required.
+Each configured server must expose an OpenAI-compatible chat-completions API.
+The `defaultProvider` is used when `--provider` is omitted. Replace
+`YOUR_OPENAI_MODEL_ID` with a model available to your OpenAI project.
+
+For authenticated providers, `apiKeyEnvironmentVariable` contains the name
+of the environment variable—not the secret itself. Export that variable before
+running ARCA:
+
+```sh
+export OPENAI_API_KEY="your-api-key"
+```
+
+ARCA reads the value at runtime and sends it as a bearer token. It does not
+store the value in `.arca.json` or include it in reports and diagnostics.
 
 ## Run an experiment
 
@@ -47,8 +74,12 @@ swift run arca llm \
   --file Sources/Feature.swift \
   --review swift \
   --prompt guided \
+  --provider openai \
   --format json
 ```
+
+Use `--provider local` for LM Studio, `--provider openai` for OpenAI, or
+omit the option to use `llm.defaultProvider`.
 
 The baseline command does not accept `--review`. Guided review values are
 `swift`, `swiftui`, `tca`, `security`, `god-object`, and `all`. Guided `all`
@@ -80,6 +111,11 @@ ARCA supplies the file path, derives each finding's range from its evidence, and
 extracts the exact evidence excerpt from the source. In guided runs, ARCA also
 adds the canonical title, category, and issue type from its rule registry. The
 parser rejects unknown rule IDs and unsupported response fields.
+
+When the selected file has uncommitted Git changes, ARCA includes its added,
+modified, and deleted ranges as optional attention signals. When no matching
+change exists, the change field is omitted. The complete current source is sent
+in both cases.
 
 ## Exit statuses
 

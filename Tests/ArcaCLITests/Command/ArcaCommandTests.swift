@@ -29,6 +29,47 @@ struct ArcaCommandTests {
       #expect(prompts[0].contains("Variant: baseline"))
       #expect(!prompts[0].contains("RULES_AND_KNOWLEDGE"))
       #expect(!prompts[0].contains("ARCA-SWIFT-CONCURRENCY-001"))
+      #expect(result.reviewRequest?.changes.isEmpty == true)
+      #expect(!prompts[0].contains(#""change" :"#))
+    }
+  }
+
+  @Test("selected file changes are included as optional prompt context")
+  func includesSelectedFileChanges() async throws {
+    try await withFixture { directory, file in
+      try runGit(["init", "--quiet"], in: directory)
+      try runGit(["add", "--", file.lastPathComponent, ".arca.json"], in: directory)
+      try runGit(
+        [
+          "-c", "user.name=ARCA Tests",
+          "-c", "user.email=arca-tests@example.invalid",
+          "commit", "--quiet", "-m", "Initial fixture",
+        ],
+        in: directory
+      )
+      try """
+      struct Example {
+        let value = 2
+      }
+      """.write(to: file, atomically: true, encoding: .utf8)
+
+      let provider = RecordingProvider()
+      let result = await run(
+        directory: directory,
+        file: file,
+        review: nil,
+        prompt: "baseline",
+        provider: provider
+      )
+      let prompt = try #require(await provider.prompts.first)
+      let change = try #require(result.reviewRequest?.changes.first)
+
+      #expect(result.exitStatus == .success)
+      #expect(result.reviewRequest?.changes.count == 1)
+      #expect(change.filePath == file.standardizedFileURL.path)
+      #expect(!change.modifiedLineRanges.isEmpty)
+      #expect(prompt.contains(#""change" :"#))
+      #expect(prompt.contains(#""modifiedLineRanges" :"#))
     }
   }
 
@@ -127,6 +168,26 @@ struct ArcaCommandTests {
     #expect(result.output.contains("swiftui"))
     #expect(result.output.contains("security"))
     #expect(result.output.contains("all"))
+    #expect(result.output.contains("--provider <id>"))
+  }
+
+  @Test("explicit provider selects its model configuration")
+  func selectsExplicitProvider() async throws {
+    try await withFixture { directory, file in
+      let provider = RecordingProvider()
+      let result = await run(
+        directory: directory,
+        file: file,
+        review: nil,
+        prompt: "baseline",
+        providerID: "cloud",
+        provider: provider
+      )
+      let report = try decode(result)
+
+      #expect(result.exitStatus == .success)
+      #expect(report.analysis.llmExecutionMetadata?.modelID == "cloud-model")
+    }
   }
 
   private func run(
@@ -134,6 +195,7 @@ struct ArcaCommandTests {
     file: URL,
     review: String?,
     prompt: String,
+    providerID: String? = nil,
     provider: RecordingProvider
   ) async -> CommandResult {
     var arguments = ["llm", "--file", file.path]
@@ -141,6 +203,9 @@ struct ArcaCommandTests {
       arguments += ["--review", review]
     }
     arguments += ["--prompt", prompt, "--format", "json"]
+    if let providerID {
+      arguments += ["--provider", providerID]
+    }
     return await ArcaCommand.execute(
       arguments: arguments,
       currentDirectory: directory.path,
@@ -153,6 +218,16 @@ struct ArcaCommandTests {
       LLMIssueDetectionReport.self,
       from: Data(result.output.utf8)
     )
+  }
+
+  private func runGit(_ arguments: [String], in directory: URL) throws {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+    process.arguments = arguments
+    process.currentDirectoryURL = directory
+    try process.run()
+    process.waitUntilExit()
+    #expect(process.terminationStatus == 0)
   }
 
   private func withFixture(
@@ -175,12 +250,25 @@ struct ArcaCommandTests {
     {
       "schemaVersion": 1,
       "llm": {
-        "providerID": "mock",
-        "baseURL": "http://127.0.0.1:1234",
-        "modelID": "mock-model",
-        "timeoutSeconds": 30,
-        "temperature": 0,
-        "seed": 7
+        "defaultProvider": "local",
+        "providers": [
+          {
+            "id": "local",
+            "baseURL": "http://127.0.0.1:1234",
+            "modelID": "mock-model",
+            "timeoutSeconds": 30,
+            "temperature": 0,
+            "seed": 7
+          },
+          {
+            "id": "cloud",
+            "baseURL": "https://api.openai.com",
+            "modelID": "cloud-model",
+            "timeoutSeconds": 60,
+            "temperature": 0,
+            "seed": 9
+          }
+        ]
       }
     }
     """.write(

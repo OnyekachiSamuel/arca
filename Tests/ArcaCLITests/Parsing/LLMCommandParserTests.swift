@@ -10,12 +10,14 @@ struct LLMCommandParserTests {
     let options = try LLMCommandParser().parse(arguments: [
       "--file", "Example.swift",
       "--prompt", "baseline",
+      "--provider", "openai",
       "--format", "json",
     ])
 
     #expect(options.filePath == "Example.swift")
     #expect(options.reviewType == nil)
     #expect(options.promptVariant == .baseline)
+    #expect(options.providerID == "openai")
     #expect(options.outputFormat == .json)
   }
 

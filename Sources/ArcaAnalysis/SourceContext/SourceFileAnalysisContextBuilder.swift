@@ -2,33 +2,18 @@ import ArcaDomain
 import Foundation
 
 public struct SourceFileAnalysisContextBuilder: Sendable {
-    private let limits: SourceFileAnalysisContextLimits
-
-    public init(limits: SourceFileAnalysisContextLimits = .default) {
-        self.limits = limits
-    }
+    public init() {}
 
     public func build(
         from analysisContext: AnalysisContext
-    ) -> SourceFileAnalysisContextBuildResult {
+    ) -> [SourceFileAnalysisContext] {
         var contexts: [SourceFileAnalysisContext] = []
-        var diagnostics: [AnalyzerDiagnostic] = []
 
         for sourceFile in analysisContext.sourceFiles {
             let filePath = contextPath(
                 for: sourceFile.path,
                 repositoryRoot: analysisContext.request.repositoryRoot
             )
-            let sourceByteCount = sourceFile.content.utf8.count
-
-            guard sourceByteCount <= limits.maximumSourceUTF8Bytes else {
-                diagnostics.append(oversizedFileDiagnostic(
-                    filePath: filePath,
-                    actualBytes: sourceByteCount
-                ))
-                continue
-            }
-
             let change = analysisContext.changes.first {
                 canonicalPath($0.filePath) == canonicalPath(sourceFile.path)
             }.map {
@@ -45,10 +30,7 @@ public struct SourceFileAnalysisContextBuilder: Sendable {
             ))
         }
 
-        return SourceFileAnalysisContextBuildResult(
-            contexts: contexts,
-            diagnostics: diagnostics
-        )
+        return contexts
     }
 
     private func makeChangeContext(
@@ -62,19 +44,6 @@ public struct SourceFileAnalysisContextBuilder: Sendable {
             addedLineRanges: change.addedLineRanges,
             modifiedLineRanges: change.modifiedLineRanges,
             deletedLineRanges: change.deletedLineRanges
-        )
-    }
-
-    private func oversizedFileDiagnostic(
-        filePath: String,
-        actualBytes: Int
-    ) -> AnalyzerDiagnostic {
-        AnalyzerDiagnostic(
-            code: "ARCA-LLM-SOURCE-FILE-TOO-LARGE",
-            severity: .warning,
-            message: """
-            LLM analysis was skipped for '\(filePath)': the source is \(actualBytes) UTF-8 bytes; the limit is \(limits.maximumSourceUTF8Bytes). Static analysis can still run.
-            """
         )
     }
 

@@ -51,8 +51,8 @@ public struct LLMCodeAnalyzer: Analyzer {
   public func analyze(
     context: AnalysisContext
   ) async throws -> AnalyzerResult {
-    let builtContexts = contextBuilder.build(from: context)
-    var diagnostics = builtContexts.diagnostics
+    let sourceContexts = contextBuilder.build(from: context)
+    var diagnostics: [AnalyzerDiagnostic] = []
     let rules =
       knowledgeProvider.map {
         ruleSelector.rules(
@@ -78,7 +78,7 @@ public struct LLMCodeAnalyzer: Analyzer {
     var candidates: [FindingCandidate] = []
     var metrics = Metrics()
 
-    for sourceContext in builtContexts.contexts {
+    for sourceContext in sourceContexts {
       let prompt: CodeAnalysisPrompt
       do {
         switch promptVariant {
@@ -178,7 +178,7 @@ public struct LLMCodeAnalyzer: Analyzer {
     return result(
       candidates: candidates,
       diagnostics: diagnostics,
-      executionStatus: builtContexts.contexts.isEmpty
+      executionStatus: sourceContexts.isEmpty
         ? .skipped
         : .completed,
       metrics: metrics

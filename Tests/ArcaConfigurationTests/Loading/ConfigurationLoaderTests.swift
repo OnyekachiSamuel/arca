@@ -14,21 +14,34 @@ struct ConfigurationLoaderTests {
     }
   }
 
-  @Test("loads the LLM provider and experiment parameters")
+  @Test("loads named LLM providers and the default provider")
   func loadsLLMConfiguration() throws {
     try withTemporaryDirectory { directory in
-      try write(
+      _ = try write(
         """
         {
           "schemaVersion": 1,
           "llm": {
-            "providerID": "local-qwen",
-            "baseURL": "http://127.0.0.1:1234",
-            "completionPath": "/v1/chat/completions",
-            "modelID": "qwen2.5-coder",
-            "timeoutSeconds": 120,
-            "temperature": 0.2,
-            "seed": 42
+            "defaultProvider": "local",
+            "providers": [
+              {
+                "id": "local",
+                "baseURL": "http://127.0.0.1:1234",
+                "completionPath": "/v1/chat/completions",
+                "modelID": "qwen2.5-coder",
+                "timeoutSeconds": 120,
+                "temperature": 0.2,
+                "seed": 42
+              },
+              {
+                "id": "openai",
+                "baseURL": "https://api.openai.com",
+                "completionPath": "/v1/chat/completions",
+                "modelID": "gpt-test",
+                "apiKeyEnvironmentVariable": "OPENAI_API_KEY",
+                "timeoutSeconds": 90
+              }
+            ]
           }
         }
         """, to: directory)
@@ -36,12 +49,46 @@ struct ConfigurationLoaderTests {
       let llm = try #require(
         ConfigurationLoader().load(from: directory).llm
       )
-      #expect(llm.providerID == "local-qwen")
-      #expect(llm.baseURL == "http://127.0.0.1:1234")
-      #expect(llm.modelID == "qwen2.5-coder")
-      #expect(llm.timeoutSeconds == 120)
-      #expect(llm.temperature == 0.2)
-      #expect(llm.seed == 42)
+      #expect(llm.defaultProvider == "local")
+      #expect(llm.providers.count == 2)
+      let local = try #require(llm.provider(id: "local"))
+      #expect(local.baseURL == "http://127.0.0.1:1234")
+      #expect(local.modelID == "qwen2.5-coder")
+      #expect(local.timeoutSeconds == 120)
+      #expect(local.temperature == 0.2)
+      #expect(local.seed == 42)
+      let openAI = try #require(llm.provider(id: "openai"))
+      #expect(openAI.apiKeyEnvironmentVariable == "OPENAI_API_KEY")
+      #expect(openAI.timeoutSeconds == 90)
+    }
+  }
+
+  @Test("default provider must identify one configured provider")
+  func validatesDefaultProvider() throws {
+    try withTemporaryDirectory { directory in
+      _ = try write(
+        """
+        {
+          "schemaVersion": 1,
+          "llm": {
+            "defaultProvider": "missing",
+            "providers": [{
+              "id": "local",
+              "baseURL": "http://127.0.0.1:1234",
+              "modelID": "local-model"
+            }]
+          }
+        }
+        """, to: directory)
+
+      #expect(
+        throws: ConfigurationLoadingError.invalidValue(
+          field: "llm.defaultProvider",
+          reason: "must identify a configured provider."
+        )
+      ) {
+        try ConfigurationLoader().load(from: directory)
+      }
     }
   }
 
@@ -49,7 +96,7 @@ struct ConfigurationLoaderTests {
   func rejectsRemovedConfiguration() throws {
     for field in ["godObject", "swiftLint"] {
       try withTemporaryDirectory { directory in
-        try write(
+        _ = try write(
           "{\"schemaVersion\":1,\"\(field)\":{}}",
           to: directory
         )
@@ -75,11 +122,11 @@ struct ConfigurationLoaderTests {
   @Test("schema version is required and fixed at one")
   func validatesSchemaVersion() throws {
     try withTemporaryDirectory { directory in
-      try write("{}", to: directory)
+      _ = try write("{}", to: directory)
       #expect(throws: ConfigurationLoadingError.missingSchemaVersion) {
         try ConfigurationLoader().load(from: directory)
       }
-      try write("{\"schemaVersion\":2}", to: directory)
+      _ = try write("{\"schemaVersion\":2}", to: directory)
       #expect(
         throws: ConfigurationLoadingError.unsupportedSchemaVersion(2)
       ) {

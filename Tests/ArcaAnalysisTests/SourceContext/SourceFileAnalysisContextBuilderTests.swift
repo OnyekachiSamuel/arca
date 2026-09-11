@@ -40,13 +40,12 @@ struct SourceFileAnalysisContextBuilderTests {
             repositoryRoot: repositoryRoot
         )
 
-        let result = SourceFileAnalysisContextBuilder().build(
+        let contexts = SourceFileAnalysisContextBuilder().build(
             from: analysisContext
         )
-        let context = try #require(result.contexts.first)
+        let context = try #require(contexts.first)
 
-        #expect(result.contexts.count == 1)
-        #expect(result.diagnostics.isEmpty)
+        #expect(contexts.count == 1)
         #expect(context.filePath == "Sources/App.swift")
         #expect(context.sourceContent == source.content)
         #expect(context.lineCount == 3)
@@ -93,29 +92,29 @@ struct SourceFileAnalysisContextBuilderTests {
             repositoryRoot: repositoryRoot
         )
 
-        let result = SourceFileAnalysisContextBuilder().build(
+        let contexts = SourceFileAnalysisContextBuilder().build(
             from: analysisContext
         )
 
-        #expect(result.contexts.map(\.filePath) == [
+        #expect(contexts.map(\.filePath) == [
             "Sources/Renamed.swift",
             "Sources/New File.swift"
         ])
-        #expect(result.contexts.map(\.sourceContent) == [
+        #expect(contexts.map(\.sourceContent) == [
             renamedSource.content,
             newSource.content
         ])
         #expect(
-            result.contexts[0].change?.previousFilePath
+            contexts[0].change?.previousFilePath
                 == "Sources/Original.swift"
         )
         #expect(
-            result.contexts[0].change?.modifiedLineRanges == [
+            contexts[0].change?.modifiedLineRanges == [
                 ChangedLineRange(startLine: 2, endLine: 2)
             ]
         )
         #expect(
-            result.contexts[0].change?.deletedLineRanges == [
+            contexts[0].change?.deletedLineRanges == [
                 DeletedLineRange(
                     originalStartLine: 3,
                     originalEndLine: 4
@@ -123,11 +122,10 @@ struct SourceFileAnalysisContextBuilderTests {
             ]
         )
         #expect(
-            result.contexts[1].change?.addedLineRanges == [
+            contexts[1].change?.addedLineRanges == [
                 ChangedLineRange(startLine: 1, endLine: 1)
             ]
         )
-        #expect(result.diagnostics.isEmpty)
     }
 
     @Test("Unicode source is preserved without exposing its local directory")
@@ -144,10 +142,10 @@ struct SourceFileAnalysisContextBuilderTests {
         )
         let analysisContext = makeAnalysisContext(sourceFiles: [source])
 
-        let result = SourceFileAnalysisContextBuilder().build(
+        let contexts = SourceFileAnalysisContextBuilder().build(
             from: analysisContext
         )
-        let context = try #require(result.contexts.first)
+        let context = try #require(contexts.first)
 
         #expect(context.filePath == "Greeting.swift")
         #expect(context.sourceContent == content)
@@ -155,38 +153,26 @@ struct SourceFileAnalysisContextBuilderTests {
         #expect(context.lineCount == 3)
     }
 
-    @Test("oversized files are skipped explicitly without blocking small files")
-    func oversizedFile() throws {
-        let oversized = SourceFile(
+    @Test("source context construction does not filter files by size")
+    func retainsLargeFile() throws {
+        let largeContent = String(repeating: "x", count: 64_001)
+        let large = SourceFile(
             path: "/tmp/Shop/Sources/Large.swift",
-            content: String(repeating: "x", count: 11),
-            lineCount: 1
-        )
-        let small = SourceFile(
-            path: "/tmp/Shop/Sources/Small.swift",
-            content: "let x = 1",
+            content: largeContent,
             lineCount: 1
         )
         let analysisContext = makeAnalysisContext(
-            sourceFiles: [oversized, small],
+            sourceFiles: [large],
             repositoryRoot: "/tmp/Shop"
         )
-        let builder = SourceFileAnalysisContextBuilder(
-            limits: SourceFileAnalysisContextLimits(
-                maximumSourceUTF8Bytes: 10
-            )
+        let contexts = SourceFileAnalysisContextBuilder().build(
+            from: analysisContext
         )
+        let context = try #require(contexts.first)
 
-        let result = builder.build(from: analysisContext)
-        let diagnostic = try #require(result.diagnostics.first)
-
-        #expect(result.contexts.map(\.filePath) == ["Sources/Small.swift"])
-        #expect(result.diagnostics.count == 1)
-        #expect(diagnostic.code == "ARCA-LLM-SOURCE-FILE-TOO-LARGE")
-        #expect(diagnostic.severity == .warning)
-        #expect(diagnostic.message.contains("Sources/Large.swift"))
-        #expect(diagnostic.message.contains("11 UTF-8 bytes"))
-        #expect(diagnostic.message.contains("limit is 10"))
+        #expect(contexts.count == 1)
+        #expect(context.filePath == "Sources/Large.swift")
+        #expect(context.sourceContent == largeContent)
     }
 
     @Test("unselected repository changes are never added to the context")
@@ -216,11 +202,11 @@ struct SourceFileAnalysisContextBuilderTests {
             repositoryRoot: "/tmp/Shop"
         )
 
-        let result = SourceFileAnalysisContextBuilder().build(
+        let contexts = SourceFileAnalysisContextBuilder().build(
             from: analysisContext
         )
 
-        #expect(result.contexts.map(\.filePath) == [
+        #expect(contexts.map(\.filePath) == [
             "Sources/Selected.swift"
         ])
     }

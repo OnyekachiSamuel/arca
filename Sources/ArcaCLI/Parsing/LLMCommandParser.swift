@@ -5,6 +5,7 @@ struct LLMCommandParser {
     var filePath: String?
     var reviewType: ReviewType?
     var promptVariant: CodeAnalysisPromptVariant?
+    var providerID: String?
     var outputFormat = ReviewOutputFormat.terminal
     var outputFormatWasSpecified = false
     var index = 0
@@ -74,6 +75,16 @@ struct LLMCommandParser {
         outputFormat = parsed
         outputFormatWasSpecified = true
         index += 2
+      case "--provider":
+        guard providerID == nil else {
+          throw LLMCommandParsingError.duplicateOption("--provider")
+        }
+        providerID = try value(
+          after: "--provider",
+          at: index,
+          in: arguments
+        )
+        index += 2
       default:
         throw LLMCommandParsingError.unknownOption(arguments[index])
       }
@@ -99,6 +110,7 @@ struct LLMCommandParser {
       filePath: filePath,
       reviewType: reviewType,
       promptVariant: promptVariant,
+      providerID: providerID,
       outputFormat: outputFormat
     )
   }

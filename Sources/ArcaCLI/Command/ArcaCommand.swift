@@ -39,6 +39,7 @@ public enum ArcaCommand {
       --file <path>           Analyze an explicit Swift file.
       --review <type>         Guided only. Values: swift, swiftui, tca, security, god-object, all.
       --prompt <variant>      Select prompt content. Values: baseline, guided.
+      --provider <id>         Select a configured provider. Default: llm.defaultProvider.
       --format <format>       Select output format. Values: terminal, json. Default: terminal.
       -h, --help              Show help information.
 
@@ -120,9 +121,23 @@ public enum ArcaCommand {
       )
       let source = try SourceFileLoader().load(path: selectedPath)
       let environment = try loadReviewEnvironment(from: currentDirectory)
-      guard let configuration = environment.configuration.llm else {
+      let changes = try selectedFileChanges(
+        filePath: source.path,
+        repositoryRootURL: environment.repositoryRootURL
+      )
+      guard let llmConfiguration = environment.configuration.llm else {
         return CommandResult(
           output: "Error: The llm command requires an llm configuration in .arca.json.",
+          exitStatus: .invalidInput
+        )
+      }
+      guard
+        let configuration = llmConfiguration.provider(id: options.providerID)
+      else {
+        let requestedProvider =
+          options.providerID ?? llmConfiguration.defaultProvider
+        return CommandResult(
+          output: "Error: LLM provider '\(requestedProvider)' is not configured.",
           exitStatus: .invalidInput
         )
       }
@@ -147,6 +162,7 @@ public enum ArcaCommand {
         id: UUID(),
         repositoryRoot: environment.repositoryRootURL?.path,
         selectedFiles: [source.path],
+        changes: changes,
         selectedReviewTypes: selectedReviewTypes,
         configuration: environment.configuration
       )
@@ -287,6 +303,26 @@ public enum ArcaCommand {
     case .terminal: TerminalReporter()
     case .json: JSONReporter()
     }
+  }
+
+  private static func selectedFileChanges(
+    filePath: String,
+    repositoryRootURL: URL?
+  ) throws -> [CodeChange] {
+    guard let repositoryRootURL else { return [] }
+
+    let selectedPath = URL(fileURLWithPath: filePath)
+      .standardizedFileURL
+      .resolvingSymlinksInPath()
+      .path
+    return try GitDiffProvider()
+      .extract(from: repositoryRootURL.path)
+      .filter {
+        URL(fileURLWithPath: $0.filePath)
+          .standardizedFileURL
+          .resolvingSymlinksInPath()
+          .path == selectedPath
+      }
   }
 
   private static func loadReviewEnvironment(
