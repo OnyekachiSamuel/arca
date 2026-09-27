@@ -2,29 +2,19 @@ import ArcaDomain
 import Foundation
 
 public struct BaselineCodeAnalysisResponseParser: Sendable {
-  private let sourceIdentifiers: [String]
   private let limits: CodeAnalysisResponseLimits
 
   public init(
-    sourceIdentifiers: [String],
     limits: CodeAnalysisResponseLimits = .default
   ) {
-    var encountered: Set<String> = []
-    self.sourceIdentifiers = sourceIdentifiers.filter {
-      encountered.insert($0).inserted
-    }
     self.limits = limits
   }
 
   public func parse(
     _ responseText: String,
-    context: SourceFileAnalysisContext,
-    metadata: [String: FindingMetadataValue] = [:]
+    context: SourceFileAnalysisContext
   ) -> CodeAnalysisResponseParsingResult {
-    guard limits.isValid,
-      !sourceIdentifiers.isEmpty,
-      sourceIdentifiers.allSatisfy({ !$0.trimmed.isEmpty })
-    else {
+    guard limits.isValid else {
       return rejected(
         code: "ARCA-LLM-ANALYSIS-INVALID-CONFIGURATION",
         message: "Baseline code-analysis response configuration is invalid."
@@ -79,7 +69,7 @@ public struct BaselineCodeAnalysisResponseParser: Sendable {
     )
 
     var candidates: [FindingCandidate] = []
-    var diagnostics: [AnalyzerDiagnostic] = []
+    var diagnostics: [LLMIssueDetectionDiagnostic] = []
     for (findingIndex, finding) in response.findings.enumerated() {
       let title = finding.title.trimmed
       let explanation = finding.explanation.trimmed
@@ -116,7 +106,6 @@ public struct BaselineCodeAnalysisResponseParser: Sendable {
         do {
           candidates.append(
             try FindingCandidate(
-              candidateID: UUID(),
               ruleID: nil,
               title: title,
               explanation: explanation,
@@ -125,9 +114,7 @@ public struct BaselineCodeAnalysisResponseParser: Sendable {
                 startLine: startLine,
                 endLine: endLine
               ),
-              evidence: evidence,
-              sourceIdentifiers: sourceIdentifiers,
-              analyzerMetadata: metadata
+              evidence: evidence
             ))
         } catch {
           diagnostics.append(
@@ -191,8 +178,11 @@ public struct BaselineCodeAnalysisResponseParser: Sendable {
     )
   }
 
-  private func diagnostic(code: String, message: String) -> AnalyzerDiagnostic {
-    AnalyzerDiagnostic(code: code, severity: .warning, message: message)
+  private func diagnostic(
+    code: String,
+    message: String
+  ) -> LLMIssueDetectionDiagnostic {
+    LLMIssueDetectionDiagnostic(code: code, message: message)
   }
 }
 

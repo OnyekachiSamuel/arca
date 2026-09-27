@@ -12,7 +12,7 @@ public struct GuidedCodeAnalysisPromptBuilder: Sendable {
   public func build(
     context: SourceFileAnalysisContext,
     rules: [RuleKnowledge]
-  ) throws -> CodeAnalysisPrompt {
+  ) throws -> String {
     guard limits.maximumPromptUTF8Bytes > 0 else {
       throw CodeAnalysisPromptBuildingError.invalidLimits
     }
@@ -61,11 +61,7 @@ public struct GuidedCodeAnalysisPromptBuilder: Sendable {
       )
     }
 
-    return CodeAnalysisPrompt(
-      templateID: GuidedCodeAnalysisPromptTemplateV1.id,
-      templateVersion: GuidedCodeAnalysisPromptTemplateV1.version,
-      text: promptText
-    )
+    return promptText
   }
 
   private func validatedRules(

@@ -11,7 +11,9 @@ struct RuleKnowledgeRegistryTests {
 
     #expect(registry.allKnowledge.count == 28)
     let rule = try #require(
-      registry.knowledge(for: "ARCA-SWIFT-CONCURRENCY-001")
+      registry.allKnowledge.first {
+        $0.ruleID == "ARCA-SWIFT-CONCURRENCY-001"
+      }
     )
     #expect(rule.reviewType == .swift)
     #expect(rule.category == "concurrency")
@@ -66,7 +68,7 @@ struct RuleKnowledgeRegistryTests {
     }
   }
 
-  @Test("uses schema version one without legacy decoding")
+  @Test("requires ruleset schema version one")
   func usesSchemaVersionOne() throws {
     let fixture = try RulesetFixture()
     try fixture.writeRules([], schemaVersion: 2)

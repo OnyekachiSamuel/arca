@@ -5,7 +5,7 @@ import Testing
 
 @testable import ArcaCLI
 
-@Suite("Arca LLM command")
+@Suite("Arca command")
 struct ArcaCommandTests {
   @Test("baseline sends one broad prompt without rule knowledge")
   func runsBaseline() async throws {
@@ -24,12 +24,10 @@ struct ArcaCommandTests {
       #expect(result.exitStatus == .success)
       #expect(report.promptVariant == .baseline)
       #expect(report.reviewType == nil)
-      #expect(result.reviewRequest?.selectedReviewTypes.isEmpty == true)
       #expect(prompts.count == 1)
       #expect(prompts[0].contains("Variant: baseline"))
       #expect(!prompts[0].contains("RULES_AND_KNOWLEDGE"))
       #expect(!prompts[0].contains("ARCA-SWIFT-CONCURRENCY-001"))
-      #expect(result.reviewRequest?.changes.isEmpty == true)
       #expect(!prompts[0].contains(#""change" :"#))
     }
   }
@@ -62,12 +60,8 @@ struct ArcaCommandTests {
         provider: provider
       )
       let prompt = try #require(await provider.prompts.first)
-      let change = try #require(result.reviewRequest?.changes.first)
 
       #expect(result.exitStatus == .success)
-      #expect(result.reviewRequest?.changes.count == 1)
-      #expect(change.filePath == file.standardizedFileURL.path)
-      #expect(!change.modifiedLineRanges.isEmpty)
       #expect(prompt.contains(#""change" :"#))
       #expect(prompt.contains(#""modifiedLineRanges" :"#))
     }
@@ -96,7 +90,6 @@ struct ArcaCommandTests {
       #expect(prompt.contains("# God Object"))
       #expect(prompt.contains("```swift"))
       #expect(!prompt.contains("ARCA-SWIFT-CONCURRENCY-001"))
-      #expect(!prompt.contains("arca.issue-categorization"))
     }
   }
 
@@ -116,8 +109,8 @@ struct ArcaCommandTests {
 
       #expect(report.reviewType == .all)
       #expect(prompts.count == ReviewType.analysisTypes.count)
-      #expect(report.analysis.llmExecutionMetadata?.requestCount == 5)
-      #expect(report.analysis.llmExecutionMetadata?.usage.totalTokens == 15)
+      #expect(report.analysis.executionMetadata.requestCount == 5)
+      #expect(report.analysis.executionMetadata.usage.totalTokens == 15)
       #expect(report.analysis.candidates.isEmpty)
       #expect(report.analysis.diagnostics.isEmpty)
       #expect(
@@ -132,37 +125,13 @@ struct ArcaCommandTests {
     }
   }
 
-  @Test("baseline rejects any review selection")
-  func rejectsReviewForBaseline() async throws {
-    try await withFixture { directory, file in
-      let provider = RecordingProvider()
-      let result = await run(
-        directory: directory,
-        file: file,
-        review: "swift",
-        prompt: "baseline",
-        provider: provider
-      )
-
-      #expect(result.exitStatus == .invalidInput)
-      #expect(result.output.contains("must not be provided with the baseline prompt"))
-      #expect(await provider.prompts.isEmpty)
-    }
-  }
-
-  @Test("legacy combined review command is not exposed by the LLM-only MVP")
-  func rejectsLegacyReviewCommand() async {
-    let result = await ArcaCommand.run(arguments: ["review", "--help"])
-
-    #expect(result.exitStatus == .invalidInput)
-    #expect(!ArcaCommand.rootHelp.contains("review                  "))
-  }
-
   @Test("help describes the experiment variants and rule sets")
   func describesCommand() async {
-    let result = await ArcaCommand.run(arguments: ["llm", "--help"])
+    let result = await ArcaCommand.run(arguments: ["--help"])
 
     #expect(result.exitStatus == .success)
+    #expect(result.output.contains("USAGE: arca --file"))
+    #expect(!result.output.contains("arca llm"))
     #expect(result.output.contains("baseline"))
     #expect(result.output.contains("guided"))
     #expect(result.output.contains("swiftui"))
@@ -186,7 +155,27 @@ struct ArcaCommandTests {
       let report = try decode(result)
 
       #expect(result.exitStatus == .success)
-      #expect(report.analysis.llmExecutionMetadata?.modelID == "cloud-model")
+      #expect(report.analysis.executionMetadata.modelID == "cloud-model")
+    }
+  }
+
+  @Test("provider failure returns exit status 3 and a diagnostic")
+  func reportsProviderFailure() async throws {
+    try await withFixture { directory, file in
+      let result = await run(
+        directory: directory,
+        file: file,
+        review: nil,
+        prompt: "baseline",
+        provider: FailingProvider()
+      )
+      let report = try decode(result)
+
+      #expect(result.exitStatus == .executionFailure)
+      #expect(
+        report.analysis.diagnostics.map(\.code)
+          == ["ARCA-LLM-ANALYSIS-PROVIDER-FAILED"]
+      )
     }
   }
 
@@ -196,9 +185,9 @@ struct ArcaCommandTests {
     review: String?,
     prompt: String,
     providerID: String? = nil,
-    provider: RecordingProvider
+    provider: any LLMProvider
   ) async -> CommandResult {
-    var arguments = ["llm", "--file", file.path]
+    var arguments = ["--file", file.path]
     if let review {
       arguments += ["--review", review]
     }
@@ -296,4 +285,16 @@ private actor RecordingProvider: LLMProvider {
       durationMilliseconds: 2
     )
   }
+}
+
+private struct FailingProvider: LLMProvider {
+  let id = "failing"
+
+  func submit(_ request: LLMRequest) async throws -> LLMResponse {
+    throw ProviderFailure.unavailable
+  }
+}
+
+private enum ProviderFailure: Error {
+  case unavailable
 }

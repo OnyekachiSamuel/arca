@@ -14,7 +14,6 @@ let package = Package(
     .library(name: "ArcaGit", targets: ["ArcaGit"]),
     .library(name: "ArcaKnowledge", targets: ["ArcaKnowledge"]),
     .library(name: "ArcaLLM", targets: ["ArcaLLM"]),
-    .library(name: "ArcaAnalysis", targets: ["ArcaAnalysis"]),
     .library(name: "ArcaAnalyzers", targets: ["ArcaAnalyzers"]),
     .library(name: "ArcaReporting", targets: ["ArcaReporting"]),
     .library(name: "ArcaSource", targets: ["ArcaSource"]),
@@ -32,11 +31,9 @@ let package = Package(
       name: "ArcaLLM",
       dependencies: ["ArcaDomain", "ArcaKnowledge"]
     ),
-    .target(name: "ArcaAnalysis", dependencies: ["ArcaDomain"]),
     .target(
       name: "ArcaAnalyzers",
       dependencies: [
-        "ArcaAnalysis",
         "ArcaDomain",
         "ArcaKnowledge",
         "ArcaLLM",
@@ -47,7 +44,6 @@ let package = Package(
     .target(
       name: "ArcaCLI",
       dependencies: [
-        "ArcaAnalysis",
         "ArcaAnalyzers",
         "ArcaConfiguration",
         "ArcaDomain",
@@ -60,15 +56,13 @@ let package = Package(
     ),
     .executableTarget(
       name: "ArcaExecutable",
-      dependencies: ["ArcaAnalyzers", "ArcaCLI"]
+      dependencies: ["ArcaCLI"]
     ),
     .testTarget(
       name: "ArcaCLITests",
       dependencies: [
-        "ArcaAnalysis",
         "ArcaCLI",
         "ArcaDomain",
-        "ArcaKnowledge",
         "ArcaLLM",
       ]
     ),
@@ -87,17 +81,11 @@ let package = Package(
     ),
     .testTarget(
       name: "ArcaLLMTests",
-      dependencies: ["ArcaDomain", "ArcaKnowledge", "ArcaLLM"],
-      resources: [.copy("Fixtures")]
-    ),
-    .testTarget(
-      name: "ArcaAnalysisTests",
-      dependencies: ["ArcaAnalysis", "ArcaDomain"]
+      dependencies: ["ArcaDomain", "ArcaKnowledge", "ArcaLLM"]
     ),
     .testTarget(
       name: "ArcaAnalyzersTests",
       dependencies: [
-        "ArcaAnalysis",
         "ArcaAnalyzers",
         "ArcaDomain",
         "ArcaKnowledge",

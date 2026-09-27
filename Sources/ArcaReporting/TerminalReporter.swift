@@ -1,30 +1,14 @@
 import ArcaDomain
-import Darwin
 import Foundation
 
 public struct TerminalReporter: Reporter {
-  private let outputIsTTY: @Sendable () -> Bool
-
-  public init(outputIsTTY: (@Sendable () -> Bool)? = nil) {
-    self.outputIsTTY =
-      outputIsTTY ?? {
-        Darwin.isatty(STDOUT_FILENO) == 1
-      }
-  }
+  public init() {}
 
   public func render(
     detectionReport: LLMIssueDetectionReport
   ) throws -> String {
-    let usesColor = outputIsTTY()
     let analysis = detectionReport.analysis
-    let metadata =
-      analysis.llmExecutionMetadata
-      ?? LLMExecutionMetadata(
-        providerID: "unknown",
-        modelID: "unknown",
-        requestCount: 0,
-        providerDurationMilliseconds: 0
-      )
+    let metadata = analysis.executionMetadata
     var lines = [
       "ARCA LLM Detection Experiment",
       "Overall result: \(resultDescription(analysis.candidates.count))",
@@ -46,7 +30,7 @@ public struct TerminalReporter: Reporter {
         "",
         "Detection results",
         "-----------------",
-        "No candidates were returned by the model.",
+        "The model did not identify any candidate code issues in the analysed file.",
       ]
     }
 
@@ -87,7 +71,7 @@ public struct TerminalReporter: Reporter {
       lines += ["", "Validation notes", "----------------"]
       lines.append(
         contentsOf: analysis.diagnostics.map {
-          "\(severityLabel($0.severity, usesColor: usesColor)) \($0.code): \($0.message)"
+          "\($0.code): \($0.message)"
         })
     }
     return lines.joined(separator: "\n")
@@ -156,22 +140,6 @@ public struct TerminalReporter: Reporter {
     "\(usage.inputTokens.map(String.init) ?? "unknown") input, "
       + "\(usage.outputTokens.map(String.init) ?? "unknown") output, "
       + "\(usage.totalTokens.map(String.init) ?? "unknown") total"
-  }
-
-  private func severityLabel(
-    _ severity: Severity,
-    usesColor: Bool
-  ) -> String {
-    let label = "[\(severity.rawValue.uppercased())]"
-    guard usesColor else { return label }
-    let code =
-      switch severity {
-      case .info: "36"
-      case .warning: "33"
-      case .error: "31"
-      case .critical: "1;31"
-      }
-    return "\u{001B}[\(code)m\(label)\u{001B}[0m"
   }
 
   private func appendEvidence(

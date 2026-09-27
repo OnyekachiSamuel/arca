@@ -53,20 +53,6 @@ struct LLMCommandParserTests {
     }
   }
 
-  @Test("removed review names are rejected")
-  func rejectsRemovedReviewNames() {
-    for value in ["style", "team-convention", "tca-architecture"] {
-      expectError(
-        .unsupportedReviewType(value),
-        arguments: [
-          "--file", "Example.swift",
-          "--review", value,
-          "--prompt", "guided",
-        ]
-      )
-    }
-  }
-
   @Test("file and prompt are required, while guided also requires review")
   func requiresExperimentalInputs() {
     expectError(.missingOption("--file"), arguments: [])

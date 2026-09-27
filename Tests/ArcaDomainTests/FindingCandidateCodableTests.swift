@@ -16,13 +16,6 @@ struct FindingCandidateCodableTests {
     #expect(decoded.evidence.first?.description == "The type owns unrelated behavior.")
   }
 
-  @Test("candidate requires at least one source identifier")
-  func candidateRequiresSourceIdentifier() {
-    #expect(throws: FindingCandidateValidationError.missingSourceIdentifiers) {
-      try makeCandidate(sourceIdentifiers: [])
-    }
-  }
-
   @Test("candidate requires at least one source-code evidence item")
   func candidateRequiresEvidence() {
     #expect(throws: FindingCandidateValidationError.missingEvidence) {
@@ -79,13 +72,9 @@ struct FindingCandidateCodableTests {
         ),
         excerpt: "func save() {}"
       )
-    ],
-    sourceIdentifiers: [String] = ["llm-code-analysis"]
+    ]
   ) throws -> FindingCandidate {
     try FindingCandidate(
-      candidateID: UUID(
-        uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
-      )!,
       ruleID: "ARCA-TEST-001",
       title: "Candidate",
       explanation: "Test explanation.",
@@ -93,9 +82,7 @@ struct FindingCandidateCodableTests {
       range: range,
       issueType: .antiPattern,
       category: "architecture",
-      evidence: evidence,
-      sourceIdentifiers: sourceIdentifiers,
-      analyzerMetadata: ["modelID": .string("qwen")]
+      evidence: evidence
     )
   }
 }

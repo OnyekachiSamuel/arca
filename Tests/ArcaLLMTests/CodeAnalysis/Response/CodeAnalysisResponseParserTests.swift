@@ -9,8 +9,7 @@ struct CodeAnalysisResponseParserTests {
   func parsesCompactResponse() throws {
     let result = parser.parse(
       validResponse,
-      context: context,
-      analyzerMetadata: ["modelID": .string("qwen")]
+      context: context
     )
 
     let candidate = try #require(result.candidates.first)
@@ -26,8 +25,6 @@ struct CodeAnalysisResponseParserTests {
     #expect(range.endLine == 5)
     #expect(evidence.description == "The type owns persistence behavior.")
     #expect(evidence.excerpt == "    func submit() {\n        repository.save()\n    }")
-    #expect(candidate.analyzerMetadata["modelID"] == .string("qwen"))
-    #expect(candidate.analyzerMetadata["reviewType"] == .string("god-object"))
   }
 
   @Test("an empty findings array is a successful empty result")
@@ -63,8 +60,8 @@ struct CodeAnalysisResponseParserTests {
     #expect(result.diagnostics.map(\.code) == ["ARCA-LLM-ANALYSIS-UNKNOWN-RULE"])
   }
 
-  @Test("fields from the old response schema are rejected")
-  func rejectsLegacyFields() {
+  @Test("unexpected response fields are rejected")
+  func rejectsUnexpectedFields() {
     for field in [
       #", "filePath": "Sources/Checkout.swift""#,
       #", "severity": "warning""#,
@@ -140,10 +137,7 @@ struct CodeAnalysisResponseParserTests {
 
   private var parser: CodeAnalysisResponseParser {
     CodeAnalysisResponseParser(
-      knowledgeProvider: StubCodeAnalysisKnowledgeProvider(
-        knowledge: [godObjectKnowledge]
-      ),
-      sourceIdentifier: "llm-code-analysis"
+      rules: [godObjectKnowledge]
     )
   }
 
@@ -212,15 +206,5 @@ struct CodeAnalysisResponseParserTests {
   ) {
     #expect(result.candidates.isEmpty, sourceLocation: sourceLocation)
     #expect(result.diagnostics.first?.code == code, sourceLocation: sourceLocation)
-    #expect(result.diagnostics.first?.severity == .warning, sourceLocation: sourceLocation)
-  }
-}
-
-private struct StubCodeAnalysisKnowledgeProvider: RuleKnowledgeProviding {
-  let knowledge: [RuleKnowledge]
-  var allKnowledge: [RuleKnowledge] { knowledge }
-
-  func knowledge(for ruleID: String) -> RuleKnowledge? {
-    knowledge.first { $0.ruleID == ruleID }
   }
 }

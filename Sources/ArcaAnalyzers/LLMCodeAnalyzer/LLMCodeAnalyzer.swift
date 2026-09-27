@@ -1,16 +1,9 @@
-import ArcaAnalysis
 import ArcaDomain
 import ArcaKnowledge
 import ArcaLLM
 
-public struct LLMCodeAnalyzer: Analyzer {
-  public let id = "llm-code-analysis"
-  public let supportedReviewTypes = Set(ReviewType.analysisTypes)
-
+public struct LLMCodeAnalyzer: Sendable {
   private let provider: any LLMProvider
-  private let knowledgeProvider: (any RuleKnowledgeProviding)?
-  private let ruleSelector: ReviewRuleSelector
-  private let contextBuilder: SourceFileAnalysisContextBuilder
   private let promptVariant: CodeAnalysisPromptVariant
   private let baselinePromptBuilder: BaselineCodeAnalysisPromptBuilder
   private let guidedPromptBuilder: GuidedCodeAnalysisPromptBuilder
@@ -21,10 +14,6 @@ public struct LLMCodeAnalyzer: Analyzer {
 
   public init(
     provider: any LLMProvider,
-    knowledgeProvider: (any RuleKnowledgeProviding)?,
-    ruleSelector: ReviewRuleSelector = ReviewRuleSelector(),
-    contextBuilder: SourceFileAnalysisContextBuilder =
-      SourceFileAnalysisContextBuilder(),
     promptVariant: CodeAnalysisPromptVariant = .guided,
     baselinePromptBuilder: BaselineCodeAnalysisPromptBuilder =
       BaselineCodeAnalysisPromptBuilder(),
@@ -36,9 +25,6 @@ public struct LLMCodeAnalyzer: Analyzer {
     temperature: Double? = nil
   ) {
     self.provider = provider
-    self.knowledgeProvider = knowledgeProvider
-    self.ruleSelector = ruleSelector
-    self.contextBuilder = contextBuilder
     self.promptVariant = promptVariant
     self.baselinePromptBuilder = baselinePromptBuilder
     self.guidedPromptBuilder = guidedPromptBuilder
@@ -49,55 +35,36 @@ public struct LLMCodeAnalyzer: Analyzer {
   }
 
   public func analyze(
-    context: AnalysisContext
-  ) async throws -> AnalyzerResult {
-    let sourceContexts = contextBuilder.build(from: context)
-    var diagnostics: [AnalyzerDiagnostic] = []
-    let rules =
-      knowledgeProvider.map {
-        ruleSelector.rules(
-          for: context.request.selectedReviewTypes,
-          from: $0
-        )
-      } ?? []
-
+    contexts: [SourceFileAnalysisContext],
+    rules: [RuleKnowledge] = []
+  ) async -> LLMIssueDetectionResult {
+    var diagnostics: [LLMIssueDetectionDiagnostic] = []
     guard promptVariant == .baseline || !rules.isEmpty else {
       diagnostics.append(
         diagnostic(
           code: "ARCA-LLM-ANALYSIS-NO-APPLICABLE-RULES",
-          message: "No rule knowledge is available for the selected review types."
+          message: "No rule knowledge is available for the selected review type."
         ))
-      return result(
-        candidates: [],
-        diagnostics: diagnostics,
-        executionStatus: .skipped,
-        metrics: Metrics()
-      )
+      return result(candidates: [], diagnostics: diagnostics, metrics: Metrics())
     }
 
     var candidates: [FindingCandidate] = []
     var metrics = Metrics()
 
-    for sourceContext in sourceContexts {
-      let prompt: CodeAnalysisPrompt
+    for context in contexts {
+      let prompt: String
       do {
         switch promptVariant {
         case .baseline:
-          prompt = try baselinePromptBuilder.build(
-            context: sourceContext
-          )
+          prompt = try baselinePromptBuilder.build(context: context)
         case .guided:
-          prompt = try guidedPromptBuilder.build(
-            context: sourceContext,
-            rules: rules
-          )
+          prompt = try guidedPromptBuilder.build(context: context, rules: rules)
         }
       } catch {
         diagnostics.append(
           diagnostic(
             code: "ARCA-LLM-ANALYSIS-PROMPT-FAILED",
-            message:
-              "The LLM code-analysis prompt could not be built for '\(sourceContext.filePath)'."
+            message: "The LLM code-analysis prompt could not be built for '\(context.filePath)'."
           ))
         continue
       }
@@ -108,7 +75,7 @@ public struct LLMCodeAnalyzer: Analyzer {
         response = try await provider.submit(
           LLMRequest(
             modelID: modelID,
-            prompt: prompt.text,
+            prompt: prompt,
             timeout: timeout,
             seed: seed,
             temperature: temperature
@@ -118,85 +85,45 @@ public struct LLMCodeAnalyzer: Analyzer {
           diagnostic(
             code: "ARCA-LLM-ANALYSIS-PROVIDER-FAILED",
             message:
-              "LLM analysis failed for '\(sourceContext.filePath)' using provider '\(provider.id)' and model '\(modelID)'."
+              "LLM analysis failed for '\(context.filePath)' using provider '\(provider.id)' and model '\(modelID)'."
           ))
         continue
       }
 
       metrics.record(response)
-      let metadata: [String: FindingMetadataValue] = [
-        "providerID": .string(provider.id),
-        "modelID": .string(modelID),
-        "promptVariant": .string(promptVariant.rawValue),
-        "promptTemplateID": .string(prompt.templateID),
-        "promptTemplateVersion": .integer(
-          prompt.templateVersion
-        ),
-      ]
+      let parsingResult: CodeAnalysisResponseParsingResult
       switch promptVariant {
       case .baseline:
-        let parsingResult = BaselineCodeAnalysisResponseParser(
-          sourceIdentifiers: [
-            id,
-            "llm-provider:\(provider.id)",
-            "llm-model:\(modelID)",
-          ]
-        ).parse(
+        parsingResult = BaselineCodeAnalysisResponseParser().parse(
           response.text,
-          context: sourceContext,
-          metadata: metadata
+          context: context
         )
-        candidates.append(contentsOf: parsingResult.candidates)
-        diagnostics.append(contentsOf: parsingResult.diagnostics)
       case .guided:
-        guard let knowledgeProvider else {
-          diagnostics.append(
-            diagnostic(
-              code: "ARCA-LLM-ANALYSIS-NO-APPLICABLE-RULES",
-              message: "No rule knowledge is available for the selected review types."
-            ))
-          continue
-        }
-        let guidedParser = CodeAnalysisResponseParser(
-          knowledgeProvider: knowledgeProvider,
-          sourceIdentifiers: [
-            id,
-            "llm-provider:\(provider.id)",
-            "llm-model:\(modelID)",
-          ]
-        )
-        let parsingResult = guidedParser.parse(
+        parsingResult = CodeAnalysisResponseParser(rules: rules).parse(
           response.text,
-          context: sourceContext,
-          analyzerMetadata: metadata
+          context: context
         )
-        candidates.append(contentsOf: parsingResult.candidates)
-        diagnostics.append(contentsOf: parsingResult.diagnostics)
       }
+      candidates.append(contentsOf: parsingResult.candidates)
+      diagnostics.append(contentsOf: parsingResult.diagnostics)
     }
 
     return result(
       candidates: candidates,
       diagnostics: diagnostics,
-      executionStatus: sourceContexts.isEmpty
-        ? .skipped
-        : .completed,
       metrics: metrics
     )
   }
 
   private func result(
     candidates: [FindingCandidate],
-    diagnostics: [AnalyzerDiagnostic],
-    executionStatus: AnalyzerExecutionStatus,
+    diagnostics: [LLMIssueDetectionDiagnostic],
     metrics: Metrics
-  ) -> AnalyzerResult {
-    AnalyzerResult(
-      analyzerID: id,
+  ) -> LLMIssueDetectionResult {
+    LLMIssueDetectionResult(
       candidates: candidates,
-      executionStatus: executionStatus,
       diagnostics: diagnostics,
-      llmExecutionMetadata: LLMExecutionMetadata(
+      executionMetadata: LLMExecutionMetadata(
         providerID: provider.id,
         modelID: modelID,
         requestCount: metrics.requestCount,
@@ -205,8 +132,7 @@ public struct LLMCodeAnalyzer: Analyzer {
           outputTokens: metrics.outputTokens,
           totalTokens: metrics.totalTokens
         ),
-        providerDurationMilliseconds:
-          metrics.providerDurationMilliseconds
+        providerDurationMilliseconds: metrics.providerDurationMilliseconds
       )
     )
   }
@@ -214,12 +140,8 @@ public struct LLMCodeAnalyzer: Analyzer {
   private func diagnostic(
     code: String,
     message: String
-  ) -> AnalyzerDiagnostic {
-    AnalyzerDiagnostic(
-      code: code,
-      severity: .warning,
-      message: message
-    )
+  ) -> LLMIssueDetectionDiagnostic {
+    LLMIssueDetectionDiagnostic(code: code, message: message)
   }
 }
 

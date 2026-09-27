@@ -1,10 +1,9 @@
 import ArcaDomain
 import Foundation
 
-public struct RuleKnowledgeRegistry: RuleKnowledgeProviding {
+public struct RuleKnowledgeRegistry: Sendable {
   public static let currentSchemaVersion = 1
 
-  private let knowledgeByRuleID: [String: RuleKnowledge]
   public let allKnowledge: [RuleKnowledge]
 
   public init(rulesetURL: URL) throws {
@@ -82,10 +81,6 @@ public struct RuleKnowledgeRegistry: RuleKnowledgeProviding {
     }
   }
 
-  public func knowledge(for ruleID: String) -> RuleKnowledge? {
-    knowledgeByRuleID[ruleID]
-  }
-
   public func knowledge(for reviewType: ReviewType) -> [RuleKnowledge] {
     allKnowledge.filter { $0.reviewType == reviewType }
   }
@@ -112,11 +107,11 @@ public struct RuleKnowledgeRegistry: RuleKnowledgeProviding {
       throw RuleKnowledgeRegistryError.emptyRegistry
     }
 
-    var indexed: [String: RuleKnowledge] = [:]
+    var encounteredRuleIDs: Set<String> = []
     var loaded: [RuleKnowledge] = []
     for definition in document.rules {
       try Self.validate(definition)
-      guard indexed[definition.ruleID] == nil else {
+      guard encounteredRuleIDs.insert(definition.ruleID).inserted else {
         throw RuleKnowledgeRegistryError.duplicateRuleID(
           definition.ruleID
         )
@@ -144,10 +139,8 @@ public struct RuleKnowledgeRegistry: RuleKnowledgeProviding {
         supportingKnowledge: markdown,
         deprecatedFromVersion: definition.deprecatedFromVersion
       )
-      indexed[knowledge.ruleID] = knowledge
       loaded.append(knowledge)
     }
-    knowledgeByRuleID = indexed
     allKnowledge = loaded
   }
 

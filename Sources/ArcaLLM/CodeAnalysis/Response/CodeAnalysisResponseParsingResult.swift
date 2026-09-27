@@ -1,14 +1,14 @@
 import ArcaDomain
 
 public struct CodeAnalysisResponseParsingResult: Equatable, Sendable {
-    public let candidates: [FindingCandidate]
-    public let diagnostics: [AnalyzerDiagnostic]
+  public let candidates: [FindingCandidate]
+  public let diagnostics: [LLMIssueDetectionDiagnostic]
 
-    public init(
-        candidates: [FindingCandidate],
-        diagnostics: [AnalyzerDiagnostic]
-    ) {
-        self.candidates = candidates
-        self.diagnostics = diagnostics
-    }
+  public init(
+    candidates: [FindingCandidate],
+    diagnostics: [LLMIssueDetectionDiagnostic]
+  ) {
+    self.candidates = candidates
+    self.diagnostics = diagnostics
+  }
 }

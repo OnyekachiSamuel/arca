@@ -11,25 +11,23 @@ struct CodeAnalysisPromptBuilderTests {
       context: validContext
     )
 
-    #expect(prompt.templateID == "arca.code-analysis.baseline")
-    #expect(prompt.templateVersion == 1)
-    #expect(prompt.text.contains("code smells and anti-patterns"))
-    #expect(!prompt.text.contains("ARCA-GOD-001"))
-    #expect(!prompt.text.contains("God Object"))
-    #expect(!prompt.text.contains("selected analysis task"))
-    #expect(!prompt.text.contains(#""ruleID""#))
-    #expect(prompt.text.contains(#""title""#))
-    #expect(!prompt.text.contains(#""issueType""#))
-    #expect(!prompt.text.contains(#""severity""#))
-    #expect(!prompt.text.contains(#""filePath""#))
-    #expect(!prompt.text.contains(#""excerpt""#))
-    #expect(!prompt.text.contains(#""additionalProperties""#))
-    #expect(prompt.text.contains("Return at most 5 distinct findings"))
-    #expect(!prompt.text.contains(godObjectKnowledge.problemContext))
-    #expect(!prompt.text.contains(godObjectKnowledge.expectedBehavior))
-    #expect(!prompt.text.contains(godObjectKnowledge.violationCriteria))
-    #expect(!prompt.text.contains("multiple unrelated responsibilities"))
-    #expect(!prompt.text.contains(#""rules""#))
+    #expect(prompt.contains("code smells and anti-patterns"))
+    #expect(!prompt.contains("ARCA-GOD-001"))
+    #expect(!prompt.contains("God Object"))
+    #expect(!prompt.contains("selected analysis task"))
+    #expect(!prompt.contains(#""ruleID""#))
+    #expect(prompt.contains(#""title""#))
+    #expect(!prompt.contains(#""issueType""#))
+    #expect(!prompt.contains(#""severity""#))
+    #expect(!prompt.contains(#""filePath""#))
+    #expect(!prompt.contains(#""excerpt""#))
+    #expect(!prompt.contains(#""additionalProperties""#))
+    #expect(prompt.contains("Return at most 5 distinct findings"))
+    #expect(!prompt.contains(godObjectKnowledge.problemContext))
+    #expect(!prompt.contains(godObjectKnowledge.expectedBehavior))
+    #expect(!prompt.contains(godObjectKnowledge.violationCriteria))
+    #expect(!prompt.contains("multiple unrelated responsibilities"))
+    #expect(!prompt.contains(#""rules""#))
   }
 
   @Test("guided prompt includes the selected rule knowledge")
@@ -39,12 +37,10 @@ struct CodeAnalysisPromptBuilderTests {
       rules: [godObjectKnowledge]
     )
 
-    #expect(prompt.templateID == "arca.code-analysis.guided")
-    #expect(prompt.templateVersion == 1)
-    #expect(prompt.text.contains(godObjectKnowledge.problemContext))
-    #expect(prompt.text.contains(#""rules""#))
-    #expect(prompt.text.contains(godObjectKnowledge.expectedBehavior))
-    #expect(prompt.text.contains(godObjectKnowledge.violationCriteria))
+    #expect(prompt.contains(godObjectKnowledge.problemContext))
+    #expect(prompt.contains(#""rules""#))
+    #expect(prompt.contains(godObjectKnowledge.expectedBehavior))
+    #expect(prompt.contains(godObjectKnowledge.violationCriteria))
   }
 
   @Test("guided prompt omits rules that do not apply to the source")
@@ -54,34 +50,34 @@ struct CodeAnalysisPromptBuilderTests {
       rules: [godObjectKnowledge]
     )
 
-    #expect(prompt.text.contains("RULE APPLICABILITY"))
+    #expect(prompt.contains("RULE APPLICABILITY"))
     #expect(
-      prompt.text.contains(
+      prompt.contains(
         "First determine whether each supplied rule applies"
       )
     )
     #expect(
-      prompt.text.contains(
+      prompt.contains(
         "A TCA rule applies only when the source visibly contains relevant TCA constructs or behavior"
       )
     )
     #expect(
-      prompt.text.contains(
+      prompt.contains(
         "A SwiftUI rule applies only when the source visibly contains relevant SwiftUI constructs or behavior"
       )
     )
     #expect(
-      prompt.text.contains(
+      prompt.contains(
         "Importing a framework alone does not establish a violation"
       )
     )
     #expect(
-      prompt.text.contains(
+      prompt.contains(
         "Do not report missing TCA or SwiftUI usage as a violation"
       )
     )
     #expect(
-      prompt.text.contains(
+      prompt.contains(
         #"If no applicable rule is violated, return {"findings":[]}"#
       )
     )
@@ -118,14 +114,14 @@ struct CodeAnalysisPromptBuilderTests {
       rules: [rule]
     )
 
-    #expect(prompt.text.contains("ARCA-OWASP-MASWE-0001"))
-    #expect(prompt.text.contains("Review type: security"))
-    #expect(prompt.text.contains("Category: data-storage"))
-    #expect(prompt.text.contains("Issue type: security-weakness"))
-    #expect(prompt.text.contains(rule.problemContext))
-    #expect(prompt.text.contains(rule.expectedBehavior))
-    #expect(prompt.text.contains(rule.violationCriteria))
-    #expect(prompt.text.contains(markdown))
+    #expect(prompt.contains("ARCA-OWASP-MASWE-0001"))
+    #expect(prompt.contains("Review type: security"))
+    #expect(prompt.contains("Category: data-storage"))
+    #expect(prompt.contains("Issue type: security-weakness"))
+    #expect(prompt.contains(rule.problemContext))
+    #expect(prompt.contains(rule.expectedBehavior))
+    #expect(prompt.contains(rule.violationCriteria))
+    #expect(prompt.contains(markdown))
   }
 
   @Test("guided prompt does not include framework deprecation versions")
@@ -149,8 +145,8 @@ struct CodeAnalysisPromptBuilderTests {
       rules: [rule]
     )
 
-    #expect(!prompt.text.contains("Deprecated from TCA version"))
-    #expect(!prompt.text.contains("1.25.0"))
+    #expect(!prompt.contains("Deprecated from TCA version"))
+    #expect(!prompt.contains("1.25.0"))
   }
 
   @Test("prompt contains the complete file, changes, every rule, and response contract")
@@ -188,48 +184,46 @@ struct CodeAnalysisPromptBuilderTests {
       rules: [longMethodKnowledge, godObjectKnowledge]
     )
 
-    #expect(prompt.templateID == "arca.code-analysis.guided")
-    #expect(prompt.templateVersion == 1)
-    #expect(prompt.text.contains("Sources/Checkout.swift"))
-    #expect(prompt.text.contains("Sources/OldCheckout.swift"))
-    #expect(prompt.text.contains("Hello 👋"))
-    #expect(prompt.text.contains(#""lineNumber" : 2"#))
-    #expect(prompt.text.contains(#""text" : ""#))
-    #expect(prompt.text.contains(#""startLine" : 4"#))
-    #expect(prompt.text.contains(#""originalStartLine" : 7"#))
-    #expect(prompt.text.contains("ARCA-GOD-001"))
-    #expect(prompt.text.contains("ARCA-LONG-METHOD-001"))
-    #expect(prompt.text.contains(godObjectKnowledge.problemContext))
+    #expect(prompt.contains("Sources/Checkout.swift"))
+    #expect(prompt.contains("Sources/OldCheckout.swift"))
+    #expect(prompt.contains("Hello 👋"))
+    #expect(prompt.contains(#""lineNumber" : 2"#))
+    #expect(prompt.contains(#""text" : ""#))
+    #expect(prompt.contains(#""startLine" : 4"#))
+    #expect(prompt.contains(#""originalStartLine" : 7"#))
+    #expect(prompt.contains("ARCA-GOD-001"))
+    #expect(prompt.contains("ARCA-LONG-METHOD-001"))
+    #expect(prompt.contains(godObjectKnowledge.problemContext))
     #expect(
-      prompt.text.contains(
+      prompt.contains(
         godObjectKnowledge.violationCriteria
       )
     )
     #expect(
-      prompt.text.contains(
+      prompt.contains(
         godObjectKnowledge.expectedBehavior
       )
     )
-    #expect(prompt.text.contains(#""findings""#))
-    #expect(prompt.text.contains(#""ruleID""#))
-    #expect(!prompt.text.contains(#""filePath""#))
-    #expect(prompt.text.contains(#""evidence""#))
-    #expect(!prompt.text.contains("Repeat the supplied file path exactly"))
-    #expect(prompt.text.contains("Return only JSON in exactly this shape"))
-    #expect(prompt.text.contains("visible source evidence"))
-    #expect(prompt.text.contains("one-based, inclusive line numbers"))
-    #expect(prompt.text.contains("Do not invent numeric thresholds"))
-    #expect(prompt.text.contains("multiple unrelated responsibilities"))
+    #expect(prompt.contains(#""findings""#))
+    #expect(prompt.contains(#""ruleID""#))
+    #expect(!prompt.contains(#""filePath""#))
+    #expect(prompt.contains(#""evidence""#))
+    #expect(!prompt.contains("Repeat the supplied file path exactly"))
+    #expect(prompt.contains("Return only JSON in exactly this shape"))
+    #expect(prompt.contains("visible source evidence"))
+    #expect(prompt.contains("one-based, inclusive line numbers"))
+    #expect(prompt.contains("Do not invent numeric thresholds"))
+    #expect(prompt.contains("multiple unrelated responsibilities"))
     #expect(
-      prompt.text.contains(
+      prompt.contains(
         "size alone is insufficient"
       )
     )
-    #expect(!prompt.text.contains(#""excerpt""#))
-    #expect(!prompt.text.contains(#""severity""#))
-    #expect(!prompt.text.contains(#""additionalProperties""#))
-    #expect(prompt.text.contains("Return at most 5 distinct findings"))
-    #expect(prompt.text.contains("Do not provide refactoring"))
+    #expect(!prompt.contains(#""excerpt""#))
+    #expect(!prompt.contains(#""severity""#))
+    #expect(!prompt.contains(#""additionalProperties""#))
+    #expect(prompt.contains("Return at most 5 distinct findings"))
+    #expect(prompt.contains("Do not provide refactoring"))
   }
 
   @Test("the same rule set produces stable output regardless of input order")
@@ -252,10 +246,10 @@ struct CodeAnalysisPromptBuilderTests {
 
     #expect(first == second)
     let godObjectPosition = try #require(
-      first.text.range(of: "ARCA-GOD-001")
+      first.range(of: "ARCA-GOD-001")
     )
     let longMethodPosition = try #require(
-      first.text.range(of: "ARCA-LONG-METHOD-001")
+      first.range(of: "ARCA-LONG-METHOD-001")
     )
     #expect(godObjectPosition.lowerBound < longMethodPosition.lowerBound)
   }
@@ -271,8 +265,8 @@ struct CodeAnalysisPromptBuilderTests {
       rules: [godObjectKnowledge]
     )
 
-    #expect(!prompt.text.contains(#""change" :"#))
-    #expect(!prompt.text.contains(#""previousFilePath""#))
+    #expect(!prompt.contains(#""change" :"#))
+    #expect(!prompt.contains(#""previousFilePath""#))
   }
 
   @Test("common credential values are not included in the prompt")
@@ -286,8 +280,8 @@ struct CodeAnalysisPromptBuilderTests {
       rules: [godObjectKnowledge]
     )
 
-    #expect(!prompt.text.contains("sk-live-super-secret-value"))
-    #expect(prompt.text.contains("[REDACTED]"))
+    #expect(!prompt.contains("sk-live-super-secret-value"))
+    #expect(prompt.contains("[REDACTED]"))
   }
 
   @Test("at least one applicable rule is required")

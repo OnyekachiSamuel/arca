@@ -65,12 +65,12 @@ store the value in `.arca.json` or include it in reports and diagnostics.
 Choose one prompt variant for each run:
 
 ```sh
-swift run arca llm \
+swift run arca \
   --file Sources/Feature.swift \
   --prompt baseline \
   --format json
 
-swift run arca llm \
+swift run arca \
   --file Sources/Feature.swift \
   --review swift \
   --prompt guided \

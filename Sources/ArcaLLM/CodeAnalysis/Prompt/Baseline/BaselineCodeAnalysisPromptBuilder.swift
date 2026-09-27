@@ -10,7 +10,7 @@ public struct BaselineCodeAnalysisPromptBuilder: Sendable {
 
   public func build(
     context: SourceFileAnalysisContext
-  ) throws -> CodeAnalysisPrompt {
+  ) throws -> String {
     guard limits.maximumPromptUTF8Bytes > 0 else {
       throw CodeAnalysisPromptBuildingError.invalidLimits
     }
@@ -51,11 +51,7 @@ public struct BaselineCodeAnalysisPromptBuilder: Sendable {
       )
     }
 
-    return CodeAnalysisPrompt(
-      templateID: BaselineCodeAnalysisPromptTemplateV1.id,
-      templateVersion: BaselineCodeAnalysisPromptTemplateV1.version,
-      text: promptText
-    )
+    return promptText
   }
 
   private func encode(

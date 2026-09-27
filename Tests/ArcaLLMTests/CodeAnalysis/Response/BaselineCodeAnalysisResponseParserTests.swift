@@ -8,8 +8,7 @@ struct BaselineCodeAnalysisResponseParserTests {
   func acceptsCompactFinding() throws {
     let result = parser.parse(
       validResponse,
-      context: context,
-      metadata: ["promptVariant": .string("baseline")]
+      context: context
     )
 
     let finding = try #require(result.candidates.first)
@@ -24,11 +23,10 @@ struct BaselineCodeAnalysisResponseParserTests {
     #expect(range.startLine == 2)
     #expect(range.endLine == 2)
     #expect(evidence.excerpt == "    let value = 1")
-    #expect(finding.sourceIdentifiers == ["llm-code-analysis"])
   }
 
-  @Test("fields from the old response schema are rejected")
-  func rejectsLegacyFields() {
+  @Test("unexpected response fields are rejected")
+  func rejectsUnexpectedFields() {
     let response = validResponse.replacingOccurrences(
       of: #""title":"Large Class""#,
       with: #""title":"Large Class","severity":"warning""#
@@ -62,9 +60,7 @@ struct BaselineCodeAnalysisResponseParserTests {
   }
 
   private var parser: BaselineCodeAnalysisResponseParser {
-    BaselineCodeAnalysisResponseParser(
-      sourceIdentifiers: ["llm-code-analysis"]
-    )
+    BaselineCodeAnalysisResponseParser()
   }
 
   private var context: SourceFileAnalysisContext {

@@ -3,34 +3,23 @@ import ArcaKnowledge
 import Foundation
 
 public struct CodeAnalysisResponseParser: Sendable {
-  private let knowledgeProvider: any RuleKnowledgeProviding
-  private let sourceIdentifiers: [String]
+  private let knowledgeByRuleID: [String: RuleKnowledge]
   private let limits: CodeAnalysisResponseLimits
 
   public init(
-    knowledgeProvider: any RuleKnowledgeProviding,
-    sourceIdentifier: String,
+    rules: [RuleKnowledge],
     limits: CodeAnalysisResponseLimits = .default
   ) {
-    self.knowledgeProvider = knowledgeProvider
-    sourceIdentifiers = [sourceIdentifier]
-    self.limits = limits
-  }
-
-  public init(
-    knowledgeProvider: any RuleKnowledgeProviding,
-    sourceIdentifiers: [String],
-    limits: CodeAnalysisResponseLimits = .default
-  ) {
-    self.knowledgeProvider = knowledgeProvider
-    self.sourceIdentifiers = Self.unique(sourceIdentifiers)
+    knowledgeByRuleID = Dictionary(
+      rules.map { ($0.ruleID, $0) },
+      uniquingKeysWith: { first, _ in first }
+    )
     self.limits = limits
   }
 
   public func parse(
     _ responseText: String,
-    context: SourceFileAnalysisContext,
-    analyzerMetadata: [String: FindingMetadataValue] = [:]
+    context: SourceFileAnalysisContext
   ) -> CodeAnalysisResponseParsingResult {
     guard limits.isValid else {
       return rejected(
@@ -38,9 +27,7 @@ public struct CodeAnalysisResponseParser: Sendable {
         message: "Code-analysis response limits must be greater than zero."
       )
     }
-    guard !sourceIdentifiers.isEmpty,
-      sourceIdentifiers.allSatisfy({ !$0.trimmed.isEmpty })
-    else {
+    guard !knowledgeByRuleID.isEmpty else {
       return rejected(
         code: "ARCA-LLM-ANALYSIS-INVALID-CONFIGURATION",
         message: "The LLM code analyzer source identifier must not be empty."
@@ -92,9 +79,9 @@ public struct CodeAnalysisResponseParser: Sendable {
     )
 
     var candidates: [FindingCandidate] = []
-    var diagnostics: [AnalyzerDiagnostic] = []
+    var diagnostics: [LLMIssueDetectionDiagnostic] = []
     for (findingIndex, finding) in response.findings.enumerated() {
-      guard let knowledge = knowledgeProvider.knowledge(for: finding.ruleID) else {
+      guard let knowledge = knowledgeByRuleID[finding.ruleID] else {
         diagnostics.append(
           diagnostic(
             code: "ARCA-LLM-ANALYSIS-UNKNOWN-RULE",
@@ -134,7 +121,6 @@ public struct CodeAnalysisResponseParser: Sendable {
         do {
           candidates.append(
             try FindingCandidate(
-              candidateID: UUID(),
               ruleID: knowledge.ruleID,
               title: knowledge.title,
               explanation: explanation,
@@ -145,12 +131,7 @@ public struct CodeAnalysisResponseParser: Sendable {
               ),
               issueType: knowledge.issueType,
               category: knowledge.category,
-              evidence: evidence,
-              sourceIdentifiers: sourceIdentifiers,
-              analyzerMetadata: analyzerMetadata.merging([
-                "reviewType": .string(knowledge.reviewType.commandLineName),
-                "knowledgeFile": .string(knowledge.knowledgeFile),
-              ]) { current, _ in current }
+              evidence: evidence
             ))
         } catch {
           diagnostics.append(
@@ -197,11 +178,6 @@ public struct CodeAnalysisResponseParser: Sendable {
     return .accepted(evidence)
   }
 
-  private static func unique(_ values: [String]) -> [String] {
-    var encountered: Set<String> = []
-    return values.filter { encountered.insert($0).inserted }
-  }
-
   private func invalidJSON() -> CodeAnalysisResponseParsingResult {
     rejected(
       code: "ARCA-LLM-ANALYSIS-INVALID-JSON",
@@ -219,8 +195,11 @@ public struct CodeAnalysisResponseParser: Sendable {
     )
   }
 
-  private func diagnostic(code: String, message: String) -> AnalyzerDiagnostic {
-    AnalyzerDiagnostic(code: code, severity: .warning, message: message)
+  private func diagnostic(
+    code: String,
+    message: String
+  ) -> LLMIssueDetectionDiagnostic {
+    LLMIssueDetectionDiagnostic(code: code, message: message)
   }
 }
 

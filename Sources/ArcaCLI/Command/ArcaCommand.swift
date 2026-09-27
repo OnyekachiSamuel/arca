@@ -1,4 +1,3 @@
-import ArcaAnalysis
 import ArcaAnalyzers
 import ArcaConfiguration
 import ArcaDomain
@@ -13,27 +12,24 @@ public struct CommandResult: Equatable {
   public let output: String
   public let exitStatus: ArcaExitStatus
   public let outputDestination: CommandOutputDestination
-  public let reviewRequest: ReviewRequest?
 
   public var exitCode: Int32 { exitStatus.rawValue }
 
   init(
     output: String,
-    exitStatus: ArcaExitStatus,
-    reviewRequest: ReviewRequest? = nil
+    exitStatus: ArcaExitStatus
   ) {
     self.output = output
     self.exitStatus = exitStatus
     outputDestination = exitStatus.outputDestination
-    self.reviewRequest = reviewRequest
   }
 }
 
 public enum ArcaCommand {
-  static let llmHelp = """
+  static let help = """
     OVERVIEW: Detect Swift code issues using one LLM prompt variant.
 
-    USAGE: arca llm [options]
+    USAGE: arca --file <path> --prompt <variant> [options]
 
     OPTIONS:
       --file <path>           Analyze an explicit Swift file.
@@ -58,18 +54,6 @@ public enum ArcaCommand {
       3  Provider, parser, or internal execution failure.
     """
 
-  static let rootHelp = """
-    OVERVIEW: LLM-based code-issue detection for Swift.
-
-    USAGE: arca <command>
-
-    COMMANDS:
-      llm                     Run an LLM code-issue detection experiment.
-
-    OPTIONS:
-      -h, --help              Show help information.
-    """
-
   public static func run(
     arguments: [String],
     currentDirectory: String = FileManager.default.currentDirectoryPath
@@ -88,28 +72,19 @@ public enum ArcaCommand {
   ) async -> CommandResult {
     switch arguments {
     case [], ["--help"], ["-h"]:
-      return CommandResult(output: rootHelp, exitStatus: .success)
-    case ["llm", "--help"], ["llm", "-h"]:
-      return CommandResult(output: llmHelp, exitStatus: .success)
+      return CommandResult(output: help, exitStatus: .success)
     default:
       break
     }
 
-    guard arguments.first == "llm" else {
-      return CommandResult(
-        output: "Error: unknown command or option. Run 'arca --help' for usage.",
-        exitStatus: .invalidInput
-      )
-    }
-
-    return await executeLLM(
-      arguments: Array(arguments.dropFirst()),
+    return await executeAnalysis(
+      arguments: arguments,
       currentDirectory: currentDirectory,
       llmProvider: llmProvider
     )
   }
 
-  private static func executeLLM(
+  private static func executeAnalysis(
     arguments: [String],
     currentDirectory: String,
     llmProvider: (any LLMProvider)?
@@ -127,7 +102,7 @@ public enum ArcaCommand {
       )
       guard let llmConfiguration = environment.configuration.llm else {
         return CommandResult(
-          output: "Error: The llm command requires an llm configuration in .arca.json.",
+          output: "Error: ARCA requires an llm configuration in .arca.json.",
           exitStatus: .invalidInput
         )
       }
@@ -150,21 +125,11 @@ public enum ArcaCommand {
         options.promptVariant == .guided
         ? try RuleKnowledgeRegistry.bundled()
         : nil
-      let selectedReviewTypes: Set<ReviewType>
-      if options.reviewType == .all {
-        selectedReviewTypes = Set(ReviewType.analysisTypes)
-      } else if let reviewType = options.reviewType {
-        selectedReviewTypes = [reviewType]
-      } else {
-        selectedReviewTypes = []
-      }
-      let request = ReviewRequest(
-        id: UUID(),
+      let requestID = UUID()
+      let sourceContexts = SourceFileAnalysisContextBuilder().build(
+        sourceFiles: [source],
         repositoryRoot: environment.repositoryRootURL?.path,
-        selectedFiles: [source.path],
-        changes: changes,
-        selectedReviewTypes: selectedReviewTypes,
-        configuration: environment.configuration
+        changes: changes
       )
 
       let reviewTypesToRun: [ReviewType?]
@@ -176,30 +141,21 @@ public enum ArcaCommand {
         reviewTypesToRun = [nil]
       }
 
-      var results: [AnalyzerResult] = []
+      var results: [LLMIssueDetectionResult] = []
       for reviewType in reviewTypesToRun {
-        let runRequest = ReviewRequest(
-          id: request.id,
-          repositoryRoot: request.repositoryRoot,
-          selectedFiles: request.selectedFiles,
-          changes: request.changes,
-          selectedReviewTypes: reviewType.map { [$0] } ?? [],
-          configuration: request.configuration
-        )
+        let rules =
+          reviewType.map {
+            knowledgeProvider?.knowledge(for: $0) ?? []
+          } ?? []
         results.append(
-          try await LLMCodeAnalyzer(
+          await LLMCodeAnalyzer(
             provider: provider,
-            knowledgeProvider: knowledgeProvider,
             promptVariant: options.promptVariant,
             modelID: configuration.modelID,
             timeout: .seconds(configuration.timeoutSeconds),
             seed: configuration.seed,
             temperature: configuration.temperature
-          ).analyze(
-            context: AnalysisContext(
-              request: runRequest,
-              sourceFiles: [source]
-            )))
+          ).analyze(contexts: sourceContexts, rules: rules))
       }
 
       let result = combinedLLMResult(
@@ -216,7 +172,7 @@ public enum ArcaCommand {
         exitStatus = .success
       }
       let report = LLMIssueDetectionReport(
-        requestID: request.id,
+        requestID: requestID,
         filePath: SourceFileAnalysisContextBuilder().contextPath(
           for: source.path,
           repositoryRoot: environment.repositoryRootURL?.path
@@ -231,8 +187,7 @@ public enum ArcaCommand {
         output: try reporter(for: options.outputFormat).render(
           detectionReport: report
         ),
-        exitStatus: exitStatus,
-        reviewRequest: request
+        exitStatus: exitStatus
       )
     } catch let error as LLMCommandParsingError {
       return CommandResult(
@@ -263,24 +218,20 @@ public enum ArcaCommand {
   }
 
   private static func combinedLLMResult(
-    _ results: [AnalyzerResult],
+    _ results: [LLMIssueDetectionResult],
     providerID: String,
     modelID: String
-  ) -> AnalyzerResult {
+  ) -> LLMIssueDetectionResult {
     func sum(_ values: [Int?]) -> Int? {
       let present = values.compactMap { $0 }
       return present.isEmpty ? nil : present.reduce(0, +)
     }
 
-    let metadata = results.compactMap(\.llmExecutionMetadata)
-    return AnalyzerResult(
-      analyzerID: "llm-code-analysis",
+    let metadata = results.map(\.executionMetadata)
+    return LLMIssueDetectionResult(
       candidates: results.flatMap(\.candidates),
-      executionStatus: results.allSatisfy {
-        $0.executionStatus == .skipped
-      } ? .skipped : .completed,
       diagnostics: results.flatMap(\.diagnostics),
-      llmExecutionMetadata: LLMExecutionMetadata(
+      executionMetadata: LLMExecutionMetadata(
         providerID: providerID,
         modelID: modelID,
         requestCount: metadata.reduce(0) { $0 + $1.requestCount },

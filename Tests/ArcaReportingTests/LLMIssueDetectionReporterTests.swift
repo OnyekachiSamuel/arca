@@ -12,17 +12,22 @@ struct LLMIssueDetectionReporterTests {
       reviewType: nil,
       promptVariant: .baseline
     )
-    let output = try TerminalReporter(outputIsTTY: { false })
+    let output = try TerminalReporter()
       .render(detectionReport: report)
 
     #expect(output.contains("Analysis scope: General, without rules"))
+    #expect(
+      output.contains(
+        "The model did not identify any candidate code issues in the analysed file."
+      )
+    )
     #expect(!output.contains("Review:"))
   }
 
   @Test("terminal output explains the run and guided finding")
   func rendersTerminalReport() throws {
     let report = try makeReport(candidates: [candidate])
-    let output = try TerminalReporter(outputIsTTY: { false })
+    let output = try TerminalReporter()
       .render(detectionReport: report)
 
     #expect(output.contains("ARCA LLM Detection Experiment"))
@@ -32,8 +37,6 @@ struct LLMIssueDetectionReporterTests {
     #expect(output.contains("Canonical rule: ARCA-GOD-Object-001"))
     #expect(output.contains("Provider: lm-studio"))
     #expect(!output.contains("Severity:"))
-    #expect(!output.contains("Categorization"))
-    #expect(!output.contains("Static analyzer"))
   }
 
   @Test("JSON output is versioned and decodes to the report")
@@ -53,7 +56,6 @@ struct LLMIssueDetectionReporterTests {
   private var candidate: FindingCandidate {
     get throws {
       try FindingCandidate(
-        candidateID: UUID(),
         ruleID: "ARCA-GOD-Object-001",
         title: "God Object",
         explanation: "The type owns unrelated responsibilities.",
@@ -77,9 +79,7 @@ struct LLMIssueDetectionReporterTests {
             ),
             excerpt: "let client: Client"
           )
-        ],
-        sourceIdentifiers: ["llm-code-analysis"],
-        analyzerMetadata: [:]
+        ]
       )
     }
   }
@@ -94,10 +94,9 @@ struct LLMIssueDetectionReporterTests {
       filePath: "Sources/App.swift",
       reviewType: reviewType,
       promptVariant: promptVariant,
-      analysis: AnalyzerResult(
-        analyzerID: "llm-code-analysis",
+      analysis: LLMIssueDetectionResult(
         candidates: candidates,
-        llmExecutionMetadata: LLMExecutionMetadata(
+        executionMetadata: LLMExecutionMetadata(
           providerID: "lm-studio",
           modelID: "qwen",
           requestCount: 1,

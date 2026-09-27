@@ -8,7 +8,7 @@ public struct LLMIssueDetectionReport: Codable, Equatable, Sendable {
   public let filePath: String
   public let reviewType: ReviewType?
   public let promptVariant: CodeAnalysisPromptVariant
-  public let analysis: AnalyzerResult
+  public let analysis: LLMIssueDetectionResult
   public let seed: Int?
   public let temperature: Double?
 
@@ -18,7 +18,7 @@ public struct LLMIssueDetectionReport: Codable, Equatable, Sendable {
     filePath: String,
     reviewType: ReviewType?,
     promptVariant: CodeAnalysisPromptVariant,
-    analysis: AnalyzerResult,
+    analysis: LLMIssueDetectionResult,
     seed: Int?,
     temperature: Double?
   ) {

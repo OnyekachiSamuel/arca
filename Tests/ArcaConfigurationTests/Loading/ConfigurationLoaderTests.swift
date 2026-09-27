@@ -92,19 +92,17 @@ struct ConfigurationLoaderTests {
     }
   }
 
-  @Test("static-analysis configuration is rejected")
-  func rejectsRemovedConfiguration() throws {
-    for field in ["godObject", "swiftLint"] {
-      try withTemporaryDirectory { directory in
-        _ = try write(
-          "{\"schemaVersion\":1,\"\(field)\":{}}",
-          to: directory
-        )
-        #expect(
-          throws: ConfigurationLoadingError.unknownField(field)
-        ) {
-          try ConfigurationLoader().load(from: directory)
-        }
+  @Test("unknown configuration fields are rejected")
+  func rejectsUnknownConfigurationField() throws {
+    try withTemporaryDirectory { directory in
+      _ = try write(
+        "{\"schemaVersion\":1,\"unexpected\":{}}",
+        to: directory
+      )
+      #expect(
+        throws: ConfigurationLoadingError.unknownField("unexpected")
+      ) {
+        try ConfigurationLoader().load(from: directory)
       }
     }
   }

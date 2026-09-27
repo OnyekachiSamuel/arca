@@ -20,7 +20,7 @@ enum LLMCommandParsingError: Error, Equatable, LocalizedError {
     case .missingValue(let option):
       "Option '\(option)' requires a value."
     case .unknownOption(let option):
-      "Unknown llm option '\(option)'."
+      "Unknown option '\(option)'."
     case .unsupportedPromptVariant(let value):
       "Unsupported prompt variant '\(value)'. Use baseline or guided."
     case .unsupportedReviewType(let value):

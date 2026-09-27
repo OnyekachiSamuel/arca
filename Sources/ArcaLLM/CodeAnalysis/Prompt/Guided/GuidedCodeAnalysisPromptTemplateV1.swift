@@ -2,6 +2,7 @@ enum GuidedCodeAnalysisPromptTemplateV1 {
   static let id = "arca.code-analysis.guided"
   static let version = 1
 
+
   static func render(
     rulesAndKnowledge: String,
     sourceInputJSON: String
@@ -20,7 +21,6 @@ enum GuidedCodeAnalysisPromptTemplateV1 {
     RULE APPLICABILITY
     - First determine whether each supplied rule applies to the visible source code.
     - Evaluating every supplied rule does not require returning a finding for every rule.
-    - A TCA rule applies only when the source visibly contains relevant TCA constructs or behavior.
     - A SwiftUI rule applies only when the source visibly contains relevant SwiftUI constructs or behavior.
     - Importing a framework alone does not establish a violation.
     - Do not report missing TCA or SwiftUI usage as a violation.
@@ -37,7 +37,6 @@ enum GuidedCodeAnalysisPromptTemplateV1 {
     - Do not invent numeric thresholds.
     - For God Object findings, require multiple unrelated responsibilities; size alone is insufficient.
     - Do not provide refactoring suggestions, steps, or replacement code.
-    - Return at most 5 distinct findings, prioritizing the strongest evidence.
     - Do not repeat identical or substantially similar findings.
 
     RULES_AND_KNOWLEDGE ("rules")

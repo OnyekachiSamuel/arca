@@ -166,16 +166,6 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "ArcaAnalysisTests"
-               BuildableName = "ArcaAnalysisTests"
-               BlueprintName = "ArcaAnalysisTests"
-               ReferencedContainer = "container:">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "ArcaSourceTests"
                BuildableName = "ArcaSourceTests"
                BlueprintName = "ArcaSourceTests"

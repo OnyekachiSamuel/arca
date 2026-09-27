@@ -2,6 +2,7 @@ enum BaselineCodeAnalysisPromptTemplateV1 {
   static let id = "arca.code-analysis.baseline"
   static let version = 1
 
+
   static func render(inputJSON: String) -> String {
     """
     ARCA BASELINE CODE ANALYSIS PROMPT

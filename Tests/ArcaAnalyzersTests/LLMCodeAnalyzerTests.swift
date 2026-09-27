@@ -1,4 +1,3 @@
-import ArcaAnalysis
 import ArcaAnalyzers
 import ArcaDomain
 import ArcaKnowledge
@@ -8,7 +7,7 @@ import Testing
 
 @Suite("LLM code analyzer")
 struct LLMCodeAnalyzerTests {
-  @Test("baseline analysis returns rule-free candidates through AnalyzerResult")
+  @Test("baseline analysis returns a rule-free candidate")
   func analyzesWithBaselinePrompt() async throws {
     let provider = RecordingCodeAnalysisProvider(responses: [
       .success(
@@ -33,27 +32,24 @@ struct LLMCodeAnalyzerTests {
     ])
     let analyzer = makeAnalyzer(
       provider: provider,
-      promptVariant: .baseline,
-      knowledgeProvider: nil
+      promptVariant: .baseline
     )
 
-    let result = try await analyzer.analyze(
-      context: context(files: [source(path: "/project/App.swift")])
+    let result = await analyzer.analyze(
+      contexts: contexts(files: [source(path: "/project/App.swift")])
     )
     let candidate = try #require(result.candidates.first)
     let requests = await provider.requests
 
-    #expect(result.analyzerID == "llm-code-analysis")
     #expect(candidate.ruleID == nil)
     #expect(candidate.title == "Large Class")
     #expect(candidate.issueType == nil)
-    #expect(candidate.analyzerMetadata["promptVariant"] == .string("baseline"))
     #expect(requests.count == 1)
     #expect(requests[0].prompt.contains("Variant: baseline"))
     #expect(!requests[0].prompt.contains("ARCA-GOD-001"))
   }
 
-  @Test("analyzes every selected file and records provenance and usage")
+  @Test("analyzes every selected file and records usage")
   func analyzesEveryFile() async throws {
     let provider = RecordingCodeAnalysisProvider(responses: [
       .success(response()),
@@ -61,13 +57,14 @@ struct LLMCodeAnalyzerTests {
     ])
     let analyzer = makeAnalyzer(provider: provider)
 
-    let result = try await analyzer.analyze(
-      context: context(files: [
+    let result = await analyzer.analyze(
+      contexts: contexts(files: [
         source(path: "/project/First.swift"),
         source(path: "/project/Second.swift"),
-      ]))
+      ]),
+      rules: godObjectRules
+    )
 
-    #expect(result.analyzerID == "llm-code-analysis")
     #expect(
       result.candidates.map(\.filePath) == [
         "First.swift", "Second.swift",
@@ -75,16 +72,7 @@ struct LLMCodeAnalyzerTests {
     #expect(result.diagnostics.isEmpty)
     #expect(await provider.requests.count == 2)
     #expect(
-      result.candidates.allSatisfy {
-        $0.sourceIdentifiers == [
-          "llm-code-analysis",
-          "llm-provider:mock-provider",
-          "llm-model:mock-model",
-        ]
-      }
-    )
-    #expect(
-      result.llmExecutionMetadata
+      result.executionMetadata
         == LLMExecutionMetadata(
           providerID: "mock-provider",
           modelID: "mock-model",
@@ -112,14 +100,14 @@ struct LLMCodeAnalyzerTests {
       .success(llmResponse(text: #"{"findings":[]}"#))
     ])
 
-    let result = try await makeAnalyzer(provider: provider).analyze(
-      context: context(files: [source(path: "/project/App.swift")])
+    let result = await makeAnalyzer(provider: provider).analyze(
+      contexts: contexts(files: [source(path: "/project/App.swift")]),
+      rules: godObjectRules
     )
 
     #expect(result.candidates.isEmpty)
     #expect(result.diagnostics.isEmpty)
-    #expect(result.executionStatus == .completed)
-    #expect(result.llmExecutionMetadata?.requestCount == 1)
+    #expect(result.executionMetadata.requestCount == 1)
   }
 
   @Test("malformed model output becomes a parser diagnostic")
@@ -128,8 +116,9 @@ struct LLMCodeAnalyzerTests {
       .success(llmResponse(text: "not JSON"))
     ])
 
-    let result = try await makeAnalyzer(provider: provider).analyze(
-      context: context(files: [source(path: "/project/App.swift")])
+    let result = await makeAnalyzer(provider: provider).analyze(
+      contexts: contexts(files: [source(path: "/project/App.swift")]),
+      rules: godObjectRules
     )
 
     #expect(result.candidates.isEmpty)
@@ -145,8 +134,9 @@ struct LLMCodeAnalyzerTests {
       .success(response())
     ])
 
-    let result = try await makeAnalyzer(provider: provider).analyze(
-      context: context(files: [source(path: "/project/App.swift")])
+    let result = await makeAnalyzer(provider: provider).analyze(
+      contexts: contexts(files: [source(path: "/project/App.swift")]),
+      rules: godObjectRules
     )
 
     #expect(result.candidates.count == 1)
@@ -161,11 +151,12 @@ struct LLMCodeAnalyzerTests {
       .success(response()),
     ])
 
-    let result = try await makeAnalyzer(provider: provider).analyze(
-      context: context(files: [
+    let result = await makeAnalyzer(provider: provider).analyze(
+      contexts: contexts(files: [
         source(path: "/project/First.swift"),
         source(path: "/project/Second.swift"),
-      ])
+      ]),
+      rules: godObjectRules
     )
 
     #expect(result.candidates.map(\.filePath) == ["Second.swift"])
@@ -174,21 +165,18 @@ struct LLMCodeAnalyzerTests {
         == ["ARCA-LLM-ANALYSIS-PROVIDER-FAILED"]
     )
     #expect(await provider.requests.count == 2)
-    #expect(result.llmExecutionMetadata?.requestCount == 2)
+    #expect(result.executionMetadata.requestCount == 2)
     #expect(
-      result.llmExecutionMetadata?.providerDurationMilliseconds == 7
+      result.executionMetadata.providerDurationMilliseconds == 7
     )
   }
 
   private func makeAnalyzer(
     provider: RecordingCodeAnalysisProvider,
-    promptVariant: CodeAnalysisPromptVariant = .guided,
-    knowledgeProvider: (any RuleKnowledgeProviding)? =
-      AnalyzerKnowledgeProvider()
+    promptVariant: CodeAnalysisPromptVariant = .guided
   ) -> LLMCodeAnalyzer {
     LLMCodeAnalyzer(
       provider: provider,
-      knowledgeProvider: knowledgeProvider,
       promptVariant: promptVariant,
       modelID: "mock-model",
       timeout: .seconds(30),
@@ -197,15 +185,14 @@ struct LLMCodeAnalyzerTests {
     )
   }
 
-  private func context(files: [SourceFile]) -> AnalysisContext {
-    AnalysisContext(
-      request: ReviewRequest(
-        id: UUID(),
-        selectedFiles: files.map(\.path),
-        selectedReviewTypes: [.godObject]
-      ),
-      sourceFiles: files
-    )
+  private func contexts(files: [SourceFile]) -> [SourceFileAnalysisContext] {
+    files.map {
+      SourceFileAnalysisContext(
+        filePath: URL(fileURLWithPath: $0.path).lastPathComponent,
+        sourceContent: $0.content,
+        lineCount: $0.lineCount
+      )
+    }
   }
 
   private func source(path: String) -> SourceFile {
@@ -270,36 +257,17 @@ private enum MockProviderError: Error, Sendable {
   case failed
 }
 
-private struct AnalyzerKnowledgeProvider: RuleKnowledgeProviding {
-  let allKnowledge: [RuleKnowledge] = [
-    RuleKnowledge(
-      ruleID: "ARCA-GOD-001",
-      reviewType: .godObject,
-      category: "architecture",
-      issueType: .antiPattern,
-      title: "God Object candidate",
-      problemContext: "A type owns unrelated responsibilities.",
-      expectedBehavior: "Keep types focused.",
-      violationCriteria: "Several responsibilities are visible.",
-      knowledgeFile: "references/ARCA-GOD-001.md",
-      supportingKnowledge: "# God Object"
-    ),
-    RuleKnowledge(
-      ruleID: "ARCA-LONG-METHOD-001",
-      reviewType: .swift,
-      category: "complexity",
-      issueType: .codeSmell,
-      title: "Long Method candidate",
-      problemContext: "A method is too complex.",
-      expectedBehavior: "Keep methods focused.",
-      violationCriteria: "Several distinct operations are visible.",
-      knowledgeFile: "references/ARCA-LONG-METHOD-001.md",
-      supportingKnowledge: "# Long Method"
-    ),
-  ]
-
-  func knowledge(for ruleID: String) -> RuleKnowledge? {
-    allKnowledge.first { $0.ruleID == ruleID }
-  }
-
-}
+private let godObjectRules: [RuleKnowledge] = [
+  RuleKnowledge(
+    ruleID: "ARCA-GOD-001",
+    reviewType: .godObject,
+    category: "architecture",
+    issueType: .antiPattern,
+    title: "God Object candidate",
+    problemContext: "A type owns unrelated responsibilities.",
+    expectedBehavior: "Keep types focused.",
+    violationCriteria: "Several responsibilities are visible.",
+    knowledgeFile: "references/ARCA-GOD-001.md",
+    supportingKnowledge: "# God Object"
+  )
+]
