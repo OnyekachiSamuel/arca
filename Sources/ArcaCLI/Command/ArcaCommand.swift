@@ -57,19 +57,22 @@ public enum ArcaCommand {
     
     public static func run(
         arguments: [String],
-        currentDirectory: String = FileManager.default.currentDirectoryPath
+        currentDirectory: String = FileManager.default.currentDirectoryPath,
+        progress: (@Sendable (String) -> Void)? = nil
     ) async -> CommandResult {
         await execute(
             arguments: arguments,
             currentDirectory: currentDirectory,
-            llmProvider: nil
+            llmProvider: nil,
+            progress: progress
         )
     }
     
     static func execute(
         arguments: [String],
         currentDirectory: String,
-        llmProvider: (any LLMProvider)?
+        llmProvider: (any LLMProvider)?,
+        progress: (@Sendable (String) -> Void)? = nil
     ) async -> CommandResult {
         switch arguments {
         case [], ["--help"], ["-h"]:
@@ -81,20 +84,21 @@ public enum ArcaCommand {
         return await executeAnalysis(
             arguments: arguments,
             currentDirectory: currentDirectory,
-            llmProvider: llmProvider
+            llmProvider: llmProvider,
+            progress: progress
         )
     }
     
     private static func executeAnalysis(
         arguments: [String],
         currentDirectory: String,
-        llmProvider: (any LLMProvider)?
+        llmProvider: (any LLMProvider)?,
+        progress: (@Sendable (String) -> Void)?
     ) async -> CommandResult {
         do {
             let options = try LLMCommandParser().parse(arguments: arguments)
-            let selectedPath = try ExplicitSwiftFileSelector().select(
-                path: options.filePath
-            )
+            let fileSelector = ExplicitSwiftFileSelector()
+            let selectedPath = try fileSelector.select(path: options.filePath)
             let source = try SourceFileLoader().load(path: selectedPath)
             let environment = try loadReviewEnvironment(from: currentDirectory)
             let changes = try selectedFileChanges(
@@ -153,20 +157,22 @@ public enum ArcaCommand {
             }
             
             var results: [LLMIssueDetectionResult] = []
+            progress?("Waiting for the LLM response...")
             for reviewType in reviewTypesToRun {
                 let rules =
                 reviewType.map {
                     knowledgeProvider?.knowledge(for: $0) ?? []
                 } ?? []
-                results.append(
-                    await LLMCodeAnalyzer(
-                        provider: analysisProvider,
-                        promptVariant: options.promptVariant,
-                        modelID: configuration.modelID,
-                        timeout: .seconds(configuration.timeoutSeconds),
-                        seed: configuration.seed,
-                        temperature: configuration.temperature
-                    ).analyze(context: sourceContext, rules: rules))
+                let analyzer = LLMCodeAnalyzer(
+                    provider: analysisProvider,
+                    promptVariant: options.promptVariant,
+                    modelID: configuration.modelID,
+                    timeout: .seconds(configuration.timeoutSeconds),
+                    seed: configuration.seed,
+                    temperature: configuration.temperature
+                )
+                let llmResponse = await analyzer.analyze(context: sourceContext, rules: rules)
+                results.append(llmResponse)
             }
             
             let result = combinedLLMResult(

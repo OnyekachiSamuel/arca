@@ -2,7 +2,11 @@ import ArcaCLI
 import Foundation
 
 let result = await ArcaCommand.run(
-    arguments: Array(CommandLine.arguments.dropFirst())
+    arguments: Array(CommandLine.arguments.dropFirst()),
+    progress: { message in
+        guard let data = (message + "\n").data(using: .utf8) else { return }
+        FileHandle.standardError.write(data)
+    }
 )
 let stream: FileHandle
 switch result.outputDestination {

@@ -27,9 +27,7 @@ struct FindingCandidateCodableTests {
       try makeCandidate(
         range: SourceRange(
           startLine: 0,
-          startColumn: 1,
-          endLine: 1,
-          endColumn: 1
+          endLine: 1
         ))
     }
   }
@@ -42,11 +40,8 @@ struct FindingCandidateCodableTests {
           description: "Invalid location.",
           range: SourceRange(
             startLine: 0,
-            startColumn: 1,
-            endLine: 1,
-            endColumn: 1
-          ),
-          excerpt: "struct App {}"
+            endLine: 1
+          )
         )
       ])
     }
@@ -55,20 +50,15 @@ struct FindingCandidateCodableTests {
   private func makeCandidate(
     range: SourceRange = SourceRange(
       startLine: 1,
-      startColumn: 1,
-      endLine: 20,
-      endColumn: 2
+      endLine: 20
     ),
     evidence: [SourceCodeEvidence] = [
       SourceCodeEvidence(
         description: "The type owns unrelated behavior.",
         range: SourceRange(
           startLine: 2,
-          startColumn: 1,
-          endLine: 4,
-          endColumn: 2
-        ),
-        excerpt: "func save() {}"
+          endLine: 4
+        )
       )
     ]
   ) throws -> FindingCandidate {

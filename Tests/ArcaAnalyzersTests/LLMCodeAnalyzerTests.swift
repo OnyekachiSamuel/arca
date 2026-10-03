@@ -121,22 +121,6 @@ struct LLMCodeAnalyzerTests {
     )
   }
 
-  @Test("source excerpts are extracted by ARCA from the reported lines")
-  func extractsSourceEvidence() async throws {
-    let provider = RecordingCodeAnalysisProvider(responses: [
-      .success(response())
-    ])
-
-    let result = await makeAnalyzer(provider: provider).analyze(
-      context: context(file: source(path: "/project/App.swift")),
-      rules: godObjectRules
-    )
-
-    #expect(result.candidates.count == 1)
-    #expect(result.diagnostics.isEmpty)
-    #expect(result.candidates.first?.evidence.first?.excerpt == "    let value = 1")
-  }
-
   @Test("provider failure becomes a diagnostic")
   func reportsProviderFailure() async throws {
     let provider = RecordingCodeAnalysisProvider(responses: [

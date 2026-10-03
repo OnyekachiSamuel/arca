@@ -267,6 +267,26 @@ struct ArcaCommandTests {
     }
   }
 
+  @Test("reports when ARCA starts waiting for the LLM response")
+  func reportsLLMWaitProgress() async throws {
+    try await withFixture { directory, file in
+      let progress = ProgressRecorder()
+
+      _ = await ArcaCommand.execute(
+        arguments: [
+          "--file", file.path,
+          "--prompt", "baseline",
+          "--format", "terminal",
+        ],
+        currentDirectory: directory.path,
+        llmProvider: RecordingProvider(),
+        progress: { progress.record($0) }
+      )
+
+      #expect(progress.messages == ["Waiting for the LLM response..."])
+    }
+  }
+
   private func run(
     directory: URL,
     file: URL,
@@ -381,6 +401,23 @@ private actor RecordingProvider: LLMProvider {
       ),
       durationMilliseconds: 2
     )
+  }
+}
+
+private final class ProgressRecorder: @unchecked Sendable {
+  private let lock = NSLock()
+  private var recordedMessages: [String] = []
+
+  var messages: [String] {
+    lock.lock()
+    defer { lock.unlock() }
+    return recordedMessages
+  }
+
+  func record(_ message: String) {
+    lock.lock()
+    defer { lock.unlock() }
+    recordedMessages.append(message)
   }
 }
 

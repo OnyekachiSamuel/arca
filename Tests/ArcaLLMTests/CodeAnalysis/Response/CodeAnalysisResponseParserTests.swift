@@ -23,7 +23,6 @@ struct CodeAnalysisResponseParserTests {
     #expect(range.startLine == 3)
     #expect(range.endLine == 5)
     #expect(evidence.description == "The type owns persistence behavior.")
-    #expect(evidence.excerpt == "    func submit() {\n        repository.save()\n    }")
   }
 
   @Test("an empty findings array is a successful empty result")
@@ -132,22 +131,6 @@ struct CodeAnalysisResponseParserTests {
       parser.parse(#"{"findings":[}"#, context: context),
       code: "ARCA-LLM-ANALYSIS-INVALID-JSON"
     )
-  }
-
-  @Test("evidence excerpts preserve the original source text")
-  func preservesSourceEvidence() throws {
-    let source = #"let apiToken = "sk-live-super-secret-value""#
-    let result = parser.parse(
-      "{\"findings\":[\(findingJSON(startLine: 1, endLine: 1))]}",
-      context: SourceFileAnalysisContext(
-        filePath: "Secrets.swift",
-        sourceContent: source,
-        lineCount: 1
-      )
-    )
-
-    #expect(result.diagnostics.isEmpty)
-    #expect(result.candidates.first?.evidence.first?.excerpt == source)
   }
 
   private var parser: CodeAnalysisResponseParser {

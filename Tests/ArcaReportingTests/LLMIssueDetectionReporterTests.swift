@@ -47,6 +47,9 @@ struct LLMIssueDetectionReporterTests {
 
     #expect(decoded == report)
     #expect(decoded.schemaVersion == 1)
+    #expect(!output.contains(#""startColumn""#))
+    #expect(!output.contains(#""endColumn""#))
+    #expect(!output.contains(#""excerpt""#))
   }
 
   @Test("JSON reports are stored by prompt variant with unique descriptive names")
@@ -112,20 +115,15 @@ struct LLMIssueDetectionReporterTests {
         filePath: "Sources/App.swift",
         range: SourceRange(
           startLine: 1,
-          startColumn: 1,
-          endLine: 10,
-          endColumn: 2
+          endLine: 10
         ),
         evidence: [
           SourceCodeEvidence(
             description: "Networking and persistence are both owned.",
             range: SourceRange(
               startLine: 2,
-              startColumn: 1,
-              endLine: 4,
-              endColumn: 2
-            ),
-            excerpt: "let client: Client"
+              endLine: 4
+            )
           )
         ]
       )

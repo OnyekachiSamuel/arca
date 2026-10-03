@@ -20,7 +20,7 @@ struct BaselineCodeAnalysisResponseParserTests {
     #expect(finding.filePath == "Example.swift")
     #expect(range.startLine == 2)
     #expect(range.endLine == 2)
-    #expect(evidence.excerpt == "    let value = 1")
+    #expect(evidence.description == "The type owns state directly.")
   }
 
   @Test("unexpected response fields are rejected")

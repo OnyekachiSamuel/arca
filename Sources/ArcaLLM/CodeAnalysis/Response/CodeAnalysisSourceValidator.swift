@@ -28,22 +28,17 @@ struct CodeAnalysisSourceValidator: Sendable {
                 ))
         }
         
-        let excerpt = sourceLines[(startLine - 1)...(endLine - 1)]
-            .joined(separator: "\n")
         return .accepted(
             SourceCodeEvidence(
                 description: normalizedDescription,
-                range: sourceRange(startLine: startLine, endLine: endLine),
-                excerpt: excerpt
+                range: sourceRange(startLine: startLine, endLine: endLine)
             ))
     }
     
     func sourceRange(startLine: Int, endLine: Int) -> SourceRange {
         SourceRange(
             startLine: startLine,
-            startColumn: 1,
-            endLine: endLine,
-            endColumn: sourceLines[endLine - 1].utf8.count + 1
+            endLine: endLine
         )
     }
     

@@ -44,7 +44,6 @@ struct GitDiffProviderTests {
 
             #expect(diffs.count == 1)
             #expect(diff.filePath == normalizedPath(file))
-            #expect(diff.previousFilePath == nil)
             #expect(
                 diff.addedLineRanges
                     == [ChangedLineRange(startLine: 5, endLine: 5)]
@@ -99,10 +98,10 @@ struct GitDiffProviderTests {
         }
     }
 
-    @Test("preserves old and new paths when a modified file is renamed")
+    @Test("extracts modified ranges when a file is renamed")
     func extractsRenamedFileDiff() throws {
         try withTemporaryGitRepository { repository in
-            let oldFile = try repository.write(
+            _ = try repository.write(
                 """
                 struct Feature {
                     let value = 1
@@ -127,7 +126,6 @@ struct GitDiffProviderTests {
 
             #expect(diffs.count == 1)
             #expect(diff.filePath == normalizedPath(newFile))
-            #expect(diff.previousFilePath == normalizedPath(oldFile))
             #expect(
                 diff.modifiedLineRanges
                     == [ChangedLineRange(startLine: 2, endLine: 2)]

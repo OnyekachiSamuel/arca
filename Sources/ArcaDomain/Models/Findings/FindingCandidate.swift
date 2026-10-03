@@ -88,17 +88,7 @@ public struct FindingCandidate: Codable, Equatable, Sendable {
     }
     
     private static func isValid(_ range: SourceRange) -> Bool {
-        let positionsAreOneBased =
-        range.startLine > 0
-        && range.startColumn > 0
-        && range.endLine > 0
-        && range.endColumn > 0
-        let endFollowsStart =
-        range.endLine > range.startLine
-        || (range.endLine == range.startLine
-            && range.endColumn >= range.startColumn)
-        
-        return positionsAreOneBased && endFollowsStart
+        range.startLine > 0 && range.endLine >= range.startLine
     }
 }
 

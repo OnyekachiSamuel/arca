@@ -49,9 +49,6 @@ public struct SourceFileAnalysisContextBuilder: Sendable {
         repositoryRoot: String?
     ) -> SourceFileChangeContext {
         SourceFileChangeContext(
-            previousFilePath: change.previousFilePath.map {
-                contextPath(for: $0, repositoryRoot: repositoryRoot)
-            },
             addedLineRanges: change.addedLineRanges,
             modifiedLineRanges: change.modifiedLineRanges,
             deletedLineRanges: change.deletedLineRanges

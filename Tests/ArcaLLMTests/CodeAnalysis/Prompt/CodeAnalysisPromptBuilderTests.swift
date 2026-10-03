@@ -153,7 +153,6 @@ struct CodeAnalysisPromptBuilderTests {
         """,
       lineCount: 6,
       change: SourceFileChangeContext(
-        previousFilePath: "Sources/OldCheckout.swift",
         addedLineRanges: [
           ChangedLineRange(startLine: 4, endLine: 4)
         ],
@@ -175,7 +174,7 @@ struct CodeAnalysisPromptBuilderTests {
     )
 
     #expect(prompt.contains("Sources/Checkout.swift"))
-    #expect(prompt.contains("Sources/OldCheckout.swift"))
+    #expect(!prompt.contains(#""previousFilePath""#))
     #expect(prompt.contains("Hello 👋"))
     #expect(prompt.contains(#""lineNumber" : 2"#))
     #expect(prompt.contains(#""text" : ""#))

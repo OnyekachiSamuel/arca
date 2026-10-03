@@ -25,7 +25,6 @@ public struct GitDiffProvider: Sendable {
             return try parsePatch(
                 patch,
                 filePath: filePath,
-                previousFilePath: trackedChange?.previousFilePath,
                 repositoryRoot: repositoryRoot
             )
         }
@@ -89,11 +88,7 @@ public struct GitDiffProvider: Sendable {
                 )
                 changes[currentFilePath] = TrackedChange(
                     relativeFilePath: newPath,
-                    previousRelativeFilePath: oldPath,
-                    previousFilePath: absolutePath(
-                        oldPath,
-                        repositoryRoot: repositoryRoot
-                    )
+                    previousRelativeFilePath: oldPath
                 )
             } else {
                 guard fieldIndex < fields.count,
@@ -110,8 +105,7 @@ public struct GitDiffProvider: Sendable {
                 )
                 changes[currentFilePath] = TrackedChange(
                     relativeFilePath: currentPath,
-                    previousRelativeFilePath: nil,
-                    previousFilePath: nil
+                    previousRelativeFilePath: nil
                 )
             }
         }
@@ -177,7 +171,6 @@ public struct GitDiffProvider: Sendable {
     private func parsePatch(
         _ patch: String,
         filePath: String,
-        previousFilePath: String?,
         repositoryRoot: String
     ) throws -> CodeChange? {
         guard !isBinaryPatch(patch) else {
@@ -225,7 +218,6 @@ public struct GitDiffProvider: Sendable {
 
         return CodeChange(
             filePath: filePath,
-            previousFilePath: previousFilePath,
             addedLineRanges: addedLineRanges,
             modifiedLineRanges: modifiedLineRanges,
             deletedLineRanges: deletedLineRanges
@@ -323,7 +315,6 @@ public struct GitDiffProvider: Sendable {
 private struct TrackedChange: Sendable {
     let relativeFilePath: String
     let previousRelativeFilePath: String?
-    let previousFilePath: String?
 }
 
 private struct GitCommandResult: Sendable {
