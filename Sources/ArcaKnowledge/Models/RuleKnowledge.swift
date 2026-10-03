@@ -4,7 +4,6 @@ public struct RuleKnowledge: Equatable, Sendable {
   public let ruleID: String
   public let reviewType: ReviewType
   public let category: String
-  public let issueType: IssueType
   public let title: String
   public let problemContext: String
   public let expectedBehavior: String
@@ -17,7 +16,6 @@ public struct RuleKnowledge: Equatable, Sendable {
     ruleID: String,
     reviewType: ReviewType,
     category: String,
-    issueType: IssueType,
     title: String,
     problemContext: String,
     expectedBehavior: String,
@@ -29,7 +27,6 @@ public struct RuleKnowledge: Equatable, Sendable {
     self.ruleID = ruleID
     self.reviewType = reviewType
     self.category = category
-    self.issueType = issueType
     self.title = title
     self.problemContext = problemContext
     self.expectedBehavior = expectedBehavior

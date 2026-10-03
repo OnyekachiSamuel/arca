@@ -129,8 +129,6 @@ public struct CodeAnalysisResponseParser: Sendable {
                 startLine: startLine,
                 endLine: endLine
               ),
-              issueType: knowledge.issueType,
-              category: knowledge.category,
               evidence: evidence
             ))
         } catch {

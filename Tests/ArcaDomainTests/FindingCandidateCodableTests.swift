@@ -9,10 +9,13 @@ struct FindingCandidateCodableTests {
     let candidate = try makeCandidate()
     let data = try JSONEncoder().encode(candidate)
     let decoded = try JSONDecoder().decode(FindingCandidate.self, from: data)
+    let json = try #require(
+      JSONSerialization.jsonObject(with: data) as? [String: Any]
+    )
 
     #expect(decoded == candidate)
-    #expect(decoded.issueType == .antiPattern)
-    #expect(decoded.category == "architecture")
+    #expect(json["issueType"] == nil)
+    #expect(json["category"] == nil)
     #expect(decoded.evidence.first?.description == "The type owns unrelated behavior.")
   }
 
@@ -80,8 +83,6 @@ struct FindingCandidateCodableTests {
       explanation: "Test explanation.",
       filePath: "Sources/App.swift",
       range: range,
-      issueType: .antiPattern,
-      category: "architecture",
       evidence: evidence
     )
   }

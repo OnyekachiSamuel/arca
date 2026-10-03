@@ -22,7 +22,6 @@ struct CodeAnalysisPromptBuilderTests {
     #expect(!prompt.contains(#""filePath""#))
     #expect(!prompt.contains(#""excerpt""#))
     #expect(!prompt.contains(#""additionalProperties""#))
-    #expect(prompt.contains("Return at most 5 distinct findings"))
     #expect(!prompt.contains(godObjectKnowledge.problemContext))
     #expect(!prompt.contains(godObjectKnowledge.expectedBehavior))
     #expect(!prompt.contains(godObjectKnowledge.violationCriteria))
@@ -53,32 +52,27 @@ struct CodeAnalysisPromptBuilderTests {
     #expect(prompt.contains("RULE APPLICABILITY"))
     #expect(
       prompt.contains(
-        "First determine whether each supplied rule applies"
+        "Evaluate each supplied rule independently"
       )
     )
     #expect(
       prompt.contains(
-        "A TCA rule applies only when the source visibly contains relevant TCA constructs or behavior"
+        "First determine whether the rule applies to the provided source code"
       )
     )
     #expect(
       prompt.contains(
-        "A SwiftUI rule applies only when the source visibly contains relevant SwiftUI constructs or behavior"
+        "Report a finding only when the rule's violation criteria is met"
       )
     )
     #expect(
       prompt.contains(
-        "Importing a framework alone does not establish a violation"
+        "If a rule does not apply or there is insufficient evidence, do not report it"
       )
     )
     #expect(
       prompt.contains(
-        "Do not report missing TCA or SwiftUI usage as a violation"
-      )
-    )
-    #expect(
-      prompt.contains(
-        #"If no applicable rule is violated, return {"findings":[]}"#
+        #"Return {"findings":[]} when evidence is insufficient"#
       )
     )
   }
@@ -100,7 +94,6 @@ struct CodeAnalysisPromptBuilderTests {
       ruleID: "ARCA-OWASP-MASWE-0001",
       reviewType: .security,
       category: "data-storage",
-      issueType: .securityWeakness,
       title: "Sensitive data stored without protection",
       problemContext: "Sensitive information can be exposed.",
       expectedBehavior: "Use storage appropriate to the data.",
@@ -115,9 +108,9 @@ struct CodeAnalysisPromptBuilderTests {
     )
 
     #expect(prompt.contains("ARCA-OWASP-MASWE-0001"))
-    #expect(prompt.contains("Review type: security"))
-    #expect(prompt.contains("Category: data-storage"))
-    #expect(prompt.contains("Issue type: security-weakness"))
+    #expect(!prompt.contains("Review type: security"))
+    #expect(!prompt.contains("Category: data-storage"))
+    #expect(!prompt.contains("Issue type: security-weakness"))
     #expect(prompt.contains(rule.problemContext))
     #expect(prompt.contains(rule.expectedBehavior))
     #expect(prompt.contains(rule.violationCriteria))
@@ -130,7 +123,6 @@ struct CodeAnalysisPromptBuilderTests {
       ruleID: "ARCA-TCA-DEPRECATED-001",
       reviewType: .tca,
       category: "framework-usage",
-      issueType: .deprecatedAPI,
       title: "Legacy reducer API usage",
       problemContext: "A legacy TCA reducer API is used.",
       expectedBehavior: "Use the current reducer composition API.",
@@ -210,19 +202,13 @@ struct CodeAnalysisPromptBuilderTests {
     #expect(prompt.contains(#""evidence""#))
     #expect(!prompt.contains("Repeat the supplied file path exactly"))
     #expect(prompt.contains("Return only JSON in exactly this shape"))
-    #expect(prompt.contains("visible source evidence"))
+    #expect(prompt.contains("violation criteria is met"))
     #expect(prompt.contains("one-based, inclusive line numbers"))
     #expect(prompt.contains("Do not invent numeric thresholds"))
     #expect(prompt.contains("multiple unrelated responsibilities"))
-    #expect(
-      prompt.contains(
-        "size alone is insufficient"
-      )
-    )
     #expect(!prompt.contains(#""excerpt""#))
     #expect(!prompt.contains(#""severity""#))
     #expect(!prompt.contains(#""additionalProperties""#))
-    #expect(prompt.contains("Return at most 5 distinct findings"))
     #expect(prompt.contains("Do not provide refactoring"))
   }
 
@@ -269,19 +255,26 @@ struct CodeAnalysisPromptBuilderTests {
     #expect(!prompt.contains(#""previousFilePath""#))
   }
 
-  @Test("common credential values are not included in the prompt")
-  func redactsCommonCredentials() throws {
-    let prompt = try GuidedCodeAnalysisPromptBuilder().build(
-      context: SourceFileAnalysisContext(
-        filePath: "Secrets.swift",
-        sourceContent: #"let apiToken = "sk-live-super-secret-value""#,
-        lineCount: 1
-      ),
+  @Test("baseline and guided prompts preserve the complete source text")
+  func preservesCompleteSourceText() throws {
+    let source = #"let apiToken = "sk-live-super-secret-value""#
+    let context = SourceFileAnalysisContext(
+      filePath: "Secrets.swift",
+      sourceContent: source,
+      lineCount: 1
+    )
+    let baselinePrompt = try BaselineCodeAnalysisPromptBuilder().build(
+      context: context
+    )
+    let guidedPrompt = try GuidedCodeAnalysisPromptBuilder().build(
+      context: context,
       rules: [godObjectKnowledge]
     )
 
-    #expect(!prompt.contains("sk-live-super-secret-value"))
-    #expect(prompt.contains("[REDACTED]"))
+    #expect(baselinePrompt.contains("sk-live-super-secret-value"))
+    #expect(guidedPrompt.contains("sk-live-super-secret-value"))
+    #expect(!baselinePrompt.contains("[REDACTED]"))
+    #expect(!guidedPrompt.contains("[REDACTED]"))
   }
 
   @Test("at least one applicable rule is required")
@@ -361,7 +354,6 @@ struct CodeAnalysisPromptBuilderTests {
       ruleID: "ARCA-GOD-001",
       reviewType: .godObject,
       category: "architecture",
-      issueType: .antiPattern,
       title: "God Object candidate",
       problemContext: "A type owns multiple unrelated responsibilities.",
       expectedBehavior: "Do not classify a type using line count alone.",
@@ -376,7 +368,6 @@ struct CodeAnalysisPromptBuilderTests {
       ruleID: "ARCA-LONG-METHOD-001",
       reviewType: .swift,
       category: "complexity",
-      issueType: .codeSmell,
       title: "Long Method candidate",
       problemContext: "A method is difficult to understand or change safely.",
       expectedBehavior: "Do not classify a method using line count alone.",

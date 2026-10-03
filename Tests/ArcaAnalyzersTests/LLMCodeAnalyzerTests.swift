@@ -43,9 +43,9 @@ struct LLMCodeAnalyzerTests {
 
     #expect(candidate.ruleID == nil)
     #expect(candidate.title == "Large Class")
-    #expect(candidate.issueType == nil)
     #expect(requests.count == 1)
-    #expect(requests[0].prompt.contains("Variant: baseline"))
+    #expect(requests[0].prompt.contains("your existing knowledge"))
+    #expect(!requests[0].prompt.contains("RULES_AND_KNOWLEDGE"))
     #expect(!requests[0].prompt.contains("ARCA-GOD-001"))
   }
 
@@ -262,7 +262,6 @@ private let godObjectRules: [RuleKnowledge] = [
     ruleID: "ARCA-GOD-001",
     reviewType: .godObject,
     category: "architecture",
-    issueType: .antiPattern,
     title: "God Object candidate",
     problemContext: "A type owns unrelated responsibilities.",
     expectedBehavior: "Keep types focused.",

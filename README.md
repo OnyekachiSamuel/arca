@@ -81,13 +81,21 @@ swift run arca \
 Use `--provider local` for LM Studio, `--provider openai` for OpenAI, or
 omit the option to use `llm.defaultProvider`.
 
+Add `--show-prompt` to display the exact prompt sent to the configured LLM.
+ARCA still completes the analysis and presents or writes the requested report.
+Guided `all` displays each independently submitted prompt. Without this option,
+the existing output is unchanged.
+
 The baseline command does not accept `--review`. Guided review values are
 `swift`, `swiftui`, `tca`, `security`, `god-object`, and `all`. Guided `all`
 runs each rule set independently and aggregates its findings and measurements.
 
-Omit `--format json` for a human-readable terminal report. JSON output uses
-schema version `1` and records the prompt variant, provider, model, generation
-parameters, duration, token usage, findings, and diagnostics.
+Omit `--format json` for a human-readable terminal report. With
+`--format json`, ARCA writes a new schema-versioned report under
+`arca-results/baseline` or `arca-results/guided-analysis` and prints its path.
+Guided filenames include the selected review type. Each report records the
+prompt variant, provider, model, generation parameters, duration, token usage,
+findings, and diagnostics.
 
 ## Prompt variants
 
@@ -109,8 +117,9 @@ file metadata.
 
 ARCA supplies the file path, derives each finding's range from its evidence, and
 extracts the exact evidence excerpt from the source. In guided runs, ARCA also
-adds the canonical title, category, and issue type from its rule registry. The
-parser rejects unknown rule IDs and unsupported response fields.
+adds the canonical title from its rule registry. Category remains catalogue
+metadata and is not included in prompts or finding reports. The parser rejects
+unknown rule IDs and unsupported response fields.
 
 When the selected file has uncommitted Git changes, ARCA includes its added,
 modified, and deleted ranges as optional attention signals. When no matching

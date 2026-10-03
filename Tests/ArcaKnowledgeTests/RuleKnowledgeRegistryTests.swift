@@ -17,7 +17,6 @@ struct RuleKnowledgeRegistryTests {
     )
     #expect(rule.reviewType == .swift)
     #expect(rule.category == "concurrency")
-    #expect(rule.issueType == .unsafeCode)
     #expect(rule.problemContext.contains("Swift concurrency"))
     #expect(rule.supportingKnowledge.hasPrefix("# Improper Isolation"))
     #expect(rule.supportingKnowledge.contains("```swift"))
@@ -111,7 +110,6 @@ private struct RulesetFixture {
       "ruleID": "RULE-001",
       "reviewType": "swift",
       "category": "concurrency",
-      "issueType": "unsafe-code",
       "title": "Unsafe state",
       "problemContext": "State is shared.",
       "expectedBehavior": "State is isolated.",

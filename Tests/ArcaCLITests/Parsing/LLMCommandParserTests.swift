@@ -12,6 +12,7 @@ struct LLMCommandParserTests {
       "--prompt", "baseline",
       "--provider", "openai",
       "--format", "json",
+      "--show-prompt",
     ])
 
     #expect(options.filePath == "Example.swift")
@@ -19,6 +20,7 @@ struct LLMCommandParserTests {
     #expect(options.promptVariant == .baseline)
     #expect(options.providerID == "openai")
     #expect(options.outputFormat == .json)
+    #expect(options.showPrompt)
   }
 
   @Test("terminal output is the default")
@@ -30,6 +32,7 @@ struct LLMCommandParserTests {
     ])
 
     #expect(options.outputFormat == .terminal)
+    #expect(!options.showPrompt)
   }
 
   @Test("accepts every LLM-only MVP review type")

@@ -130,7 +130,6 @@ public struct RuleKnowledgeRegistry: Sendable {
         ruleID: definition.ruleID,
         reviewType: definition.reviewType,
         category: definition.category,
-        issueType: definition.issueType,
         title: definition.title,
         problemContext: definition.problemContext,
         expectedBehavior: definition.expectedBehavior,
@@ -179,7 +178,7 @@ public struct RuleKnowledgeRegistry: Sendable {
         reason: "rule ID must not contain surrounding whitespace."
       )
     }
-    if rule.issueType == .deprecatedAPI,
+    if rule.category == "deprecated-api",
       rule.deprecatedFromVersion?.trimmed.isEmpty != false
     {
       throw RuleKnowledgeRegistryError.invalidRule(
@@ -199,7 +198,6 @@ private struct RuleDefinition: Decodable {
   let ruleID: String
   let reviewType: ReviewType
   let category: String
-  let issueType: IssueType
   let title: String
   let problemContext: String
   let expectedBehavior: String

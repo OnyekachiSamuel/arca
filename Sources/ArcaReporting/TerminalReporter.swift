@@ -40,12 +40,6 @@ public struct TerminalReporter: Reporter {
         "Candidate \(index + 1) — \(finding.title)",
         "----------------------------------",
       ]
-      if let category = finding.category {
-        lines.append("Category: \(humanized(category))")
-      }
-      if let issueType = finding.issueType {
-        lines.append("Issue type: \(issueTypeDescription(issueType))")
-      }
       if let ruleID = finding.ruleID {
         lines.append("Canonical rule: \(ruleID)")
       }
@@ -110,30 +104,6 @@ public struct TerminalReporter: Reporter {
       return "Review: \(reviewDescription(reviewType))"
     }
     return "Analysis scope: General, without rules"
-  }
-
-  private func issueTypeDescription(_ issueType: IssueType) -> String {
-    switch issueType {
-    case .antiPattern: "Anti-pattern"
-    case .codeSmell: "Code smell"
-    case .unsafeCode: "Unsafe code"
-    case .deprecatedAPI: "Deprecated API"
-    case .securityWeakness: "Security weakness"
-    case .conventionViolation: "Convention violation"
-    }
-  }
-
-  private func humanized(_ value: String) -> String {
-    value
-      .replacingOccurrences(
-        of: "([a-z0-9])([A-Z])",
-        with: "$1 $2",
-        options: .regularExpression
-      )
-      .replacingOccurrences(of: "-", with: " ")
-      .split(separator: " ")
-      .map { $0.capitalized }
-      .joined(separator: " ")
   }
 
   private func tokenSummary(_ usage: LLMTokenUsageMetadata) -> String {

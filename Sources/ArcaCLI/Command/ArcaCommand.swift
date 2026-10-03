@@ -36,7 +36,8 @@ public enum ArcaCommand {
       --review <type>         Guided only. Values: swift, swiftui, tca, security, god-object, all.
       --prompt <variant>      Select prompt content. Values: baseline, guided.
       --provider <id>         Select a configured provider. Default: llm.defaultProvider.
-      --format <format>       Select output format. Values: terminal, json. Default: terminal.
+      --format <format>       Show terminal output or save JSON. Values: terminal, json. Default: terminal.
+      --show-prompt           Display the exact prompt sent to the LLM.
       -h, --help              Show help information.
 
     PROMPT VARIANTS:
@@ -121,6 +122,16 @@ public enum ArcaCommand {
         ?? LLMProviderFactory().make(
           configuration: configuration
         )
+      let analysisProvider: any LLMProvider
+      let promptRecorder: PromptRecordingLLMProvider?
+      if options.showPrompt {
+        let recorder = PromptRecordingLLMProvider(provider: provider)
+        analysisProvider = recorder
+        promptRecorder = recorder
+      } else {
+        analysisProvider = provider
+        promptRecorder = nil
+      }
       let knowledgeProvider: RuleKnowledgeRegistry? =
         options.promptVariant == .guided
         ? try RuleKnowledgeRegistry.bundled()
@@ -149,7 +160,7 @@ public enum ArcaCommand {
           } ?? []
         results.append(
           await LLMCodeAnalyzer(
-            provider: provider,
+            provider: analysisProvider,
             promptVariant: options.promptVariant,
             modelID: configuration.modelID,
             timeout: .seconds(configuration.timeoutSeconds),
@@ -160,9 +171,10 @@ public enum ArcaCommand {
 
       let result = combinedLLMResult(
         results,
-        providerID: provider.id,
+        providerID: analysisProvider.id,
         modelID: configuration.modelID
       )
+      let displayedPrompts = await promptRecorder?.recordedPrompts() ?? []
       let exitStatus: ArcaExitStatus
       if !result.candidates.isEmpty {
         exitStatus = .findingsDetected
@@ -183,9 +195,27 @@ public enum ArcaCommand {
         seed: configuration.seed,
         temperature: configuration.temperature
       )
+      if options.outputFormat == .json {
+        let json = try JSONReporter().render(detectionReport: report)
+        let destination = try JSONReportWriter().write(
+          json,
+          report: report,
+          resultsRoot: environment.outputRootURL
+        )
+        return CommandResult(
+          output: output(
+            including: displayedPrompts,
+            result: "JSON report written to: \(destination.path)"
+          ),
+          exitStatus: exitStatus
+        )
+      }
       return CommandResult(
-        output: try reporter(for: options.outputFormat).render(
-          detectionReport: report
+        output: output(
+          including: displayedPrompts,
+          result: try TerminalReporter().render(
+            detectionReport: report
+          )
         ),
         exitStatus: exitStatus
       )
@@ -209,12 +239,37 @@ public enum ArcaCommand {
         output: "Error: \(error.localizedDescription)",
         exitStatus: .invalidInput
       )
+    } catch let error as JSONReportWritingError {
+      return CommandResult(
+        output: "Error: \(error.localizedDescription)",
+        exitStatus: .executionFailure
+      )
     } catch {
       return CommandResult(
         output: "Error: LLM code analysis failed unexpectedly.",
         exitStatus: .executionFailure
       )
     }
+  }
+
+  private static func output(
+    including prompts: [String],
+    result: String
+  ) -> String {
+    guard !prompts.isEmpty else { return result }
+
+    let renderedPrompts = prompts.enumerated().map { index, prompt in
+      let heading =
+        prompts.count == 1
+        ? "Prompt sent to LLM"
+        : "Prompt \(index + 1) of \(prompts.count) sent to LLM"
+      return """
+        \(heading)
+        \(String(repeating: "-", count: heading.count))
+        \(prompt)
+        """
+    }
+    return renderedPrompts.joined(separator: "\n\n") + "\n\n" + result
   }
 
   private static func combinedLLMResult(
@@ -245,15 +300,6 @@ public enum ArcaCommand {
         }
       )
     )
-  }
-
-  private static func reporter(
-    for outputFormat: ReviewOutputFormat
-  ) -> any Reporter {
-    switch outputFormat {
-    case .terminal: TerminalReporter()
-    case .json: JSONReporter()
-    }
   }
 
   private static func selectedFileChanges(
@@ -305,6 +351,7 @@ public enum ArcaCommand {
       configuration: try ConfigurationLoader().load(
         from: workingDirectoryURL
       ),
+      outputRootURL: workingDirectoryURL,
       repositoryRootURL: repositoryRoot.map {
         URL(fileURLWithPath: $0, isDirectory: true)
           .standardizedFileURL
@@ -314,7 +361,29 @@ public enum ArcaCommand {
   }
 }
 
+private actor PromptRecordingLLMProvider: LLMProvider {
+  nonisolated let id: String
+
+  private let provider: any LLMProvider
+  private var prompts: [String] = []
+
+  init(provider: any LLMProvider) {
+    id = provider.id
+    self.provider = provider
+  }
+
+  func submit(_ request: LLMRequest) async throws -> LLMResponse {
+    prompts.append(request.prompt)
+    return try await provider.submit(request)
+  }
+
+  func recordedPrompts() -> [String] {
+    prompts
+  }
+}
+
 private struct ReviewEnvironment {
   let configuration: ArcaConfiguration
+  let outputRootURL: URL
   let repositoryRootURL: URL?
 }

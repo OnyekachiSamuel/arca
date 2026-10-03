@@ -29,7 +29,6 @@ struct CodeAnalysisSourceValidator: Sendable {
     }
 
     let excerpt = sourceLines[(startLine - 1)...(endLine - 1)]
-      .map { PromptTextRedactor.redactCommonSecrets(in: $0) }
       .joined(separator: "\n")
     return .accepted(
       SourceCodeEvidence(

@@ -31,9 +31,7 @@ public struct BaselineCodeAnalysisPromptBuilder: Sendable {
         lines: sourceLines.enumerated().map { index, text in
           BaselineCodeAnalysisSourceLineInput(
             lineNumber: index + 1,
-            text: PromptTextRedactor.redactCommonSecrets(
-              in: text
-            )
+            text: text
           )
         }
       ),

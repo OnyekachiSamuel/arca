@@ -4,7 +4,7 @@ import Testing
 
 @Suite("Baseline code-analysis response parser")
 struct BaselineCodeAnalysisResponseParserTests {
-  @Test("compact response becomes an unclassified grounded finding")
+  @Test("compact response becomes a grounded finding without a rule ID")
   func acceptsCompactFinding() throws {
     let result = parser.parse(
       validResponse,
@@ -17,8 +17,6 @@ struct BaselineCodeAnalysisResponseParserTests {
     #expect(result.diagnostics.isEmpty)
     #expect(finding.ruleID == nil)
     #expect(finding.title == "Large Class")
-    #expect(finding.issueType == nil)
-    #expect(finding.category == nil)
     #expect(finding.filePath == "Example.swift")
     #expect(range.startLine == 2)
     #expect(range.endLine == 2)

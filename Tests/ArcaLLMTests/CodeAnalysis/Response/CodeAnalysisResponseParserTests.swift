@@ -1,11 +1,12 @@
 import ArcaDomain
 import ArcaKnowledge
 import ArcaLLM
+import Foundation
 import Testing
 
 @Suite("Guided code-analysis response parser")
 struct CodeAnalysisResponseParserTests {
-  @Test("compact response becomes a grounded finding with canonical rule data")
+  @Test("compact response becomes a grounded finding with its canonical rule")
   func parsesCompactResponse() throws {
     let result = parser.parse(
       validResponse,
@@ -13,13 +14,17 @@ struct CodeAnalysisResponseParserTests {
     )
 
     let candidate = try #require(result.candidates.first)
+    let candidateData = try JSONEncoder().encode(candidate)
+    let candidateJSON = try #require(
+      JSONSerialization.jsonObject(with: candidateData) as? [String: Any]
+    )
     let range = try #require(candidate.range)
     let evidence = try #require(candidate.evidence.first)
     #expect(result.diagnostics.isEmpty)
     #expect(candidate.ruleID == "ARCA-GOD-001")
     #expect(candidate.title == "God Object candidate")
-    #expect(candidate.issueType == .antiPattern)
-    #expect(candidate.category == "architecture")
+    #expect(candidateJSON["issueType"] == nil)
+    #expect(candidateJSON["category"] == nil)
     #expect(candidate.filePath == context.filePath)
     #expect(range.startLine == 3)
     #expect(range.endLine == 5)
@@ -135,6 +140,22 @@ struct CodeAnalysisResponseParserTests {
     #expect(result.diagnostics.isEmpty)
   }
 
+  @Test("evidence excerpts preserve the original source text")
+  func preservesSourceEvidence() throws {
+    let source = #"let apiToken = "sk-live-super-secret-value""#
+    let result = parser.parse(
+      "{\"findings\":[\(findingJSON(startLine: 1, endLine: 1))]}",
+      context: SourceFileAnalysisContext(
+        filePath: "Secrets.swift",
+        sourceContent: source,
+        lineCount: 1
+      )
+    )
+
+    #expect(result.diagnostics.isEmpty)
+    #expect(result.candidates.first?.evidence.first?.excerpt == source)
+  }
+
   private var parser: CodeAnalysisResponseParser {
     CodeAnalysisResponseParser(
       rules: [godObjectKnowledge]
@@ -189,7 +210,6 @@ struct CodeAnalysisResponseParserTests {
       ruleID: "ARCA-GOD-001",
       reviewType: .godObject,
       category: "architecture",
-      issueType: .antiPattern,
       title: "God Object candidate",
       problemContext: "A type owns multiple unrelated responsibilities.",
       expectedBehavior: "Keep types focused.",

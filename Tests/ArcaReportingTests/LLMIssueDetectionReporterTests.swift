@@ -32,8 +32,8 @@ struct LLMIssueDetectionReporterTests {
 
     #expect(output.contains("ARCA LLM Detection Experiment"))
     #expect(output.contains("Prompt: Guided — rules and knowledge included"))
-    #expect(output.contains("Category: Architecture"))
-    #expect(output.contains("Issue type: Anti-pattern"))
+    #expect(!output.contains("Category:"))
+    #expect(!output.contains("Issue type:"))
     #expect(output.contains("Canonical rule: ARCA-GOD-Object-001"))
     #expect(output.contains("Provider: lm-studio"))
     #expect(!output.contains("Severity:"))
@@ -51,6 +51,62 @@ struct LLMIssueDetectionReporterTests {
     #expect(decoded == report)
     #expect(decoded.schemaVersion == 1)
     #expect(!output.contains(#""severity""#))
+    #expect(!output.contains(#""category""#))
+    #expect(!output.contains(#""issueType""#))
+  }
+
+  @Test("JSON reports are stored by prompt variant with unique descriptive names")
+  func writesJSONReports() throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let writer = JSONReportWriter()
+    let timestamp = Date(timeIntervalSince1970: 1_790_512_212)
+
+    let baseline = try makeReport(
+      candidates: [],
+      reviewType: nil,
+      promptVariant: .baseline
+    )
+    let baselineJSON = try JSONReporter().render(detectionReport: baseline)
+    let baselineURL = try writer.write(
+      baselineJSON,
+      report: baseline,
+      resultsRoot: directory,
+      timestamp: timestamp
+    )
+
+    let guided = try makeReport(candidates: [candidate])
+    let guidedJSON = try JSONReporter().render(detectionReport: guided)
+    let guidedURL = try writer.write(
+      guidedJSON,
+      report: guided,
+      resultsRoot: directory,
+      timestamp: timestamp
+    )
+
+    #expect(baselineURL.deletingLastPathComponent().lastPathComponent == "baseline")
+    #expect(guidedURL.deletingLastPathComponent().lastPathComponent == "guided-analysis")
+    #expect(baselineURL.lastPathComponent.hasPrefix("App-"))
+    #expect(guidedURL.lastPathComponent.hasPrefix("App-god-object-"))
+    #expect(baselineURL.pathExtension == "json")
+    #expect(guidedURL.pathExtension == "json")
+    #expect(baselineURL != guidedURL)
+
+    let decoded = try JSONDecoder().decode(
+      LLMIssueDetectionReport.self,
+      from: Data(contentsOf: guidedURL)
+    )
+    #expect(decoded == guided)
+
+    #expect(throws: JSONReportWritingError.self) {
+      try writer.write(
+        guidedJSON,
+        report: guided,
+        resultsRoot: directory,
+        timestamp: timestamp
+      )
+    }
   }
 
   private var candidate: FindingCandidate {
@@ -66,8 +122,6 @@ struct LLMIssueDetectionReporterTests {
           endLine: 10,
           endColumn: 2
         ),
-        issueType: .antiPattern,
-        category: "architecture",
         evidence: [
           SourceCodeEvidence(
             description: "Networking and persistence are both owned.",

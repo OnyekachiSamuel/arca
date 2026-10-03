@@ -6,4 +6,5 @@ struct LLMCommandOptions: Equatable, Sendable {
   let promptVariant: CodeAnalysisPromptVariant
   let providerID: String?
   let outputFormat: ReviewOutputFormat
+  let showPrompt: Bool
 }

@@ -6,8 +6,6 @@ public struct FindingCandidate: Codable, Equatable, Sendable {
   public let explanation: String
   public let filePath: String
   public let range: SourceRange?
-  public let issueType: IssueType?
-  public let category: String?
   public let evidence: [SourceCodeEvidence]
 
   public init(
@@ -16,8 +14,6 @@ public struct FindingCandidate: Codable, Equatable, Sendable {
     explanation: String,
     filePath: String,
     range: SourceRange?,
-    issueType: IssueType? = nil,
-    category: String? = nil,
     evidence: [SourceCodeEvidence]
   ) throws {
     guard ruleID.map({ !$0.isBlank }) ?? true else {
@@ -46,8 +42,6 @@ public struct FindingCandidate: Codable, Equatable, Sendable {
     self.explanation = explanation
     self.filePath = filePath
     self.range = range
-    self.issueType = issueType
-    self.category = category
     self.evidence = evidence
   }
 
@@ -57,8 +51,6 @@ public struct FindingCandidate: Codable, Equatable, Sendable {
     case explanation
     case filePath
     case range
-    case issueType
-    case category
     case evidence
   }
 
@@ -77,11 +69,6 @@ public struct FindingCandidate: Codable, Equatable, Sendable {
         SourceRange.self,
         forKey: .range
       ),
-      issueType: container.decodeIfPresent(
-        IssueType.self,
-        forKey: .issueType
-      ),
-      category: container.decodeIfPresent(String.self, forKey: .category),
       evidence: container.decode(
         [SourceCodeEvidence].self,
         forKey: .evidence
@@ -97,8 +84,6 @@ public struct FindingCandidate: Codable, Equatable, Sendable {
     try container.encode(explanation, forKey: .explanation)
     try container.encode(filePath, forKey: .filePath)
     try container.encodeIfPresent(range, forKey: .range)
-    try container.encodeIfPresent(issueType, forKey: .issueType)
-    try container.encodeIfPresent(category, forKey: .category)
     try container.encode(evidence, forKey: .evidence)
   }
 

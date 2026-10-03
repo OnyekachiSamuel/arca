@@ -8,6 +8,7 @@ struct LLMCommandParser {
     var providerID: String?
     var outputFormat = ReviewOutputFormat.terminal
     var outputFormatWasSpecified = false
+    var showPrompt = false
     var index = 0
 
     while index < arguments.count {
@@ -85,6 +86,12 @@ struct LLMCommandParser {
           in: arguments
         )
         index += 2
+      case "--show-prompt":
+        guard !showPrompt else {
+          throw LLMCommandParsingError.duplicateOption("--show-prompt")
+        }
+        showPrompt = true
+        index += 1
       default:
         throw LLMCommandParsingError.unknownOption(arguments[index])
       }
@@ -111,7 +118,8 @@ struct LLMCommandParser {
       reviewType: reviewType,
       promptVariant: promptVariant,
       providerID: providerID,
-      outputFormat: outputFormat
+      outputFormat: outputFormat,
+      showPrompt: showPrompt
     )
   }
 

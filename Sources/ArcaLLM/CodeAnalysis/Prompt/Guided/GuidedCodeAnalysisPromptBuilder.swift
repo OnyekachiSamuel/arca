@@ -38,9 +38,7 @@ public struct GuidedCodeAnalysisPromptBuilder: Sendable {
         lines: sourceLines.enumerated().map { index, text in
           GuidedCodeAnalysisSourceLineInput(
             lineNumber: index + 1,
-            text: PromptTextRedactor.redactCommonSecrets(
-              in: text
-            )
+            text: text
           )
         }
       ),
@@ -83,9 +81,6 @@ public struct GuidedCodeAnalysisPromptBuilder: Sendable {
       <RULE>
       <RULE_DEFINITION>
       Rule ID: \(knowledge.ruleID)
-      Review type: \(knowledge.reviewType.commandLineName)
-      Category: \(knowledge.category)
-      Issue type: \(knowledge.issueType.rawValue)
       Title: \(knowledge.title)
 
       Problem context:

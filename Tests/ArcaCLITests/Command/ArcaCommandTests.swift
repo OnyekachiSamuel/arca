@@ -24,8 +24,10 @@ struct ArcaCommandTests {
       #expect(result.exitStatus == .success)
       #expect(report.promptVariant == .baseline)
       #expect(report.reviewType == nil)
+      #expect(result.output.contains("JSON report written to:"))
+      #expect(reportURL(from: result).path.contains("/arca-results/baseline/"))
       #expect(prompts.count == 1)
-      #expect(prompts[0].contains("Variant: baseline"))
+      #expect(prompts[0].contains("your existing knowledge"))
       #expect(!prompts[0].contains("RULES_AND_KNOWLEDGE"))
       #expect(!prompts[0].contains("ARCA-SWIFT-CONCURRENCY-001"))
       #expect(!prompts[0].contains(#""change" :"#))
@@ -84,6 +86,9 @@ struct ArcaCommandTests {
       #expect(result.exitStatus == .success)
       #expect(report.promptVariant == .guided)
       #expect(report.reviewType == .godObject)
+      #expect(
+        reportURL(from: result).lastPathComponent.contains("-god-object-")
+      )
       #expect(prompt.contains("ARCA-GOD-Object-001"))
       #expect(prompt.contains("Problem context:"))
       #expect(prompt.contains("Violation criteria:"))
@@ -116,10 +121,16 @@ struct ArcaCommandTests {
       #expect(
         prompts.allSatisfy { $0.contains("RULE APPLICABILITY") }
       )
-      for reviewType in ReviewType.analysisTypes {
+      for ruleID in [
+        "ARCA-SWIFT-CONCURRENCY-001",
+        "ARCA-SWIFTUI-STATE-001",
+        "ARCA-TCA-DEPRECATED-001",
+        "ARCA-OWASP-MASWE-0001",
+        "ARCA-GOD-Object-001",
+      ] {
         #expect(
           prompts.contains {
-            $0.contains("Review type: \(reviewType.commandLineName)")
+            $0.contains("Rule ID: \(ruleID)")
           })
       }
     }
@@ -138,6 +149,83 @@ struct ArcaCommandTests {
     #expect(result.output.contains("security"))
     #expect(result.output.contains("all"))
     #expect(result.output.contains("--provider <id>"))
+  }
+
+  @Test("terminal output does not create a JSON report")
+  func terminalDoesNotWriteJSON() async throws {
+    try await withFixture { directory, file in
+      let result = await ArcaCommand.execute(
+        arguments: [
+          "--file", file.path,
+          "--prompt", "baseline",
+          "--format", "terminal",
+        ],
+        currentDirectory: directory.path,
+        llmProvider: RecordingProvider()
+      )
+
+      #expect(result.exitStatus == .success)
+      #expect(result.output.contains("ARCA LLM Detection Experiment"))
+      #expect(!result.output.contains("Prompt sent to LLM"))
+      #expect(!result.output.contains("INPUT_DATA"))
+      #expect(
+        !FileManager.default.fileExists(
+          atPath: directory.appendingPathComponent("arca-results").path
+        )
+      )
+    }
+  }
+
+  @Test("show prompt displays the exact request and preserves the terminal report")
+  func showsPromptAndTerminalReport() async throws {
+    try await withFixture { directory, file in
+      let provider = RecordingProvider()
+      let result = await ArcaCommand.execute(
+        arguments: [
+          "--file", file.path,
+          "--prompt", "baseline",
+          "--format", "terminal",
+          "--show-prompt",
+        ],
+        currentDirectory: directory.path,
+        llmProvider: provider
+      )
+      let sentPrompt = try #require(await provider.prompts.first)
+
+      #expect(result.exitStatus == .success)
+      #expect(result.output.contains("Prompt sent to LLM"))
+      #expect(result.output.contains(sentPrompt))
+      #expect(result.output.contains("ARCA LLM Detection Experiment"))
+    }
+  }
+
+  @Test("show prompt displays every guided request and still writes JSON")
+  func showsAllPromptsAndWritesJSON() async throws {
+    try await withFixture { directory, file in
+      let provider = RecordingProvider()
+      let result = await ArcaCommand.execute(
+        arguments: [
+          "--file", file.path,
+          "--review", "all",
+          "--prompt", "guided",
+          "--format", "json",
+          "--show-prompt",
+        ],
+        currentDirectory: directory.path,
+        llmProvider: provider
+      )
+      let promptCount = await provider.prompts.count
+      let reportMessage = try #require(result.output.split(separator: "\n").last)
+      let prefix = "JSON report written to: "
+      let reportPath = String(reportMessage.dropFirst(prefix.count))
+
+      #expect(result.exitStatus == .success)
+      #expect(promptCount == ReviewType.analysisTypes.count)
+      #expect(result.output.contains("Prompt 1 of 5 sent to LLM"))
+      #expect(result.output.contains("Prompt 5 of 5 sent to LLM"))
+      #expect(reportMessage.hasPrefix(prefix))
+      #expect(FileManager.default.fileExists(atPath: reportPath))
+    }
   }
 
   @Test("explicit provider selects its model configuration")
@@ -203,10 +291,19 @@ struct ArcaCommandTests {
   }
 
   private func decode(_ result: CommandResult) throws -> LLMIssueDetectionReport {
-    try JSONDecoder().decode(
+    let url = reportURL(from: result)
+    return try JSONDecoder().decode(
       LLMIssueDetectionReport.self,
-      from: Data(result.output.utf8)
+      from: Data(contentsOf: url)
     )
+  }
+
+  private func reportURL(from result: CommandResult) -> URL {
+    let prefix = "JSON report written to: "
+    let path = result.output.hasPrefix(prefix)
+      ? String(result.output.dropFirst(prefix.count))
+      : result.output
+    return URL(fileURLWithPath: path)
   }
 
   private func runGit(_ arguments: [String], in directory: URL) throws {
