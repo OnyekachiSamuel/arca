@@ -1,4 +1,4 @@
-public enum CodeAnalysisPromptVariant: String, Codable, CaseIterable, Sendable {
-    case baseline
-    case guided
+public enum CodeAnalysisPromptVariant: String, Codable, Sendable {
+  case baseline
+  case guided
 }

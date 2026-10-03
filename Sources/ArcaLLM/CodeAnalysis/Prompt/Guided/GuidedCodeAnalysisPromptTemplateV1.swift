@@ -1,8 +1,4 @@
 enum GuidedCodeAnalysisPromptTemplateV1 {
-  static let id = "arca.code-analysis.guided"
-  static let version = 1
-
-
   static func render(
     rulesAndKnowledge: String,
     sourceInputJSON: String

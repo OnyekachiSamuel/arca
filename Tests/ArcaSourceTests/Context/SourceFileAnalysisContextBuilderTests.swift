@@ -20,14 +20,12 @@ struct SourceFileAnalysisContextBuilderTests {
       modifiedLineRanges: [ChangedLineRange(startLine: 1, endLine: 1)]
     )
 
-    let contexts = SourceFileAnalysisContextBuilder().build(
-      sourceFiles: [source],
+    let context = SourceFileAnalysisContextBuilder().build(
+      sourceFile: source,
       repositoryRoot: "/tmp/Shop",
       changes: [selectedChange, unrelatedChange]
     )
-    let context = try #require(contexts.first)
 
-    #expect(contexts.count == 1)
     #expect(context.filePath == "Sources/App.swift")
     #expect(context.sourceContent == source.content)
     #expect(context.lineCount == 3)
@@ -42,11 +40,9 @@ struct SourceFileAnalysisContextBuilderTests {
       lineCount: 1
     )
 
-    let context = try #require(
-      SourceFileAnalysisContextBuilder().build(
-        sourceFiles: [source],
-        repositoryRoot: "/tmp/Shop"
-      ).first
+    let context = SourceFileAnalysisContextBuilder().build(
+      sourceFile: source,
+      repositoryRoot: "/tmp/Shop"
     )
 
     #expect(context.filePath == "Outside.swift")

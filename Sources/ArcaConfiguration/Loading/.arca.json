@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "llm": {
+    "defaultProvider": "local",
+    "providers": [
+      {
+        "id": "local",
+        "baseURL": "http://127.0.0.1:1234",
+        "completionPath": "/v1/chat/completions",
+        "modelID": "qwen2.5-coder-7b-instruct",
+        "timeoutSeconds": 120,
+        "temperature": 0,
+        "seed": 42
+      },
+      {
+        "id": "openai",
+        "baseURL": "https://api.openai.com",
+        "completionPath": "/v1/chat/completions",
+        "modelID": "YOUR_OPENAI_MODEL_ID",
+        "apiKeyEnvironmentVariable": "OPENAI_API_KEY",
+        "timeoutSeconds": 120,
+        "temperature": 0,
+        "seed": 42
+      }
+    ]
+  }
+}

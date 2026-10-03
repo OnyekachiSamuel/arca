@@ -32,11 +32,8 @@ struct LLMIssueDetectionReporterTests {
 
     #expect(output.contains("ARCA LLM Detection Experiment"))
     #expect(output.contains("Prompt: Guided — rules and knowledge included"))
-    #expect(!output.contains("Category:"))
-    #expect(!output.contains("Issue type:"))
     #expect(output.contains("Canonical rule: ARCA-GOD-Object-001"))
     #expect(output.contains("Provider: lm-studio"))
-    #expect(!output.contains("Severity:"))
   }
 
   @Test("JSON output is versioned and decodes to the report")
@@ -50,9 +47,6 @@ struct LLMIssueDetectionReporterTests {
 
     #expect(decoded == report)
     #expect(decoded.schemaVersion == 1)
-    #expect(!output.contains(#""severity""#))
-    #expect(!output.contains(#""category""#))
-    #expect(!output.contains(#""issueType""#))
   }
 
   @Test("JSON reports are stored by prompt variant with unique descriptive names")

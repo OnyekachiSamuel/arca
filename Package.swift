@@ -9,14 +9,6 @@ let package = Package(
   ],
   products: [
     .executable(name: "arca", targets: ["ArcaExecutable"]),
-    .library(name: "ArcaConfiguration", targets: ["ArcaConfiguration"]),
-    .library(name: "ArcaDomain", targets: ["ArcaDomain"]),
-    .library(name: "ArcaGit", targets: ["ArcaGit"]),
-    .library(name: "ArcaKnowledge", targets: ["ArcaKnowledge"]),
-    .library(name: "ArcaLLM", targets: ["ArcaLLM"]),
-    .library(name: "ArcaAnalyzers", targets: ["ArcaAnalyzers"]),
-    .library(name: "ArcaReporting", targets: ["ArcaReporting"]),
-    .library(name: "ArcaSource", targets: ["ArcaSource"]),
   ],
   targets: [
     .target(name: "ArcaDomain"),

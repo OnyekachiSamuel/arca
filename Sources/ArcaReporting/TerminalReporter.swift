@@ -1,7 +1,7 @@
 import ArcaDomain
 import Foundation
 
-public struct TerminalReporter: Reporter {
+public struct TerminalReporter {
   public init() {}
 
   public func render(

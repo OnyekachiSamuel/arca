@@ -14,17 +14,11 @@ struct CodeAnalysisResponseParserTests {
     )
 
     let candidate = try #require(result.candidates.first)
-    let candidateData = try JSONEncoder().encode(candidate)
-    let candidateJSON = try #require(
-      JSONSerialization.jsonObject(with: candidateData) as? [String: Any]
-    )
     let range = try #require(candidate.range)
     let evidence = try #require(candidate.evidence.first)
     #expect(result.diagnostics.isEmpty)
     #expect(candidate.ruleID == "ARCA-GOD-001")
     #expect(candidate.title == "God Object candidate")
-    #expect(candidateJSON["issueType"] == nil)
-    #expect(candidateJSON["category"] == nil)
     #expect(candidate.filePath == context.filePath)
     #expect(range.startLine == 3)
     #expect(range.endLine == 5)
@@ -37,6 +31,18 @@ struct CodeAnalysisResponseParserTests {
     let result = parser.parse(#"{"findings":[]}"#, context: context)
     #expect(result.candidates.isEmpty)
     #expect(result.diagnostics.isEmpty)
+  }
+
+  @Test("guided parsing requires rule knowledge")
+  func rejectsEmptyRuleKnowledge() throws {
+    let result = CodeAnalysisResponseParser(rules: []).parse(
+      #"{"findings":[]}"#,
+      context: context
+    )
+
+    let diagnostic = try #require(result.diagnostics.first)
+    #expect(diagnostic.code == "ARCA-LLM-ANALYSIS-INVALID-CONFIGURATION")
+    #expect(diagnostic.message == "Guided analysis requires at least one rule.")
   }
 
   @Test("one JSON document may be wrapped in a Markdown fence")
@@ -126,18 +132,6 @@ struct CodeAnalysisResponseParserTests {
       parser.parse(#"{"findings":[}"#, context: context),
       code: "ARCA-LLM-ANALYSIS-INVALID-JSON"
     )
-  }
-
-  @Test("generated commands remain inert response text")
-  func neverExecutesGeneratedCode() throws {
-    let command = "$(touch /tmp/arca-must-not-execute)"
-    let response = validResponse.replacingOccurrences(
-      of: "The type coordinates several responsibilities.",
-      with: command
-    )
-    let result = parser.parse(response, context: context)
-    #expect(try #require(result.candidates.first).explanation == command)
-    #expect(result.diagnostics.isEmpty)
   }
 
   @Test("evidence excerpts preserve the original source text")

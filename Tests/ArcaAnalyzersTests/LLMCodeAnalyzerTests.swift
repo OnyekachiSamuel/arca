@@ -36,7 +36,7 @@ struct LLMCodeAnalyzerTests {
     )
 
     let result = await analyzer.analyze(
-      contexts: contexts(files: [source(path: "/project/App.swift")])
+      context: context(file: source(path: "/project/App.swift"))
     )
     let candidate = try #require(result.candidates.first)
     let requests = await provider.requests
@@ -49,40 +49,33 @@ struct LLMCodeAnalyzerTests {
     #expect(!requests[0].prompt.contains("ARCA-GOD-001"))
   }
 
-  @Test("analyzes every selected file and records usage")
-  func analyzesEveryFile() async throws {
+  @Test("analyzes the selected file and records usage")
+  func analyzesSelectedFile() async throws {
     let provider = RecordingCodeAnalysisProvider(responses: [
-      .success(response()),
-      .success(response()),
+      .success(response())
     ])
     let analyzer = makeAnalyzer(provider: provider)
 
     let result = await analyzer.analyze(
-      contexts: contexts(files: [
-        source(path: "/project/First.swift"),
-        source(path: "/project/Second.swift"),
-      ]),
+      context: context(file: source(path: "/project/App.swift")),
       rules: godObjectRules
     )
 
-    #expect(
-      result.candidates.map(\.filePath) == [
-        "First.swift", "Second.swift",
-      ])
+    #expect(result.candidates.map(\.filePath) == ["App.swift"])
     #expect(result.diagnostics.isEmpty)
-    #expect(await provider.requests.count == 2)
+    #expect(await provider.requests.count == 1)
     #expect(
       result.executionMetadata
         == LLMExecutionMetadata(
           providerID: "mock-provider",
           modelID: "mock-model",
-          requestCount: 2,
+          requestCount: 1,
           usage: LLMTokenUsageMetadata(
-            inputTokens: 20,
-            outputTokens: 10,
-            totalTokens: 30
+            inputTokens: 10,
+            outputTokens: 5,
+            totalTokens: 15
           ),
-          providerDurationMilliseconds: 14
+          providerDurationMilliseconds: 7
         )
     )
     let requests = await provider.requests
@@ -101,7 +94,7 @@ struct LLMCodeAnalyzerTests {
     ])
 
     let result = await makeAnalyzer(provider: provider).analyze(
-      contexts: contexts(files: [source(path: "/project/App.swift")]),
+      context: context(file: source(path: "/project/App.swift")),
       rules: godObjectRules
     )
 
@@ -117,7 +110,7 @@ struct LLMCodeAnalyzerTests {
     ])
 
     let result = await makeAnalyzer(provider: provider).analyze(
-      contexts: contexts(files: [source(path: "/project/App.swift")]),
+      context: context(file: source(path: "/project/App.swift")),
       rules: godObjectRules
     )
 
@@ -135,7 +128,7 @@ struct LLMCodeAnalyzerTests {
     ])
 
     let result = await makeAnalyzer(provider: provider).analyze(
-      contexts: contexts(files: [source(path: "/project/App.swift")]),
+      context: context(file: source(path: "/project/App.swift")),
       rules: godObjectRules
     )
 
@@ -144,31 +137,25 @@ struct LLMCodeAnalyzerTests {
     #expect(result.candidates.first?.evidence.first?.excerpt == "    let value = 1")
   }
 
-  @Test("provider failure becomes a diagnostic and later files continue")
-  func reportsProviderFailureAndContinues() async throws {
+  @Test("provider failure becomes a diagnostic")
+  func reportsProviderFailure() async throws {
     let provider = RecordingCodeAnalysisProvider(responses: [
-      .failure(MockProviderError.failed),
-      .success(response()),
+      .failure(MockProviderError.failed)
     ])
 
     let result = await makeAnalyzer(provider: provider).analyze(
-      contexts: contexts(files: [
-        source(path: "/project/First.swift"),
-        source(path: "/project/Second.swift"),
-      ]),
+      context: context(file: source(path: "/project/App.swift")),
       rules: godObjectRules
     )
 
-    #expect(result.candidates.map(\.filePath) == ["Second.swift"])
+    #expect(result.candidates.isEmpty)
     #expect(
       result.diagnostics.map(\.code)
         == ["ARCA-LLM-ANALYSIS-PROVIDER-FAILED"]
     )
-    #expect(await provider.requests.count == 2)
-    #expect(result.executionMetadata.requestCount == 2)
-    #expect(
-      result.executionMetadata.providerDurationMilliseconds == 7
-    )
+    #expect(await provider.requests.count == 1)
+    #expect(result.executionMetadata.requestCount == 1)
+    #expect(result.executionMetadata.providerDurationMilliseconds == 0)
   }
 
   private func makeAnalyzer(
@@ -185,14 +172,12 @@ struct LLMCodeAnalyzerTests {
     )
   }
 
-  private func contexts(files: [SourceFile]) -> [SourceFileAnalysisContext] {
-    files.map {
-      SourceFileAnalysisContext(
-        filePath: URL(fileURLWithPath: $0.path).lastPathComponent,
-        sourceContent: $0.content,
-        lineCount: $0.lineCount
-      )
-    }
+  private func context(file: SourceFile) -> SourceFileAnalysisContext {
+    SourceFileAnalysisContext(
+      filePath: URL(fileURLWithPath: file.path).lastPathComponent,
+      sourceContent: file.content,
+      lineCount: file.lineCount
+    )
   }
 
   private func source(path: String) -> SourceFile {
