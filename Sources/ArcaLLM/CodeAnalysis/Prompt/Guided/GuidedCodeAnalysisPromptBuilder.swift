@@ -31,25 +31,15 @@ public struct GuidedCodeAnalysisPromptBuilder: Sendable {
             )
         }
         
-        let payload = GuidedCodeAnalysisPromptInput(
-            file: GuidedCodeAnalysisFileInput(
-                path: context.filePath,
-                lineCount: context.lineCount,
-                lines: sourceLines.enumerated().map { index, text in
-                    GuidedCodeAnalysisSourceLineInput(
-                        lineNumber: index + 1,
-                        text: text
-                    )
-                }
-            ),
-            change: context.change
+        let sourceInput = CodeAnalysisSourceInputRenderer().render(
+            context: context,
+            sourceLines: sourceLines
         )
-        let inputJSON = try encode(payload)
         let promptText = GuidedCodeAnalysisPromptTemplateV1.render(
             rulesAndKnowledge: sortedRules.map(renderRule).joined(
                 separator: "\n\n"
             ),
-            sourceInputJSON: inputJSON
+            sourceInput: sourceInput
         )
         let promptByteCount = promptText.utf8.count
         guard promptByteCount <= limits.maximumPromptUTF8Bytes else {
@@ -100,36 +90,4 @@ public struct GuidedCodeAnalysisPromptBuilder: Sendable {
       """
     }
     
-    private func encode(
-        _ input: GuidedCodeAnalysisPromptInput
-    ) throws -> String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [
-            .prettyPrinted,
-            .sortedKeys,
-            .withoutEscapingSlashes,
-        ]
-        do {
-            let data = try encoder.encode(input)
-            return String(decoding: data, as: UTF8.self)
-        } catch {
-            throw CodeAnalysisPromptBuildingError.inputEncodingFailed
-        }
-    }
-}
-
-private struct GuidedCodeAnalysisPromptInput: Encodable {
-    let file: GuidedCodeAnalysisFileInput
-    let change: SourceFileChangeContext?
-}
-
-private struct GuidedCodeAnalysisFileInput: Encodable {
-    let path: String
-    let lineCount: Int
-    let lines: [GuidedCodeAnalysisSourceLineInput]
-}
-
-private struct GuidedCodeAnalysisSourceLineInput: Encodable {
-    let lineNumber: Int
-    let text: String
 }

@@ -5,6 +5,20 @@ import Testing
 
 @Suite("Separate code-analysis prompt builders")
 struct CodeAnalysisPromptBuilderTests {
+  @Test("baseline and guided prompts disable Qwen thinking")
+  func appendsNoThinkControl() throws {
+    let baselinePrompt = try BaselineCodeAnalysisPromptBuilder().build(
+      context: validContext
+    )
+    let guidedPrompt = try GuidedCodeAnalysisPromptBuilder().build(
+      context: validContext,
+      rules: [godObjectKnowledge]
+    )
+
+    #expect(baselinePrompt.hasSuffix("/no_think"))
+    #expect(guidedPrompt.hasSuffix("/no_think"))
+  }
+
   @Test("baseline prompt requests broad detection without task or rule knowledge")
   func buildsBaselinePromptWithoutKnowledge() throws {
     let prompt = try BaselineCodeAnalysisPromptBuilder().build(
@@ -26,6 +40,10 @@ struct CodeAnalysisPromptBuilderTests {
     #expect(!prompt.contains(godObjectKnowledge.violationCriteria))
     #expect(!prompt.contains("multiple unrelated responsibilities"))
     #expect(!prompt.contains(#""rules""#))
+    #expect(prompt.contains("Return at most five distinct findings"))
+    #expect(prompt.contains("1 | struct Example {}"))
+    #expect(!prompt.contains(#""lineNumber""#))
+    #expect(!prompt.contains(#""text""#))
   }
 
   @Test("guided prompt includes the selected rule knowledge")
@@ -176,10 +194,14 @@ struct CodeAnalysisPromptBuilderTests {
     #expect(prompt.contains("Sources/Checkout.swift"))
     #expect(!prompt.contains(#""previousFilePath""#))
     #expect(prompt.contains("Hello 👋"))
-    #expect(prompt.contains(#""lineNumber" : 2"#))
-    #expect(prompt.contains(#""text" : ""#))
-    #expect(prompt.contains(#""startLine" : 4"#))
-    #expect(prompt.contains(#""originalStartLine" : 7"#))
+    #expect(prompt.contains("1 | import Foundation"))
+    #expect(prompt.contains("2 |"))
+    #expect(prompt.contains("4 |     let greeting = \"Hello 👋\""))
+    #expect(!prompt.contains(#""lineNumber""#))
+    #expect(!prompt.contains(#""text""#))
+    #expect(prompt.contains("Added: 4"))
+    #expect(prompt.contains("Modified: 5"))
+    #expect(prompt.contains("Deleted from previous version: 7-8"))
     #expect(prompt.contains("ARCA-GOD-001"))
     #expect(prompt.contains("ARCA-LONG-METHOD-001"))
     #expect(prompt.contains(godObjectKnowledge.problemContext))
@@ -207,6 +229,7 @@ struct CodeAnalysisPromptBuilderTests {
     #expect(!prompt.contains(#""severity""#))
     #expect(!prompt.contains(#""additionalProperties""#))
     #expect(prompt.contains("Do not provide refactoring"))
+    #expect(prompt.contains("Return at most five distinct findings"))
   }
 
   @Test("the same rule set produces stable output regardless of input order")
@@ -248,7 +271,7 @@ struct CodeAnalysisPromptBuilderTests {
       rules: [godObjectKnowledge]
     )
 
-    #expect(!prompt.contains(#""change" :"#))
+    #expect(!prompt.contains("CHANGED_LINE_RANGES"))
     #expect(!prompt.contains(#""previousFilePath""#))
   }
 

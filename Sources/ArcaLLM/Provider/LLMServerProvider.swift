@@ -121,7 +121,10 @@ public struct LLMServerProvider: LLMProvider, Sendable {
             ],
             stream: false,
             seed: request.seed,
-            temperature: request.temperature
+            temperature: request.temperature,
+            responseFormat: request.responseFormat.map(
+                ChatCompletionResponseFormat.init
+            )
         )
         let encodedBody: Data
 
@@ -175,6 +178,129 @@ private struct ChatCompletionRequest: Encodable {
     let stream: Bool
     let seed: Int?
     let temperature: Double?
+    let responseFormat: ChatCompletionResponseFormat?
+
+    private enum CodingKeys: String, CodingKey {
+        case model
+        case messages
+        case stream
+        case seed
+        case temperature
+        case responseFormat = "response_format"
+    }
+}
+
+private struct ChatCompletionResponseFormat: Encodable {
+    let type = "json_schema"
+    let jsonSchema: ChatCompletionJSONSchema
+
+    init(_ format: LLMStructuredResponseFormat) {
+        switch format {
+        case .codeAnalysis(let requiresRuleID):
+            jsonSchema = ChatCompletionJSONSchema(
+                name: "arca_code_analysis",
+                strict: true,
+                schema: CodeAnalysisJSONSchema(
+                    requiresRuleID: requiresRuleID
+                )
+            )
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case jsonSchema = "json_schema"
+    }
+}
+
+private struct ChatCompletionJSONSchema: Encodable {
+    let name: String
+    let strict: Bool
+    let schema: CodeAnalysisJSONSchema
+}
+
+private struct CodeAnalysisJSONSchema: Encodable {
+    let type = "object"
+    let properties: RootProperties
+    let required = ["findings"]
+    let additionalProperties = false
+
+    init(requiresRuleID: Bool) {
+        properties = RootProperties(
+            findings: FindingArraySchema(
+                requiresRuleID: requiresRuleID
+            )
+        )
+    }
+}
+
+private struct RootProperties: Encodable {
+    let findings: FindingArraySchema
+}
+
+private struct FindingArraySchema: Encodable {
+    let type = "array"
+    let items: FindingSchema
+    let minItems = 0
+    let maxItems = 5
+
+    init(requiresRuleID: Bool) {
+        items = FindingSchema(requiresRuleID: requiresRuleID)
+    }
+}
+
+private struct FindingSchema: Encodable {
+    let type = "object"
+    let properties: FindingProperties
+    let required: [String]
+    let additionalProperties = false
+
+    init(requiresRuleID: Bool) {
+        properties = FindingProperties(requiresRuleID: requiresRuleID)
+        required = requiresRuleID
+            ? ["ruleID", "explanation", "evidence"]
+            : ["title", "explanation", "evidence"]
+    }
+}
+
+private struct FindingProperties: Encodable {
+    let ruleID: StringSchema?
+    let title: StringSchema?
+    let explanation = StringSchema()
+    let evidence = EvidenceArraySchema()
+
+    init(requiresRuleID: Bool) {
+        ruleID = requiresRuleID ? StringSchema() : nil
+        title = requiresRuleID ? nil : StringSchema()
+    }
+}
+
+private struct EvidenceArraySchema: Encodable {
+    let type = "array"
+    let items = EvidenceSchema()
+    let minItems = 1
+    let maxItems = 5
+}
+
+private struct EvidenceSchema: Encodable {
+    let type = "object"
+    let properties = EvidenceProperties()
+    let required = ["description", "startLine", "endLine"]
+    let additionalProperties = false
+}
+
+private struct EvidenceProperties: Encodable {
+    let description = StringSchema()
+    let startLine = IntegerSchema()
+    let endLine = IntegerSchema()
+}
+
+private struct StringSchema: Encodable {
+    let type = "string"
+}
+
+private struct IntegerSchema: Encodable {
+    let type = "integer"
 }
 
 private struct ChatMessage: Codable {

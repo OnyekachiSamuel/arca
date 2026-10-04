@@ -1,5 +1,5 @@
 enum BaselineCodeAnalysisPromptTemplateV1 {
-  static func render(inputJSON: String) -> String {
+  static func render(sourceInput: String) -> String {
     """
     PURPOSE
     Evaluate the supplied Swift source code and detect visible code issues, including code smells and anti-patterns, using only the provided source code and these general instructions.
@@ -18,7 +18,7 @@ enum BaselineCodeAnalysisPromptTemplateV1 {
     - Do not repeat identical or substantially similar findings.
 
     INPUT_DATA
-    \(inputJSON)
+    \(sourceInput)
 
     OUTPUT FORMAT
     Return only JSON in exactly this shape:
@@ -40,6 +40,8 @@ enum BaselineCodeAnalysisPromptTemplateV1 {
 
     OUTPUT REQUIREMENTS
     - Return {"findings":[]} when evidence is insufficient.
+    - Return zero to five distinct findings.
+    - Never add findings to reach a particular count.
     - Use exact one-based, inclusive line numbers from INPUT_DATA.
     - Include at least one evidence item for every finding.
     - Do not add fields to the shown structure.

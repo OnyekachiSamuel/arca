@@ -47,6 +47,10 @@ struct LLMCodeAnalyzerTests {
     #expect(requests[0].prompt.contains("your existing knowledge"))
     #expect(!requests[0].prompt.contains("RULES_AND_KNOWLEDGE"))
     #expect(!requests[0].prompt.contains("ARCA-GOD-001"))
+    #expect(
+      requests[0].responseFormat
+        == .codeAnalysis(requiresRuleID: false)
+    )
   }
 
   @Test("analyzes the selected file and records usage")
@@ -80,6 +84,11 @@ struct LLMCodeAnalyzerTests {
     )
     let requests = await provider.requests
     #expect(requests.allSatisfy { $0.modelID == "mock-model" })
+    #expect(
+      requests.allSatisfy {
+        $0.responseFormat == .codeAnalysis(requiresRuleID: true)
+      }
+    )
     #expect(requests.allSatisfy { $0.prompt.contains("ARCA-GOD-001") })
     #expect(
       requests.allSatisfy {

@@ -45,13 +45,33 @@ struct LLMServerProviderTests {
             prompt: "Build one structured analysis response.",
             timeout: .seconds(12),
             seed: 42,
-            temperature: 0.2
+            temperature: 0.2,
+            responseFormat: .codeAnalysis(requiresRuleID: false)
         )
 
         let response = try await provider.submit(request)
         let sentRequest = try #require(await recorder.lastRequest)
         let body = try requestBody(from: sentRequest)
         let messages = try #require(body["messages"] as? [[String: Any]])
+        let responseFormat = try #require(
+            body["response_format"] as? [String: Any]
+        )
+        let jsonSchema = try #require(
+            responseFormat["json_schema"] as? [String: Any]
+        )
+        let schema = try #require(jsonSchema["schema"] as? [String: Any])
+        let rootProperties = try #require(
+            schema["properties"] as? [String: Any]
+        )
+        let findings = try #require(
+            rootProperties["findings"] as? [String: Any]
+        )
+        let findingSchema = try #require(
+            findings["items"] as? [String: Any]
+        )
+        let findingProperties = try #require(
+            findingSchema["properties"] as? [String: Any]
+        )
 
         #expect(provider.id == "local-qwen")
         #expect(
@@ -76,6 +96,18 @@ struct LLMServerProviderTests {
         #expect(
             messages.first?["content"] as? String
                 == "Build one structured analysis response."
+        )
+        #expect(responseFormat["type"] as? String == "json_schema")
+        #expect(jsonSchema["name"] as? String == "arca_code_analysis")
+        #expect(jsonSchema["strict"] as? Bool == true)
+        #expect(schema["additionalProperties"] as? Bool == false)
+        #expect(findings["maxItems"] as? Int == 5)
+        #expect(findingSchema["additionalProperties"] as? Bool == false)
+        #expect(findingProperties["title"] != nil)
+        #expect(findingProperties["ruleID"] == nil)
+        #expect(
+            Set(findingSchema["required"] as? [String] ?? [])
+                == Set(["title", "explanation", "evidence"])
         )
         #expect(
             response.text

@@ -30,7 +30,7 @@ struct ArcaCommandTests {
       #expect(prompts[0].contains("your existing knowledge"))
       #expect(!prompts[0].contains("RULES_AND_KNOWLEDGE"))
       #expect(!prompts[0].contains("ARCA-SWIFT-CONCURRENCY-001"))
-      #expect(!prompts[0].contains(#""change" :"#))
+      #expect(!prompts[0].contains("CHANGED_LINE_RANGES"))
     }
   }
 
@@ -64,8 +64,8 @@ struct ArcaCommandTests {
       let prompt = try #require(await provider.prompts.first)
 
       #expect(result.exitStatus == .success)
-      #expect(prompt.contains(#""change" :"#))
-      #expect(prompt.contains(#""modifiedLineRanges" :"#))
+      #expect(prompt.contains("CHANGED_LINE_RANGES"))
+      #expect(prompt.contains("Modified: 1-3"))
     }
   }
 

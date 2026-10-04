@@ -69,14 +69,17 @@ public struct LLMCodeAnalyzer: Sendable {
         
         let response: LLMResponse
         do {
-            response = try await provider.submit(
-                LLMRequest(
-                    modelID: modelID,
-                    prompt: prompt,
-                    timeout: timeout,
-                    seed: seed,
-                    temperature: temperature
-                ))
+            let llmRequest = LLMRequest(
+                modelID: modelID,
+                prompt: prompt,
+                timeout: timeout,
+                seed: seed,
+                temperature: temperature,
+                responseFormat: .codeAnalysis(
+                    requiresRuleID: promptVariant == .guided
+                )
+            )
+            response = try await provider.submit(llmRequest)
         } catch {
             return result(
                 candidates: [],

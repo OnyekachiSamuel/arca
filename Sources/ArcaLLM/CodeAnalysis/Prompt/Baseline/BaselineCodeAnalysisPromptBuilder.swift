@@ -24,22 +24,12 @@ public struct BaselineCodeAnalysisPromptBuilder: Sendable {
             )
         }
         
-        let payload = BaselineCodeAnalysisPromptInput(
-            file: BaselineCodeAnalysisFileInput(
-                path: context.filePath,
-                lineCount: context.lineCount,
-                lines: sourceLines.enumerated().map { index, text in
-                    BaselineCodeAnalysisSourceLineInput(
-                        lineNumber: index + 1,
-                        text: text
-                    )
-                }
-            ),
-            change: context.change
+        let sourceInput = CodeAnalysisSourceInputRenderer().render(
+            context: context,
+            sourceLines: sourceLines
         )
-        let inputJSON = try encode(payload)
         let promptText = BaselineCodeAnalysisPromptTemplateV1.render(
-            inputJSON: inputJSON
+            sourceInput: sourceInput
         )
         let promptByteCount = promptText.utf8.count
         guard promptByteCount <= limits.maximumPromptUTF8Bytes else {
@@ -52,36 +42,4 @@ public struct BaselineCodeAnalysisPromptBuilder: Sendable {
         return promptText
     }
     
-    private func encode(
-        _ input: BaselineCodeAnalysisPromptInput
-    ) throws -> String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [
-            .prettyPrinted,
-            .sortedKeys,
-            .withoutEscapingSlashes,
-        ]
-        do {
-            let data = try encoder.encode(input)
-            return String(decoding: data, as: UTF8.self)
-        } catch {
-            throw CodeAnalysisPromptBuildingError.inputEncodingFailed
-        }
-    }
-}
-
-private struct BaselineCodeAnalysisPromptInput: Encodable {
-    let file: BaselineCodeAnalysisFileInput
-    let change: SourceFileChangeContext?
-}
-
-private struct BaselineCodeAnalysisFileInput: Encodable {
-    let path: String
-    let lineCount: Int
-    let lines: [BaselineCodeAnalysisSourceLineInput]
-}
-
-private struct BaselineCodeAnalysisSourceLineInput: Encodable {
-    let lineNumber: Int
-    let text: String
 }
