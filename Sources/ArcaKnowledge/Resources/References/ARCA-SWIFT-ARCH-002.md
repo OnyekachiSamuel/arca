@@ -4,9 +4,16 @@
 ### Constructor Injection
 
 **Check for:**
-- [ ] Dependencies passed via initializer
-- [ ] Protocol-based dependencies (testable)
-- [ ] No service locator or singletons
+- [ ] A component obtains a service through `.shared`, `.standard`, a global variable, or a service locator
+- [ ] The service provides operational behaviour
+- [ ] The service is not received through an explicit replaceable boundary
+
+**Do not flag:**
+- [ ] Access to a stored instance property through `self`
+- [ ] A dependency supplied through an initializer or parameter
+- [ ] A singleton declaration by itself
+- [ ] Shared constants or configuration values
+- [ ] A type accessing its own shared actor instance
 
 **Examples:**
 

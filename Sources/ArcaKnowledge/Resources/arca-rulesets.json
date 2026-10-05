@@ -8,7 +8,7 @@
       "title": "Improper Isolation of Shared Mutable State",
       "problemContext": "Swift concurrency relies on actor isolation and other synchronization mechanisms to protect mutable state that may be accessed from multiple execution contexts. Shared mutable state without an appropriate isolation boundary can result in data races, while incorrect actor isolation can allow state to be accessed or modified from inappropriate concurrency domains.",
       "expectedBehavior": "Mutable state that can be accessed concurrently should have an appropriate isolation strategy. UI-related mutable state should normally respect @MainActor isolation, while other shared mutable state should be protected using actors or another suitable synchronization mechanism. Actor isolation boundaries should be respected when accessing isolated state.",
-      "violationCriteria": "A violation occurs when mutable state is accessible from multiple concurrent contexts without appropriate isolation or synchronization, when UI-related mutable state is accessed outside the appropriate main-actor context, or when actor-isolated state is accessed in a way that violates its isolation boundary.",
+      "violationCriteria": "A violation occurs only when mutable instance state is visibly read or written from multiple concurrency contexts and no actor isolation, global-actor isolation, or synchronization protects it.",
       "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-001.md"
     },
     {
@@ -18,7 +18,7 @@
       "title": "Unstructured Concurrency Without Appropriate Lifecycle Management",
       "problemContext": "Creating independent Task instances without a clear ownership, cancellation, or lifetime relationship can result in asynchronous work continuing beyond the lifetime of the operation that initiated it. This can make concurrency behavior difficult to reason about and can lead to unnecessary work or stale state updates.",
       "expectedBehavior": "Concurrent operations that form part of the same logical operation should use structured concurrency where appropriate, such as async let or task groups. Unstructured tasks should only be used where independent lifetime or execution is intentional and justified.",
-      "violationCriteria": "A violation occurs when independent Task instances are created for related asynchronous operations without an apparent need for independent lifetime and without appropriate cancellation or lifecycle management, where structured concurrency would better represent the relationship between the operations.",
+      "violationCriteria": "A violation occurs only when an unstructured task may outlive or conflict with the operation that started it and has no visible cancellation or lifecycle management.",
       "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-002.md"
     },
     {
@@ -35,10 +35,10 @@
       "ruleID": "ARCA-SWIFT-CONCURRENCY-004",
       "reviewType": "swift",
       "category": "concurrency",
-      "title": "Mutable Global or Static State",
-      "problemContext": "Mutable global and static state can be accessed from different parts of an application and potentially from different concurrency contexts. Without isolation, this creates implicit shared state and increases the risk of data races and unpredictable dependencies between components.",
-      "expectedBehavior": "Mutable state that requires application-wide or shared access should be encapsulated behind an appropriate ownership and isolation mechanism rather than exposed as unrestricted mutable global or static state.",
-      "violationCriteria": "A violation occurs when mutable global or static state is accessible from concurrent execution contexts without appropriate actor isolation, synchronization, or another visible mechanism that guarantees safe access.",
+      "title": "Unprotected Mutable Global or Static State",
+      "problemContext": "Mutable values declared at global or static scope may be shared across unrelated execution contexts. Concurrent reads and writes to such state can cause data races when no isolation or synchronization mechanism protects access.",
+      "expectedBehavior": "Mutable global or static state should be avoided or protected using actor isolation, @MainActor, locking, or another clearly visible synchronization mechanism.",
+      "violationCriteria": "A violation occurs only when the supplied source visibly shows a global or static stored var being read or written from multiple concurrency contexts without isolation or synchronization. Accessibility alone does not establish a violation.",
       "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-004.md"
     },
 
@@ -83,25 +83,15 @@
       "violationCriteria": "A violation occurs when an object strongly retains a closure and that closure strongly captures the same object, creating a visible ownership cycle without an appropriate capture strategy to break the cycle.",
       "knowledgeFile": "references/ARCA-SWIFT-MEMORY-001.md"
     },
-
-    {
-      "ruleID": "ARCA-SWIFT-DESIGN-001",
-      "reviewType": "swift",
-      "category": "type-design",
-      "title": "Inappropriate Value or Reference Semantics",
-      "problemContext": "Swift provides structs, classes, and actors with different ownership and mutation semantics. Choosing a reference type where independent value semantics are expected can introduce unintended shared mutation, while using an inappropriate type for concurrent mutable state can make ownership and synchronization unclear.",
-      "expectedBehavior": "Structs should generally represent independent values and data models, classes should be used where identity or shared reference semantics are required, and actors should be considered for mutable state that must be safely accessed across concurrency domains.",
-      "violationCriteria": "A violation occurs when the responsibilities and usage visible in the code conflict with the semantics of the chosen type, such as using a mutable shared reference type for data that is expected to behave as an independent value or using an ordinary mutable class where concurrent isolated state is required.",
-      "knowledgeFile": "references/ARCA-SWIFT-DESIGN-001.md"
-    },
     {
       "ruleID": "ARCA-SWIFT-ARCH-002",
       "reviewType": "swift",
       "category": "architecture",
-      "title": "Hard-Coded Singleton Dependency",
+      "title": "Direct Singleton Service Access",
       "problemContext": "Directly accessing a global singleton service from application components creates an implicit dependency that is difficult to substitute, isolate, or control during testing and can introduce shared mutable state.",
       "expectedBehavior": "External services and other application dependencies should be supplied explicitly through an appropriate dependency mechanism such as constructor injection, environment-based injection, or an architecture-specific dependency system.",
-      "violationCriteria": "A violation occurs when a component directly obtains an operational dependency through a global singleton or shared service instead of receiving the dependency through an explicit and replaceable dependency boundary.",
+      "violationCriteria": "A violation occurs only when a component directly accesses an operational service through .shared, a global variable, or a service locator instead of receiving that service through an explicit and replaceable dependency boundary. Singleton declarations, shared constants, and a type accessing its own shared actor instance do not constitute violations. Accessing a stored instance property does not, by itself, constitute singleton access.",
+      
       "knowledgeFile": "references/ARCA-SWIFT-ARCH-002.md"
     },
     {

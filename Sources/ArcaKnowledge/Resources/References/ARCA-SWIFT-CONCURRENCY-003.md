@@ -3,10 +3,9 @@
 ### Sendable Conformance
 
 **Check for:**
-- [ ] Types crossing actor boundaries conform to Sendable
-- [ ] Value types (struct, enum) are implicitly Sendable
-- [ ] Reference types explicitly marked with Sendable where appropriate
-- [ ] Non-Sendable types properly isolated
+- [ ] A visible `Sendable` or `@unchecked Sendable` conformance
+- [ ] Mutable state inside the conforming type
+- [ ] No visible isolation or synchronization protecting that state
 
 **Examples:**
 

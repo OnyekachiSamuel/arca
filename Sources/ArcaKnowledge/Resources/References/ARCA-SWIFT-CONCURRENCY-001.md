@@ -7,15 +7,22 @@
 - [ ] No shared mutable state without synchronization
 - [ ] Proper actor isolation boundaries
 
+**Do not flag:**
+- [ ] Actor-isolated properties
+- [ ] Global or static declarations covered by the dedicated global-state rule
+- [ ] Computed properties that do not access unprotected shared mutable state
+
 **Examples:**
 
-❌ **Bad: No actor isolation**
+❌ **Bad: Concurrent access without isolation**
 ```swift
-class UserViewModel {
-    var users: [User] = []  // ❌ Mutable state without isolation
+final class UserStore {
+    var users: [User] = []
 
-    func loadUsers() {
-        // Can be called from any thread - data race!
+    func refresh() {
+        Task.detached {
+            self.users = await fetchUsers()
+        }
     }
 }
 ```
@@ -51,11 +58,10 @@ actor DatabaseManager {
 ```swift
 @MainActor
 final class UserManager {
-    static let shared = UserManager()
-    private(set) var currentUser: User?  // ✅ MainActor-isolated
+    private(set) var currentUser: User?
 
     func updateUser(_ user: User) {
-        currentUser = user  // ✅ Always on main actor
+        currentUser = user
     }
 }
 ```

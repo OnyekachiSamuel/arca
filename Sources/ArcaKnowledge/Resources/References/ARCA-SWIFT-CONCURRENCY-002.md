@@ -1,38 +1,41 @@
 # Unstructured Concurrency Without Appropriate Lifecycle Management
 
-### Async/Await Patterns
+### Task Lifecycle
 
 **Check for:**
-- [ ] Async/await used instead of completion handlers
-- [ ] Structured concurrency (Task, TaskGroup) over unstructured
-- [ ] Proper error propagation with async throws
-- [ ] No blocking the main thread
+- [ ] An unstructured `Task` or `Task.detached` is created
+- [ ] The task can be replaced, restarted, stopped, or outlive its owner
+- [ ] Unfinished work can update state after replacement or owner termination
+- [ ] No task handle or cancellation mechanism manages its lifetime
+
+**Do not flag:**
+- [ ] Tasks whose handles are retained and cancelled when required
+- [ ] Task groups or `async let`
+- [ ] A task used only to send work to an actor when no cancellation requirement is visible
 
 **Examples:**
 
-❌ **Bad: Completion handler**
+❌ **Bad: Replaceable work without cancellation**
 ```swift
-func fetchUser(id: UUID, completion: @escaping (Result<User, Error>) -> Void) {
-    // Old pattern
-}
-```
-
-✅ **Good: Async/await**
-```swift
-func fetchUser(id: UUID) async throws -> User {
-    let (data, _) = try await URLSession.shared.data(from: url)
-    return try JSONDecoder().decode(User.self, from: data)
-}
-```
-
-❌ **Bad: Unstructured concurrency**
-```swift
-func loadData() {
-    Task {  // ❌ Unstructured, no cancellation handling
-        await fetchUsers()
+final class SearchController {
+    func search(_ query: String) {
+        Task {
+            results = await service.search(query)
+        }
     }
-    Task {
-        await fetchPosts()
+}
+```
+
+✅ **Good: Owned and cancelled task**
+```swift
+final class SearchController {
+    private var searchTask: Task<Void, Never>?
+
+    func search(_ query: String) {
+        searchTask?.cancel()
+        searchTask = Task {
+            results = await service.search(query)
+        }
     }
 }
 ```
@@ -40,10 +43,9 @@ func loadData() {
 ✅ **Good: Structured concurrency**
 ```swift
 func loadData() async {
-    await withTaskGroup(of: Void.self) { group in
-        group.addTask { await self.fetchUsers() }
-        group.addTask { await self.fetchPosts() }
-        // All tasks complete before function returns
-    }
+    async let users = fetchUsers()
+    async let posts = fetchPosts()
+
+    await update(users: users, posts: posts)
 }
 ```

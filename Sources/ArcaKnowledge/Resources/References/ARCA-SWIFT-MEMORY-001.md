@@ -4,9 +4,13 @@
 ### Retain Cycles
 
 **Check for:**
-- [ ] No strong reference cycles with closures
-- [ ] [weak self] in closures when necessary
-- [ ] Proper capture lists
+- [ ] An object stores or strongly retains a closure
+- [ ] That closure strongly captures the same object through `self`
+- [ ] The resulting ownership cycle is visible in the source
+
+**Do not flag:**
+- [ ] A `Task` closure merely because it references an object
+- [ ] A closure that does not capture `self`
 
 **Examples:**
 
