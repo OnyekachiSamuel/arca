@@ -5,30 +5,30 @@
       "ruleID": "ARCA-SWIFT-CONCURRENCY-001",
       "reviewType": "swift",
       "category": "concurrency",
-      "title": "Improper Isolation of Shared Mutable State",
-      "problemContext": "Swift concurrency relies on actor isolation and other synchronization mechanisms to protect mutable state that may be accessed from multiple execution contexts. Shared mutable state without an appropriate isolation boundary can result in data races, while incorrect actor isolation can allow state to be accessed or modified from inappropriate concurrency domains.",
-      "expectedBehavior": "Mutable state that can be accessed concurrently should have an appropriate isolation strategy. UI-related mutable state should normally respect @MainActor isolation, while other shared mutable state should be protected using actors or another suitable synchronization mechanism. Actor isolation boundaries should be respected when accessing isolated state.",
-      "violationCriteria": "A violation occurs only when mutable instance state is visibly read or written from multiple concurrency contexts and no actor isolation, global-actor isolation, or synchronization protects it.",
+      "title": "Shared Mutable Instance State Without Isolation",
+      "problemContext": "Mutable instance state can race when it is exposed through shared access or reached from multiple concurrency contexts.",
+      "expectedBehavior": "Shared mutable instance state should have one visible isolation or synchronization boundary.",
+      "violationCriteria": "A violation occurs when mutable instance state is reachable through a visible global or static shared instance, or is visibly accessed from multiple concurrency contexts, and no actor isolation or synchronization protects it. Report the state and its visible access path. Mutation of the global or static stored value itself belongs to ARCA-SWIFT-CONCURRENCY-004.",
       "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-001.md"
     },
     {
       "ruleID": "ARCA-SWIFT-CONCURRENCY-002",
       "reviewType": "swift",
       "category": "concurrency",
-      "title": "Unstructured Concurrency Without Appropriate Lifecycle Management",
-      "problemContext": "Creating independent Task instances without a clear ownership, cancellation, or lifetime relationship can result in asynchronous work continuing beyond the lifetime of the operation that initiated it. This can make concurrency behavior difficult to reason about and can lead to unnecessary work or stale state updates.",
-      "expectedBehavior": "Concurrent operations that form part of the same logical operation should use structured concurrency where appropriate, such as async let or task groups. Unstructured tasks should only be used where independent lifetime or execution is intentional and justified.",
-      "violationCriteria": "A violation occurs only when an unstructured task may outlive or conflict with the operation that started it and has no visible cancellation or lifecycle management.",
+      "title": "Replaceable Task Without Lifecycle Management",
+      "problemContext": "Repeated unstructured work can let an older task overwrite newer results.",
+      "expectedBehavior": "Replaceable work should cancel, supersede, or reject stale tasks.",
+      "violationCriteria": "A violation occurs only when the analysed file shows replaceable unstructured tasks, a visible path that starts newer work before older work completes, updates from both tasks to the same result target, and no cancellation or stale-result guard. Do not infer repeated invocation from callers outside the file. Independent detached work belongs to ARCA-SWIFT-CONCURRENCY-007.",
       "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-002.md"
     },
     {
       "ruleID": "ARCA-SWIFT-CONCURRENCY-003",
       "reviewType": "swift",
       "category": "concurrency",
-      "title": "Unsafe Sendable Conformance",
-      "problemContext": "Values transferred across concurrency boundaries must be safe to access from those boundaries. Reference types containing mutable state may be incorrectly declared Sendable or @unchecked Sendable even when their internal state is not protected against concurrent access.",
-      "expectedBehavior": "Types crossing concurrency boundaries should satisfy Swift Sendable requirements. Reference types using @unchecked Sendable should provide an implementation that makes access to mutable state thread-safe, such as actor isolation, locking, immutability, or another appropriate synchronization strategy.",
-      "violationCriteria": "A violation occurs when a type crosses concurrency boundaries without appropriate Sendable safety, or when a reference type is marked @unchecked Sendable while containing mutable state for which no visible thread-safety or isolation mechanism is provided.",
+      "title": "Unjustified Unsafe Concurrency Escape Hatch",
+      "problemContext": "Unsafe concurrency annotations move safety responsibility from the compiler to the developer.",
+      "expectedBehavior": "An unsafe opt-out should have a visible safety mechanism or invariant.",
+      "violationCriteria": "A violation occurs only when the analysed file uses @unchecked Sendable, nonisolated(unsafe), @preconcurrency, or assumeIsolated and also shows mutable state or access that relies on that opt-out without a visible safety invariant or protection mechanism. The annotation alone is insufficient. Do not infer missing protection from code outside the file. An ordinary non-Sendable transfer belongs to ARCA-SWIFT-CONCURRENCY-006.",
       "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-003.md"
     },
     {
@@ -36,10 +36,100 @@
       "reviewType": "swift",
       "category": "concurrency",
       "title": "Unprotected Mutable Global or Static State",
-      "problemContext": "Mutable values declared at global or static scope may be shared across unrelated execution contexts. Concurrent reads and writes to such state can cause data races when no isolation or synchronization mechanism protects access.",
-      "expectedBehavior": "Mutable global or static state should be avoided or protected using actor isolation, @MainActor, locking, or another clearly visible synchronization mechanism.",
-      "violationCriteria": "A violation occurs only when the supplied source visibly shows a global or static stored var being read or written from multiple concurrency contexts without isolation or synchronization. Accessibility alone does not establish a violation.",
+      "problemContext": "Mutable global or static state can be reached from unrelated concurrency contexts.",
+      "expectedBehavior": "Mutable global or static state should be immutable, actor-isolated, or synchronized.",
+      "violationCriteria": "A violation occurs when mutable global or static stored state itself is visibly read or written from multiple concurrency contexts without isolation or synchronization. A shared reference to mutable instance state belongs to ARCA-SWIFT-CONCURRENCY-001; do not flag the reference here unless the stored reference itself is reassigned concurrently.",
       "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-004.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFT-CONCURRENCY-005",
+      "reviewType": "swift",
+      "category": "concurrency",
+      "title": "Unsafe Actor State Assumption After Suspension",
+      "problemContext": "Actor-isolated state can change while an actor method is suspended.",
+      "expectedBehavior": "Code should not assume actor state remains unchanged across await without validating or snapshotting it.",
+      "violationCriteria": "A violation occurs when an actor method establishes or reads mutable state, suspends, and then relies on that state still having its earlier value without validation. Actor access without this stale-state assumption is not a violation.",
+      "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-005.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFT-CONCURRENCY-006",
+      "reviewType": "swift",
+      "category": "concurrency",
+      "title": "Non-Sendable Value Crossing an Isolation Boundary",
+      "problemContext": "A non-Sendable value can become unsafe when transferred and then used from another isolation region.",
+      "expectedBehavior": "Transferred values should be Sendable, remain in one isolation region, or use a valid ownership transfer such as sending.",
+      "violationCriteria": "A violation occurs only when the analysed file visibly establishes that a value is non-Sendable, transfers that value across an actor or task boundary, and retains conflicting access after the transfer. If Sendable conformance or ownership depends on a declaration outside the file, omit the finding. Explicit unsafe annotations belong to ARCA-SWIFT-CONCURRENCY-003.",
+      "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-006.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFT-CONCURRENCY-007",
+      "reviewType": "swift",
+      "category": "concurrency",
+      "title": "Inappropriate Detached Task",
+      "problemContext": "A detached task does not inherit priority, task-local values, or cancellation state.",
+      "expectedBehavior": "Task.detached should be limited to work intentionally independent of its initiating task and actor context.",
+      "violationCriteria": "A violation occurs when Task.detached performs work that visibly depends on the parent task's cancellation, task-local values, priority, or actor-owned state. Replaceable stale work belongs to ARCA-SWIFT-CONCURRENCY-002.",
+      "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-007.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFT-CONCURRENCY-008",
+      "reviewType": "swift",
+      "category": "concurrency",
+      "title": "Long-Running Task Ignores Cancellation",
+      "problemContext": "Cancellation is cooperative, so long-running work continues until it observes cancellation.",
+      "expectedBehavior": "Loops and repeated asynchronous work should check or propagate cancellation at suitable points.",
+      "violationCriteria": "A violation occurs when a visible long-running loop or repeated operation can continue after cancellation because it neither checks cancellation nor exits through a cancellation-throwing operation. Task replacement belongs to ARCA-SWIFT-CONCURRENCY-002.",
+      "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-008.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFT-CONCURRENCY-009",
+      "reviewType": "swift",
+      "category": "concurrency",
+      "title": "Unobserved Throwing Task-Group Failure",
+      "problemContext": "Throwing task-group child errors are observed through group result retrieval.",
+      "expectedBehavior": "A throwing task group should consume child results with for try await, next(), reduce(), or an equivalent throwing operation.",
+      "violationCriteria": "A violation occurs when withThrowingTaskGroup adds throwing child tasks but the group body never performs a throwing result-consumption operation.",
+      "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-009.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFT-CONCURRENCY-010",
+      "reviewType": "swift",
+      "category": "concurrency",
+      "title": "Blocking Operation in Async Context",
+      "problemContext": "Blocking a cooperative-pool thread can delay unrelated asynchronous work.",
+      "expectedBehavior": "Asynchronous code should suspend rather than block while waiting.",
+      "violationCriteria": "A violation occurs when an async function or Task waits with Thread.sleep, a semaphore, a blocking lock wait, or an equivalent synchronous blocking operation. Short synchronous computation is not a violation.",
+      "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-010.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFT-CONCURRENCY-011",
+      "reviewType": "swift",
+      "category": "concurrency",
+      "title": "Task Ownership Retain Cycle",
+      "problemContext": "An owner that stores a Task can form a retain cycle when the Task strongly captures that owner.",
+      "expectedBehavior": "A stored long-running Task should avoid strongly retaining its owner or guarantee termination independently.",
+      "violationCriteria": "A violation occurs when an object stores a long-running or repeating Task and that Task strongly captures the same object, allowing the Task to prevent owner deallocation. One-way retention by a short-lived unstored Task is not a violation.",
+      "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-011.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFT-CONCURRENCY-012",
+      "reviewType": "swift",
+      "category": "concurrency",
+      "title": "Incomplete AsyncStream Lifecycle",
+      "problemContext": "A stream that never finishes or releases producer resources can remain active indefinitely.",
+      "expectedBehavior": "A finite AsyncStream should finish on every terminal path, and bridged resources should be released through termination handling.",
+      "violationCriteria": "A violation occurs only when the analysed file establishes that an AsyncStream is finite and shows a terminal path without finish, or when the file creates a bridged observer, delegate, or producer whose cleanup responsibility is visible but supplies no matching onTermination cleanup. Do not infer finiteness, termination, or cleanup responsibility from external code.",
+      "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-012.md"
+    },
+    {
+      "ruleID": "ARCA-SWIFT-CONCURRENCY-013",
+      "reviewType": "swift",
+      "category": "concurrency",
+      "title": "Multiple Consumers of a Single AsyncStream",
+      "problemContext": "A single AsyncStream distributes elements instead of broadcasting every element to every consumer.",
+      "expectedBehavior": "Code that requires broadcast delivery should create separate streams or use a broadcast-capable design.",
+      "violationCriteria": "A violation occurs only when the analysed file shows the same AsyncStream instance being iterated by multiple tasks and visibly establishes that every consumer must receive every element. Multiple consumers alone are insufficient; do not infer broadcast intent from external callers or naming alone.",
+      "knowledgeFile": "references/ARCA-SWIFT-CONCURRENCY-013.md"
     },
 
     {
@@ -80,7 +170,7 @@
       "title": "Strong Reference Cycle in Closure Capture",
       "problemContext": "Swift Automatic Reference Counting does not automatically resolve strong reference cycles. A closure stored by an object can capture that same object strongly, preventing both the closure and object from being released.",
       "expectedBehavior": "Closures should use capture semantics appropriate to their ownership relationship. When an escaping or stored closure would otherwise create a strong reference cycle, an appropriate weak or unowned capture should be used.",
-      "violationCriteria": "A violation occurs when an object strongly retains a closure and that closure strongly captures the same object, creating a visible ownership cycle without an appropriate capture strategy to break the cycle.",
+      "violationCriteria": "A violation occurs when an object strongly retains a non-Task closure and that closure strongly captures the same object, creating a visible ownership cycle without an appropriate capture strategy to break the cycle. Stored Task ownership cycles belong to ARCA-SWIFT-CONCURRENCY-011.",
       "knowledgeFile": "references/ARCA-SWIFT-MEMORY-001.md"
     },
     {

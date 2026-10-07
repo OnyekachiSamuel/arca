@@ -39,10 +39,15 @@ enum BaselineCodeAnalysisPromptTemplateV1 {
     }
 
     OUTPUT REQUIREMENTS
-    - Return {"findings":[]} when evidence is insufficient.
-    - Return zero to five distinct findings.
+    - Return {"findings":[]} when no supported finding is found.
+    - Return up to five distinct supported findings.
     - Never add findings to reach a particular count.
-    - Use exact one-based, inclusive line numbers from INPUT_DATA.
+    - Consolidate repeated occurrences of the same underlying issue into one finding.
+    - If more than five distinct findings are supported, select the five with the strongest visible evidence.
+    - Do not rank a finding higher merely because it has more occurrences.
+    - Every finding must describe an actual issue supported by the source input.
+    - Never include findings stating that code is correct or does not violate a rule.
+    - Use exact one-based, inclusive line numbers from the source input.
     - Include at least one evidence item for every finding.
     - Do not add fields to the shown structure.
     - Complete the JSON object before stopping.

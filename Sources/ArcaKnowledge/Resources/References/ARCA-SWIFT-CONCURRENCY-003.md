@@ -1,51 +1,47 @@
-# Unsafe Sendable Conformance
+# Unjustified Unsafe Concurrency Escape Hatch
 
-### Sendable Conformance
+### Unsafe Conformance
 
 **Check for:**
-- [ ] A visible `Sendable` or `@unchecked Sendable` conformance
-- [ ] Mutable state inside the conforming type
-- [ ] No visible isolation or synchronization protecting that state
+- [ ] An explicit concurrency-safety opt-out
+- [ ] Mutable state or access in the file relies on the opt-out
+- [ ] No visible safety invariant or protection mechanism
+
+**Do not flag:**
+- [ ] The annotation by itself
+- [ ] Consistently locked mutable state
+- [ ] Actor-isolated state
+- [ ] An ordinary non-Sendable transfer without an unsafe annotation
+- [ ] Missing protection inferred only from declarations outside the file
 
 **Examples:**
 
-❌ **Bad: Non-Sendable type crossing actors**
+❌ **Bad: Unchecked conformance with unprotected access**
 ```swift
-class UserData {  // ❌ Class without Sendable
-    var name: String
-}
-
-actor DataStore {
-    func save(_ data: UserData) {  // ⚠️ Warning: non-Sendable type
-        // ...
-    }
-}
-```
-
-✅ **Good: Sendable struct**
-```swift
-struct UserData: Sendable {  // ✅ Value type is Sendable
-    let name: String
-}
-
-actor DataStore {
-    func save(_ data: UserData) {  // ✅ OK
-        // ...
-    }
-}
-```
-
-✅ **Good: Sendable reference type**
-```swift
-final class UserData: @unchecked Sendable {  // ✅ Explicitly Sendable
+final class Cache: @unchecked Sendable {
     private let lock = NSLock()
-    private var _name: String
+    private var items: [String: Data] = [:]
 
-    var name: String {
-        lock.lock()
-        defer { lock.unlock() }
-        return _name
+    // ⚠️ Forgot lock - data race!
+    var count: Int {
+        items.count
     }
-    // Thread-safe implementation
+}
+```
+
+✅ **Good: Actor-isolated cache**
+```swift
+actor Cache {
+    private var items: [String: Data] = [:]
+
+    var count: Int { items.count }
+
+    func get(_ key: String) -> Data? {
+        items[key]
+    }
+
+    func set(_ key: String, value: Data) {
+        items[key] = value
+    }
 }
 ```

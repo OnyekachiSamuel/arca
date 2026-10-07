@@ -10,6 +10,7 @@
 
 **Do not flag:**
 - [ ] A `Task` closure merely because it references an object
+- [ ] Stored `Task` ownership cycles covered by `ARCA-SWIFT-CONCURRENCY-011`
 - [ ] A closure that does not capture `self`
 
 **Examples:**
