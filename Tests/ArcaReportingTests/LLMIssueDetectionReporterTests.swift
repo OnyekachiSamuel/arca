@@ -95,7 +95,6 @@ struct LLMIssueDetectionReporterTests {
       from: Data(contentsOf: guidedURL)
     )
     #expect(decoded == guided)
-
     #expect(throws: JSONReportWritingError.self) {
       try writer.write(
         guidedJSON,

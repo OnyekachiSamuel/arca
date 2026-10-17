@@ -112,7 +112,6 @@ struct LLMCommandParser {
     case .baseline, .guided:
       break
     }
-
     return LLMCommandOptions(
       filePath: filePath,
       reviewType: reviewType,

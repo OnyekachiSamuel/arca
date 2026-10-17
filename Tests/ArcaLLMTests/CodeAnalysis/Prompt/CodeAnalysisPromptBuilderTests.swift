@@ -5,8 +5,8 @@ import Testing
 
 @Suite("Separate code-analysis prompt builders")
 struct CodeAnalysisPromptBuilderTests {
-  @Test("baseline and guided prompts disable Qwen thinking")
-  func appendsNoThinkControl() throws {
+  @Test("prompts do not include vendor-specific thinking controls")
+  func omitsVendorSpecificThinkingControls() throws {
     let baselinePrompt = try BaselineCodeAnalysisPromptBuilder().build(
       context: validContext
     )
@@ -15,8 +15,8 @@ struct CodeAnalysisPromptBuilderTests {
       rules: [godObjectKnowledge]
     )
 
-    #expect(baselinePrompt.hasSuffix("/no_think"))
-    #expect(guidedPrompt.hasSuffix("/no_think"))
+    #expect(!baselinePrompt.contains("/no_think"))
+    #expect(!guidedPrompt.contains("/no_think"))
   }
 
   @Test("baseline prompt requests broad detection without task or rule knowledge")
@@ -40,7 +40,7 @@ struct CodeAnalysisPromptBuilderTests {
     #expect(!prompt.contains(godObjectKnowledge.violationCriteria))
     #expect(!prompt.contains("multiple unrelated responsibilities"))
     #expect(!prompt.contains(#""rules""#))
-    #expect(prompt.contains("Return at most five distinct findings"))
+    #expect(prompt.contains("select the five with the strongest visible evidence"))
     #expect(prompt.contains("1 | struct Example {}"))
     #expect(!prompt.contains(#""lineNumber""#))
     #expect(!prompt.contains(#""text""#))
@@ -54,12 +54,12 @@ struct CodeAnalysisPromptBuilderTests {
     )
 
     #expect(prompt.contains(godObjectKnowledge.problemContext))
-    #expect(prompt.contains(#""rules""#))
+    #expect(prompt.contains("RULES_AND_KNOWLEDGE"))
     #expect(prompt.contains(godObjectKnowledge.expectedBehavior))
     #expect(prompt.contains(godObjectKnowledge.violationCriteria))
   }
 
-  @Test("guided prompt omits rules that do not apply to the source")
+  @Test("guided prompt requires supported rule applicability")
   func requiresRuleApplicabilityBeforeViolationDetection() throws {
     let prompt = try GuidedCodeAnalysisPromptBuilder().build(
       context: validContext,
@@ -69,29 +69,61 @@ struct CodeAnalysisPromptBuilderTests {
     #expect(prompt.contains("RULE APPLICABILITY"))
     #expect(
       prompt.contains(
-        "Evaluate each supplied rule independently"
+        "Evaluate the complete source against every supplied rule"
       )
     )
     #expect(
       prompt.contains(
-        "First determine whether the rule applies to the provided source code"
+        "structured violation criteria as the authoritative definition"
       )
     )
     #expect(
       prompt.contains(
-        "Report a finding only when the rule's violation criteria is met"
+        "Supporting knowledge explains the criteria but must not broaden them"
       )
     )
     #expect(
       prompt.contains(
-        "If a rule does not apply or there is insufficient evidence, do not report it"
+        "Insufficient evidence does not establish compliance"
       )
     )
     #expect(
       prompt.contains(
-        #"Return {"findings":[]} when evidence is insufficient"#
+        #"Return {"findings":[]} when no supported violation is found"#
       )
     )
+  }
+
+  @Test("guided prompt uses rule-agnostic evidence instructions")
+  func usesRuleAgnosticEvidenceInstructions() throws {
+    let prompt = try GuidedCodeAnalysisPromptBuilder().build(
+      context: validContext,
+      rules: [godObjectKnowledge]
+    )
+
+    #expect(!prompt.contains("CONCURRENCY EVIDENCE"))
+    #expect(
+      prompt.contains(
+        "identify the visible source elements that satisfy the rule's required conditions"
+      )
+    )
+  }
+
+  @Test("both prompts prioritize supported findings when limited to five")
+  func prioritizesStrongestSupportedFindings() throws {
+    let baselinePrompt = try BaselineCodeAnalysisPromptBuilder().build(
+      context: validContext
+    )
+    let guidedPrompt = try GuidedCodeAnalysisPromptBuilder().build(
+      context: validContext,
+      rules: [godObjectKnowledge]
+    )
+
+    for prompt in [baselinePrompt, guidedPrompt] {
+      #expect(prompt.contains("select the five with the strongest visible evidence"))
+      #expect(prompt.contains("prioritize correctness, security, and data-integrity risks"))
+      #expect(prompt.contains("Do not invent severity evidence"))
+    }
   }
 
   @Test("guided prompt preserves the rule definition and Markdown knowledge")
@@ -221,7 +253,7 @@ struct CodeAnalysisPromptBuilderTests {
     #expect(prompt.contains(#""evidence""#))
     #expect(!prompt.contains("Repeat the supplied file path exactly"))
     #expect(prompt.contains("Return only JSON in exactly this shape"))
-    #expect(prompt.contains("violation criteria is met"))
+    #expect(prompt.contains("every required condition is supported"))
     #expect(prompt.contains("one-based, inclusive line numbers"))
     #expect(prompt.contains("Do not invent numeric thresholds"))
     #expect(prompt.contains("multiple unrelated responsibilities"))
@@ -229,7 +261,7 @@ struct CodeAnalysisPromptBuilderTests {
     #expect(!prompt.contains(#""severity""#))
     #expect(!prompt.contains(#""additionalProperties""#))
     #expect(prompt.contains("Do not provide refactoring"))
-    #expect(prompt.contains("Return at most five distinct findings"))
+    #expect(prompt.contains("select the five with the strongest visible evidence"))
   }
 
   @Test("the same rule set produces stable output regardless of input order")
