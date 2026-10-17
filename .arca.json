@@ -13,14 +13,12 @@
         "seed": 42
       },
       {
-        "id": "openai",
+        "id": "openai-sol",
         "baseURL": "https://api.openai.com",
         "completionPath": "/v1/chat/completions",
-        "modelID": "YOUR_OPENAI_MODEL_ID",
+        "modelID": "gpt-6.1-sol",
         "apiKeyEnvironmentVariable": "OPENAI_API_KEY",
-        "timeoutSeconds": 600,
-        "temperature": 0.2,
-        "seed": 42
+        "timeoutSeconds": 600
       }
     ]
   }
