@@ -1,19 +1,61 @@
-# Arca
+# ARCA
 
-ARCA is an LLM-based Swift code-issue detection tool for experiments comparing
-a baseline prompt with a guided prompt containing explicit rules and supporting
-knowledge.
+ARCA is a research-oriented command-line tool for LLM-based review of Swift
+source code. It supports controlled experiments comparing a general baseline
+prompt with a knowledge-guided prompt containing explicit review rules and
+supporting references.
 
-## Build
+ARCA analyses one Swift file per request. It normalizes model output into a
+common finding format, validates rule identifiers and source locations, and
+records execution metadata for later evaluation.
 
-```sh
+## Analysis modes
+
+| Mode | Input supplied to the model |
+| --- | --- |
+| `baseline` | Complete source file and general code-review instructions. No ARCA rules are included. |
+| `guided` | Complete source file, the selected ARCA rules, and their supporting knowledge. |
+
+Guided analysis supports these review types:
+
+- `swift`
+- `swiftui`
+- `tca`
+- `security`
+- `god-object`
+- `all`
+
+The `all` option evaluates each rule set independently and aggregates the
+results. Baseline analysis does not accept a review type.
+
+## Requirements
+
+- macOS 13 or later
+- Swift 6.2 or later
+- an OpenAI-compatible `/v1/chat/completions` endpoint that supports structured
+  JSON responses
+
+The endpoint can be a local server such as LM Studio or an authenticated cloud
+provider.
+
+## Build and test
+
+```bash
 swift build
+swift test
 swift run arca --help
 ```
 
-## Configure the model
+For repeated experiments, build the executable once in release mode:
 
-Create `.arca.json` in the repository root:
+```bash
+swift build -c release
+```
+
+## Configuration
+
+Create `.arca.json` in the repository root. The following example configures a
+local provider and an authenticated cloud provider:
 
 ```json
 {
@@ -25,106 +67,89 @@ Create `.arca.json` in the repository root:
         "id": "local",
         "baseURL": "http://127.0.0.1:1234",
         "completionPath": "/v1/chat/completions",
-        "modelID": "qwen2.5-coder-7b-instruct",
-        "timeoutSeconds": 120,
-        "temperature": 0,
+        "modelID": "<local-model-id>",
+        "timeoutSeconds": 600,
+        "temperature": 0.7,
         "seed": 42
       },
       {
-        "id": "openai",
+        "id": "cloud",
         "baseURL": "https://api.openai.com",
         "completionPath": "/v1/chat/completions",
-        "modelID": "YOUR_OPENAI_MODEL_ID",
+        "modelID": "<cloud-model-id>",
         "apiKeyEnvironmentVariable": "OPENAI_API_KEY",
-        "timeoutSeconds": 120,
-        "temperature": 0,
-        "seed": 42
+        "timeoutSeconds": 600
       }
     ]
   }
 }
 ```
 
-Each configured server must expose an OpenAI-compatible chat-completions API.
-The `defaultProvider` is used when `--provider` is omitted. Replace
-`YOUR_OPENAI_MODEL_ID` with a model available to your OpenAI project.
+The configured model ID must match the identifier exposed by the selected
+provider.
 
-For authenticated providers, `apiKeyEnvironmentVariable` contains the name
-of the environment variable—not the secret itself. Export that variable before
-running ARCA:
+For authenticated providers, store only the environment-variable name in the
+configuration and export the secret before running ARCA:
 
-```sh
-export OPENAI_API_KEY="your-api-key"
+```bash
+export OPENAI_API_KEY="<API key>"
 ```
 
-ARCA reads the value at runtime and sends it as a bearer token. It does not
-store the value in `.arca.json` or include it in reports and diagnostics.
+ARCA reads the secret at runtime and does not include it in reports or
+diagnostics.
 
-## Run an experiment
+## Run an analysis
 
-Choose one prompt variant for each run:
+Baseline analysis:
 
-```sh
+```bash
 swift run arca \
   --file Sources/Feature.swift \
   --prompt baseline \
-  --format json
-
-swift run arca \
-  --file Sources/Feature.swift \
-  --review swift \
-  --prompt guided \
-  --provider openai \
+  --provider local \
   --format json
 ```
 
-Use `--provider local` for LM Studio, `--provider openai` for OpenAI, or
-omit the option to use `llm.defaultProvider`.
+Knowledge-guided Swift analysis:
 
-Add `--show-prompt` to display the exact prompt sent to the configured LLM.
-ARCA still completes the analysis and presents or writes the requested report.
-Guided `all` displays each independently submitted prompt. Without this option,
-the existing output is unchanged.
+```bash
+swift run arca \
+  --file Sources/Feature.swift \
+  --prompt guided \
+  --review swift \
+  --provider cloud \
+  --format json
+```
 
-The baseline command does not accept `--review`. Guided review values are
-`swift`, `swiftui`, `tca`, `security`, `god-object`, and `all`. Guided `all`
-runs each rule set independently and aggregates its findings and measurements.
+`--provider` selects a configured provider ID. When it is omitted, ARCA uses
+`llm.defaultProvider`. Add `--show-prompt` to print the exact prompt sent to the
+model.
 
-Omit `--format json` for a human-readable terminal report. With
-`--format json`, ARCA writes a new schema-versioned report under
-`arca-results/baseline` or `arca-results/guided-analysis` and prints its path.
-Guided filenames include the selected review type. Each report records the
-prompt variant, provider, model, generation parameters, duration, token usage,
-findings, and diagnostics.
+The default output is a human-readable terminal report. With `--format json`,
+ARCA writes a schema-versioned report under:
 
-## Prompt variants
+```text
+arca-results/baseline/
+arca-results/guided-analysis/
+```
 
-- `baseline` sends the complete selected source file with broad code-issue
-  detection instructions. It does not include rule IDs, rule definitions, or
-  supporting knowledge and therefore does not require a review type.
-- `guided` selects rules by review type from
-  `Sources/ArcaKnowledge/Resources/arca-rulesets.json`. For every selected
-  rule, it includes the structured rule definition and the referenced Markdown
-  file from `Sources/ArcaKnowledge/Resources/References`. The model first
-  checks each rule for applicability to the visible source. Irrelevant TCA or
-  SwiftUI rules produce no findings, and a framework import alone is not
-  treated as a violation.
+Reports contain the normalized findings, diagnostics, provider and model IDs,
+generation parameters, duration, request count, and token usage.
 
-Both variants use a compact response schema. The model returns an explanation
-and evidence line numbers, plus a title for baseline analysis or a supplied rule
-ID for guided analysis. It does not classify severity or repeat source text and
-file metadata.
+## Processing pipeline
 
-ARCA supplies the file path, derives each finding's range from its evidence, and
-extracts the exact evidence excerpt from the source. In guided runs, ARCA also
-adds the canonical title from its rule registry. Category remains catalogue
-metadata and is not included in prompts or finding reports. The parser rejects
-unknown rule IDs and unsupported response fields.
+For each request, ARCA:
 
-When the selected file has uncommitted Git changes, ARCA includes its added,
-modified, and deleted ranges as optional attention signals. When no matching
-change exists, the change field is omitted. The complete current source is sent
-in both cases.
+1. loads and validates the selected Swift file;
+2. records relevant uncommitted Git line ranges when available;
+3. builds either the baseline or guided prompt;
+4. requests a structured response from the configured model;
+5. validates rule references, evidence, and one-based source ranges;
+6. normalizes valid candidates into a common report; and
+7. renders the result in terminal or JSON format.
+
+Changed lines are attention signals only. Both analysis modes receive the
+complete current source file.
 
 ## Exit statuses
 
@@ -133,4 +158,45 @@ in both cases.
 | `0` | Analysis completed without findings. |
 | `1` | Analysis completed with findings. |
 | `2` | Invalid input or configuration. |
-| `3` | Provider, parser, or internal execution failure. |
+| `3` | Provider, response-parser, or internal execution failure. |
+
+Statuses `0` and `1` both represent successful analyses.
+
+## Rules and provenance
+
+Guided rules are defined in
+[`Sources/ArcaKnowledge/Resources/arca-rulesets.json`](Sources/ArcaKnowledge/Resources/arca-rulesets.json),
+with supporting Markdown under
+[`Sources/ArcaKnowledge/Resources/References`](Sources/ArcaKnowledge/Resources/References).
+
+The provenance of the Swift concurrency rules is documented in
+[`Docs/SwiftConcurrencyRuleSources.md`](Docs/SwiftConcurrencyRuleSources.md).
+Third-party attribution and licensing are provided in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+## Experiment materials
+
+- [`arca-dataset`](arca-dataset) contains the pre-fix and post-fix benchmark
+  files.
+- [`experiment-run-sequence.md`](experiment-run-sequence.md) documents the
+  reproducible 88-request batch protocol.
+- [`run-experiment-batch.sh`](run-experiment-batch.sh) runs and organizes the
+  experiment batches.
+- [`Outputs/Ground-truth`](Outputs/Ground-truth) contains the benchmark ground
+  truth.
+- [`Outputs/Evaluation`](Outputs/Evaluation) contains the completed evaluation
+  spreadsheets.
+
+## Scope and limitations
+
+ARCA is an experimental detection tool, not a replacement for the Swift
+compiler, static analysis, or human review.
+
+The current implementation is limited to single-file analysis. It does not
+resolve declarations or execution behavior across files, modules, or an entire
+repository. Consequently, guided rules are designed to require evidence that
+is visible within the analysed file.
+
+## License
+
+ARCA is distributed under the terms in [`LICENSE`](LICENSE).
